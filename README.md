@@ -21,7 +21,7 @@ The look (navy `#0A1931`, gold `#C9A96E`, cream backgrounds) and fonts
 | **BOARD** | Kanban with 6 columns — Backlog · Next · In Progress · Waiting · Done · Maybe. Drag cards between columns, quick-add, per-column add, team members bar, priority distribution chart. |
 | **WEEKLY** | Weekly review: auto "Fatto questa settimana" (from DONE) plus 5 retro columns — WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDARIO** | Month calendar; drag a task onto a date to set its due date. Unscheduled tasks listed alongside. |
-| **TRACKING 🔒** | Password-gated (`Matusalemme`) team-load monitor: active tasks, P1 count and Ok / Carico alto / Sovraccarico status per member. |
+| **TRACKING 🔒** | Password-gated team-load monitor: active tasks, P1 count and Ok / Carico alto / Sovraccarico status per member. |
 | **ISTRUZIONI** | Reference for statuses, priorities and workflow. |
 
 Task fields: title, description, owner, priority (P1–P4), status, notes,
