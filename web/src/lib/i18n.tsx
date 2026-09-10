@@ -22,9 +22,9 @@ const IT: Dict = {
 
   "tabs.board": "BOARD",
   "tabs.weekly": "WEEKLY",
-  "tabs.calendar": "CALENDARIO",
+  "tabs.calendario": "CALENDARIO",
   "tabs.tracking": "TRACKING 🔒",
-  "tabs.instructions": "ISTRUZIONI",
+  "tabs.istruzioni": "ISTRUZIONI",
 
   "filters.title": "Filtri",
   "filters.search": "Cerca attività…",
@@ -32,10 +32,9 @@ const IT: Dict = {
   "filters.allPriorities": "Tutte le priorità",
   "filters.focusP1": "Focus P1",
   "filters.reset": "Reset",
-  "view.width": "Larghezza colonne",
-  "view.compact": "Compatte",
-  "view.normal": "Normali",
-  "view.wide": "Larghe",
+  "view.columns": "Colonne",
+  "view.columnsHint": "Mostra o nascondi le colonne",
+  "view.done": "Fatto",
 
   "board.help": "Trascina le card tra le colonne o apri una card per modificarla. Nessun popup: tutto si espande qui.",
   "quick.title": "Nuova attività…",
@@ -157,9 +156,9 @@ const EN: Dict = {
 
   "tabs.board": "BOARD",
   "tabs.weekly": "WEEKLY",
-  "tabs.calendar": "CALENDAR",
+  "tabs.calendario": "CALENDAR",
   "tabs.tracking": "TRACKING 🔒",
-  "tabs.instructions": "INSTRUCTIONS",
+  "tabs.istruzioni": "INSTRUCTIONS",
 
   "filters.title": "Filters",
   "filters.search": "Search tasks…",
@@ -167,10 +166,9 @@ const EN: Dict = {
   "filters.allPriorities": "All priorities",
   "filters.focusP1": "Focus P1",
   "filters.reset": "Reset",
-  "view.width": "Column width",
-  "view.compact": "Compact",
-  "view.normal": "Normal",
-  "view.wide": "Wide",
+  "view.columns": "Columns",
+  "view.columnsHint": "Show or hide columns",
+  "view.done": "Done",
 
   "board.help": "Drag cards between columns or open a card to edit it. No popups: everything expands right here.",
   "quick.title": "New task…",
