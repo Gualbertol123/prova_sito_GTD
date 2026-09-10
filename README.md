@@ -7,12 +7,16 @@ A full rebuild of the original single-file GTD + Kanban artifact as a modern
 - **Data + realtime** → **Supabase** (free Postgres + realtime + auto REST API).
 
 Multiple people can view and edit the same board at once; every change is
-saved to Supabase and pushed live to everyone connected. **Nothing is stored or
-cached in the browser** — the Supabase client runs with memory-only state and no
-session persistence, so closing the tab leaves no local copy.
+saved to Supabase and pushed live to everyone connected. **The board data is
+never stored or cached in the browser** — the Supabase client runs with
+memory-only state and no session persistence, so closing the tab leaves no
+local copy of any task. The only things kept on the device are two personal
+display preferences: the chosen **language** (IT/EN) and the **board layout**
+(column width, collapsed columns) — never board content.
 
-The look (navy `#0A1931`, gold `#C9A96E`, cream backgrounds) and fonts
-(**Cinzel** display + **Inter** body) match the original.
+The app is **bilingual (Italian / English)** with a header toggle; the choice
+is remembered per device. The look (navy `#0A1931`, gold `#C9A96E`, cream
+backgrounds) and fonts (**Cinzel** display + **Inter** body) match the original.
 
 ---
 
@@ -20,7 +24,7 @@ The look (navy `#0A1931`, gold `#C9A96E`, cream backgrounds) and fonts
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban — Backlog · Next · In Progress · Waiting · Done · Maybe. Drag cards, quick-add, per-column add, team members bar, priority chart. |
+| **BOARD** | Kanban — Backlog · Next · In Progress · Waiting · Done · Maybe. Cards expand inline (no popups), search + filters, a full new-task bar (owner/priority/status/due), drag between columns, team members bar, priority chart, saved column width + collapse. |
 | **WEEKLY** | Weekly review: auto "Fatto questa settimana" (from DONE) + 5 retro columns (WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS). |
 | **CALENDARIO** | Month calendar; drag a task onto a date to set its due date. |
 | **TRACKING 🔒** | Password-gated team-load monitor. |

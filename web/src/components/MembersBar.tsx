@@ -1,57 +1,95 @@
+import { useState } from "react";
 import type { Board, Op } from "../lib/types";
-import { UNASSIGNED } from "../lib/constants";
+import { useT } from "../lib/i18n";
 
 interface Props {
   board: Board;
   send: (op: Op) => void;
 }
 
+// Inline members management — no browser prompts/popups.
 export function MembersBar({ board, send }: Props) {
-  const add = () => {
-    const name = prompt("Nome nuovo membro?")?.trim();
-    if (!name) return;
-    if (board.members.includes(name)) return;
-    send({ type: "setMembers", members: [...board.members, name] });
+  const { t } = useT();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [confirm, setConfirm] = useState<string | null>(null);
+
+  const commitAdd = () => {
+    const v = name.trim();
+    if (v && !board.members.includes(v)) {
+      send({ type: "setMembers", members: [...board.members, v] });
+    }
+    setName("");
+    setAdding(false);
   };
 
   const remove = (m: string) => {
-    if (!confirm(`Rimuovere ${m}? I suoi task diventeranno "${UNASSIGNED}".`))
-      return;
     send({ type: "setMembers", members: board.members.filter((x) => x !== m) });
-    // Reassign that member's tasks to Unassigned.
     board.tasks
-      .filter((t) => t.owner === m)
-      .forEach((t) =>
-        send({ type: "updateTask", id: t.id, patch: { owner: UNASSIGNED } })
-      );
+      .filter((tk) => tk.owner === m)
+      .forEach((tk) => send({ type: "updateTask", id: tk.id, patch: { owner: "Unassigned" } }));
+    setConfirm(null);
   };
 
   return (
-    <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3 flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <span className="font-trajan text-[10px] uppercase tracking-widest text-[#8A8A8A] mr-1">
-        Team
+        {t("members.team")}
       </span>
       {board.members.map((m) => (
         <span
           key={m}
-          className="group inline-flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] text-[12px] text-[#0A1931]"
+          className="group inline-flex items-center gap-1.5 h-8 pl-1 pr-2 rounded-full bg-white border border-[#E8E6E1] text-[12px] text-[#0A1931]"
         >
+          <span className="w-6 h-6 rounded-full bg-[#0A1931] text-white text-[10px] font-bold flex items-center justify-center">
+            {m.charAt(0).toUpperCase()}
+          </span>
           {m}
-          <button
-            onClick={() => remove(m)}
-            className="text-[#C9C5BE] hover:text-[#DC2626] text-[13px]"
-            title="Rimuovi"
-          >
-            ×
-          </button>
+          {confirm === m ? (
+            <>
+              <button onClick={() => remove(m)} className="text-[#DC2626] font-semibold text-[11px]">
+                {t("task.yes")}
+              </button>
+              <button onClick={() => setConfirm(null)} className="text-[#8A8A8A] text-[11px]">
+                {t("task.no")}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirm(m)}
+              className="text-[#C9C5BE] hover:text-[#DC2626] text-[13px]"
+              title={t("members.remove")}
+            >
+              ×
+            </button>
+          )}
         </span>
       ))}
-      <button
-        onClick={add}
-        className="h-8 px-3 rounded-full border border-dashed border-[#C9A96E] text-[#8B6F3E] text-[12px] font-semibold hover:bg-[#FFFBF2]"
-      >
-        + Membro
-      </button>
+
+      {adding ? (
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={commitAdd}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitAdd();
+            if (e.key === "Escape") {
+              setName("");
+              setAdding(false);
+            }
+          }}
+          placeholder={t("members.newName")}
+          className="h-8 rounded-full bg-white border border-[#C9A96E] px-3 text-[12px] outline-none"
+        />
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="h-8 px-3 rounded-full border border-dashed border-[#C9A96E] text-[#8B6F3E] text-[12px] font-semibold hover:bg-[#FFFBF2]"
+        >
+          + {t("members.add")}
+        </button>
+      )}
     </div>
   );
 }

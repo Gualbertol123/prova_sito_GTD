@@ -1,20 +1,22 @@
 import { useMemo, useState } from "react";
 import type { Board } from "../lib/types";
+import { useT } from "../lib/i18n";
 
 export function MailModal({ board, onClose }: { board: Board; onClose: () => void }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
 
   const text = useMemo(() => {
-    const done = board.tasks.filter((t) => t.status === "DONE");
+    const done = board.tasks.filter((tk) => tk.status === "DONE");
     const focus = board.weekly.focus;
-    let e = "Lavori completati:\n";
-    if (done.length === 0) e += "- (nessuno)\n";
+    let e = `${t("mail.completed")}\n`;
+    if (done.length === 0) e += `- ${t("mail.none")}\n`;
     else done.forEach((w) => (e += `- ${w.title}\n`));
-    e += "\nProssimi step:\n";
-    if (focus.length === 0) e += "- (nessuno)\n";
+    e += `\n${t("mail.nextSteps")}\n`;
+    if (focus.length === 0) e += `- ${t("mail.none")}\n`;
     else focus.forEach((w) => (e += `- ${w.text}\n`));
     return e;
-  }, [board]);
+  }, [board, t]);
 
   const copy = async () => {
     try {
@@ -27,22 +29,13 @@ export function MailModal({ board, onClose }: { board: Board; onClose: () => voi
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-[16px] w-full max-w-[480px] shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-[16px] w-full max-w-[480px] shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="p-4 border-b border-[#E8E6E1] flex items-center justify-between">
           <h3 className="font-trajan text-[14px] uppercase tracking-widest text-[#0A1931]">
-            Mail update
+            {t("mail.title")}
           </h3>
-          <button
-            onClick={onClose}
-            className="text-[#8A8A8A] hover:text-[#0A1931] text-[20px] leading-none"
-          >
+          <button onClick={onClose} className="text-[#8A8A8A] hover:text-[#0A1931] text-[20px] leading-none">
             ×
           </button>
         </div>
@@ -57,17 +50,17 @@ export function MailModal({ board, onClose }: { board: Board; onClose: () => voi
         <div className="p-4 border-t border-[#E8E6E1] flex justify-end gap-2">
           <a
             href={`mailto:?subject=${encodeURIComponent(
-              board.boardName + " — update"
+              `${board.boardName} — ${t("mail.subject")}`
             )}&body=${encodeURIComponent(text)}`}
             className="h-9 px-4 rounded-full text-[12px] font-semibold bg-white text-[#0A1931] border border-[#E8E6E1] hover:border-[#C9A96E] flex items-center"
           >
-            Apri client mail
+            {t("mail.openClient")}
           </a>
           <button
             onClick={copy}
             className="h-9 px-5 rounded-full text-[12px] font-semibold bg-[#C9A96E] text-[#0A1931] hover:bg-[#D8BC8A]"
           >
-            {copied ? "Copiato ✓" : "Copia testo"}
+            {copied ? t("mail.copied") : t("mail.copy")}
           </button>
         </div>
       </div>

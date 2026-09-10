@@ -1,75 +1,359 @@
-import { PRIORITY_DOT } from "../lib/constants";
-import type { Task } from "../lib/types";
-import { daysSince, daysUntil, formatShort } from "../lib/dates";
+import { useState } from "react";
+import type { Op, Priority, Task } from "../lib/types";
+import { PRIORITY_DOT, STATUS_ORDER, genId } from "../lib/constants";
+import {
+  ownerLabel,
+  priorityLabel,
+  statusLabel,
+  useT,
+} from "../lib/i18n";
+import { localeCode } from "../lib/i18n";
+import { useSyncedField } from "../lib/useSyncedField";
+import { daysSince, daysUntil } from "../lib/dates";
+
+const PRIOS: Priority[] = ["P1", "P2", "P3", "P4"];
+
+function Grip() {
+  return (
+    <svg width="10" height="16" viewBox="0 0 10 16" className="text-[#C9C5BE] shrink-0" aria-hidden>
+      {[3, 8, 13].map((cy) =>
+        [3, 7].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.1" fill="currentColor" />)
+      )}
+    </svg>
+  );
+}
 
 interface Props {
   task: Task;
-  onOpen: () => void;
+  members: string[];
+  send: (op: Op) => void;
+  draggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: (e: React.DragEvent) => void;
 }
 
-export function TaskCard({ task, onOpen, onDragStart, onDragEnd }: Props) {
+export function TaskCard({ task, members, send, draggable, onDragStart, onDragEnd }: Props) {
+  const { t, lang } = useT();
+  const [open, setOpen] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [newSub, setNewSub] = useState("");
+
+  const title = useSyncedField(task.title);
+  const notes = useSyncedField(task.notes);
+  const desc = useSyncedField(task.desc);
+
   const done = task.subtasks.filter((s) => s.done).length;
   const total = task.subtasks.length;
+  const pct = total ? Math.round((done / total) * 100) : 0;
   const until = daysUntil(task.dueDate);
   const waiting = task.status === "WAITING" ? daysSince(task.waitingSince) : 0;
 
+  const patch = (p: Partial<Task>) => send({ type: "updateTask", id: task.id, patch: p });
+  const idx = STATUS_ORDER.indexOf(task.status);
+  const move = (dir: -1 | 1) => {
+    const next = STATUS_ORDER[idx + dir];
+    if (next) send({ type: "moveTask", id: task.id, status: next });
+  };
+
+  const dueFmt = task.dueDate
+    ? new Date(task.dueDate).toLocaleDateString(localeCode(lang))
+    : "";
+
+  const addSub = () => {
+    const v = newSub.trim();
+    if (!v) return;
+    send({ type: "addSubtask", taskId: task.id, subtask: { id: genId(), text: v, done: false } });
+    setNewSub("");
+  };
+
+  const initial = (task.owner || "?").charAt(0).toUpperCase();
+
   return (
     <div
-      draggable
+      draggable={draggable && !open}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onClick={onOpen}
-      className="group bg-white rounded-[12px] border border-[#E8E6E1] p-3 cursor-pointer hover:border-[#C9A96E] hover:shadow-sm transition-all select-none"
+      className="bg-white rounded-[12px] border border-[#E8E6E1] hover:border-[#C9A96E] transition-colors"
     >
-      <div className="flex items-start gap-2">
-        <span
-          className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${PRIORITY_DOT[task.priority]}`}
-        />
-        <span className="font-semibold text-[13px] text-[#0A1931] leading-snug">
+      {/* Header (click to expand) */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full text-left p-3 flex items-start gap-2"
+      >
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${PRIORITY_DOT[task.priority]}`} />
+        <span className="flex-1 font-semibold text-[13px] text-[#0A1931] leading-snug">
           {task.title}
         </span>
-      </div>
+        <span className="shrink-0 text-[10px] font-semibold tracking-wide uppercase px-2 py-1 rounded-full bg-[#0A1931] text-[#C9A96E]">
+          {statusLabel(lang, task.status)}
+        </span>
+      </button>
 
-      {task.desc && (
-        <p className="text-[11px] text-[#6B6B6B] mt-1 line-clamp-2 pl-4">
-          {task.desc}
-        </p>
+      {/* Compact meta (hidden when open) */}
+      {!open && (
+        <div className="px-3 pb-3 -mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 text-[11px] text-[#6B6B6B]">
+            <span className="w-4 h-4 rounded-full bg-[#0A1931] text-white text-[8px] font-bold flex items-center justify-center">
+              {initial}
+            </span>
+            {ownerLabel(t, task.owner)}
+          </span>
+          {task.dueDate && (
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                until !== null && until < 0
+                  ? "bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]"
+                  : until !== null && until <= 2
+                  ? "bg-[#FEF3C7] text-[#92400E] border-[#FDE68A]"
+                  : "bg-[#F5F3EF] text-[#6B6B6B] border-[#E8E6E1]"
+              }`}
+            >
+              {dueFmt}
+            </span>
+          )}
+          {task.status === "WAITING" && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B6B6B] border border-[#E8E6E1]">
+              {waiting} {t("task.days")}
+            </span>
+          )}
+          {total > 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B6B6B] border border-[#E8E6E1]">
+              ☑ {done}/{total}
+            </span>
+          )}
+        </div>
       )}
 
-      <div className="flex items-center flex-wrap gap-1.5 mt-2 pl-4">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#8A8A8A]">
-          {task.owner}
-        </span>
+      {/* Expanded body */}
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          {/* Editable title */}
+          <textarea
+            rows={1}
+            value={title.value}
+            onFocus={title.onFocus}
+            onChange={(e) => title.setValue(e.target.value)}
+            onBlur={() => {
+              title.onBlur();
+              if (title.value.trim() && title.value !== task.title)
+                patch({ title: title.value.trim() });
+            }}
+            className="w-full font-semibold text-[14px] text-[#0A1931] bg-[#F5F3EF] rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#C9A96E] resize-none"
+          />
 
-        {task.dueDate && (
-          <span
-            className={`text-[10px] px-2 py-0.5 rounded-full border ${
-              until !== null && until < 0
-                ? "bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]"
-                : until !== null && until <= 2
-                ? "bg-[#FEF3C7] text-[#92400E] border-[#FDE68A]"
-                : "bg-[#F5F3EF] text-[#6B6B6B] border-[#E8E6E1]"
-            }`}
-          >
-            {formatShort(task.dueDate)}
-            {until !== null && until < 0 ? " • ritardo" : ""}
-          </span>
-        )}
+          {/* Owner + due date */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full pl-1 pr-2 h-8 border border-[#E8E6E1]">
+              <span className="w-6 h-6 rounded-full bg-[#0A1931] text-white text-[10px] font-bold flex items-center justify-center">
+                {initial}
+              </span>
+              <select
+                value={task.owner}
+                onChange={(e) => patch({ owner: e.target.value })}
+                className="bg-transparent text-[12px] text-[#0A1931] outline-none cursor-pointer"
+              >
+                <option value="Unassigned">{t("members.unassigned")}</option>
+                {members.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
 
-        {task.status === "WAITING" && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B6B6B] border border-[#E8E6E1]">
-            {waiting} gg
-          </span>
-        )}
+            <label className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full px-3 h-8 border border-[#E8E6E1] text-[12px] text-[#6B6B6B]">
+              {t("task.due")}
+              <input
+                type="date"
+                value={task.dueDate ?? ""}
+                onChange={(e) =>
+                  send({ type: "setDueDate", id: task.id, dueDate: e.target.value || undefined })
+                }
+                className="bg-transparent outline-none text-[12px] text-[#0A1931]"
+              />
+            </label>
+          </div>
 
-        {total > 0 && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B6B6B] border border-[#E8E6E1]">
-            ☑ {done}/{total}
-          </span>
-        )}
-      </div>
+          {/* Priority pills */}
+          <div className="flex items-center gap-1.5">
+            {PRIOS.map((p) => (
+              <button
+                key={p}
+                onClick={() => patch({ priority: p })}
+                title={priorityLabel(t, p)}
+                className={`h-7 px-2.5 rounded-full text-[11px] font-semibold border transition-all ${
+                  task.priority === p
+                    ? p === "P1"
+                      ? "bg-[#DC2626] text-white border-[#DC2626]"
+                      : p === "P2"
+                      ? "bg-[#C9A96E] text-[#0A1931] border-[#C9A96E]"
+                      : p === "P3"
+                      ? "bg-[#C9C5BE] text-[#0A1931] border-[#C9C5BE]"
+                      : "bg-[#0A1931] text-white border-[#0A1931]"
+                    : "bg-white text-[#8A8A8A] border-[#E8E6E1] hover:border-[#C9A96E]"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <span className="text-[11px] text-[#8A8A8A] ml-1">
+              {t(`prio.${task.priority}short`)}
+            </span>
+          </div>
+
+          {/* Subtasks */}
+          <div className="bg-[#FAF9F6] rounded-[10px] border border-[#E8E6E1] p-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-trajan text-[10px] uppercase tracking-wide text-[#8A8A8A]">
+                {t("task.subtasks")} {total ? `${done}/${total} · ${pct}%` : ""}
+              </span>
+            </div>
+            {total > 0 && (
+              <div className="h-1.5 rounded-full bg-[#E8E6E1] overflow-hidden mb-2">
+                <div className="h-full bg-[#C9A96E] transition-all" style={{ width: `${pct}%` }} />
+              </div>
+            )}
+            <div className="space-y-1">
+              {task.subtasks.map((s) => (
+                <div key={s.id} className="group flex items-center gap-1.5">
+                  <Grip />
+                  <input
+                    type="checkbox"
+                    checked={s.done}
+                    onChange={(e) =>
+                      send({
+                        type: "updateSubtask",
+                        taskId: task.id,
+                        subtaskId: s.id,
+                        patch: { done: e.target.checked },
+                      })
+                    }
+                    className="accent-[#C9A96E]"
+                  />
+                  <input
+                    defaultValue={s.text}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v && v !== s.text)
+                        send({
+                          type: "updateSubtask",
+                          taskId: task.id,
+                          subtaskId: s.id,
+                          patch: { text: v },
+                        });
+                    }}
+                    className={`flex-1 bg-transparent text-[12px] outline-none ${
+                      s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
+                    }`}
+                  />
+                  <button
+                    onClick={() =>
+                      send({ type: "deleteSubtask", taskId: task.id, subtaskId: s.id })
+                    }
+                    className="opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-1.5 mt-2">
+              <input
+                value={newSub}
+                onChange={(e) => setNewSub(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addSub()}
+                placeholder={t("task.addSubtask")}
+                className="flex-1 h-8 rounded-full bg-white border border-[#E8E6E1] px-3 text-[12px] outline-none focus:border-[#C9A96E]"
+              />
+              <button
+                onClick={addSub}
+                className="h-8 px-3 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <div className="font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb-1">
+              {t("task.description")}
+            </div>
+            <textarea
+              rows={2}
+              value={desc.value}
+              onFocus={desc.onFocus}
+              onChange={(e) => desc.setValue(e.target.value)}
+              onBlur={() => {
+                desc.onBlur();
+                if (desc.value !== task.desc) patch({ desc: desc.value });
+              }}
+              placeholder={t("task.descPlaceholder")}
+              className="w-full rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E] resize-none"
+            />
+          </div>
+
+          {/* Notes */}
+          <div>
+            <div className="font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb-1">
+              {t("task.notes")}
+            </div>
+            <textarea
+              rows={2}
+              value={notes.value}
+              onFocus={notes.onFocus}
+              onChange={(e) => notes.setValue(e.target.value)}
+              onBlur={() => {
+                notes.onBlur();
+                if (notes.value !== task.notes) patch({ notes: notes.value });
+              }}
+              placeholder={t("task.notesPlaceholder")}
+              className="w-full rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E] resize-none"
+            />
+          </div>
+
+          {/* Footer: move arrows + delete */}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => move(-1)}
+                disabled={idx <= 0}
+                title={t("task.prev")}
+                className="w-8 h-8 rounded-full border border-[#E8E6E1] text-[#0A1931] disabled:opacity-30 hover:border-[#C9A96E]"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() => move(1)}
+                disabled={idx >= STATUS_ORDER.length - 1}
+                title={t("task.next")}
+                className="w-8 h-8 rounded-full bg-[#0A1931] text-white disabled:opacity-30"
+              >
+                ›
+              </button>
+            </div>
+            {confirmDel ? (
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="text-[#DC2626]">{t("task.confirmDelete")}</span>
+                <button
+                  onClick={() => send({ type: "deleteTask", id: task.id })}
+                  className="font-semibold text-[#DC2626]"
+                >
+                  {t("task.yes")}
+                </button>
+                <button onClick={() => setConfirmDel(false)} className="text-[#8A8A8A]">
+                  {t("task.no")}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDel(true)}
+                className="text-[12px] text-[#8A8A8A] hover:text-[#DC2626] underline underline-offset-2"
+              >
+                {t("task.delete")}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

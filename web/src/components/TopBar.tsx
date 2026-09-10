@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Board } from "../lib/types";
 import type { ConnState } from "../lib/useBoard";
+import { useT } from "../lib/i18n";
 
 interface Props {
   board: Board;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function TopBar({ board, onRename, onOpenMail, rightSlot }: Props) {
+  const { t } = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(board.boardName);
 
@@ -22,7 +24,7 @@ export function TopBar({ board, onRename, onOpenMail, rightSlot }: Props) {
 
   return (
     <header className="bg-[#0A1931] text-white">
-      <div className="max-w-[1400px] mx-auto px-4 py-5 flex items-center justify-between gap-4 flex-wrap">
+      <div className="max-w-[1500px] mx-auto px-4 py-5 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4 min-w-0">
           <div className="w-10 h-10 rounded-full border-2 border-[#C9A96E] flex items-center justify-center shrink-0">
             <span className="font-trajan text-[#C9A96E] text-[15px]">G</span>
@@ -49,14 +51,14 @@ export function TopBar({ board, onRename, onOpenMail, rightSlot }: Props) {
                   setDraft(board.boardName);
                   setEditing(true);
                 }}
-                title="Doppio click per rinominare"
+                title={t("app.renameHint")}
                 className="font-trajan text-[20px] sm:text-[22px] tracking-[0.15em] uppercase text-[#C9A96E] cursor-text truncate"
               >
                 {board.boardName}
               </h1>
             )}
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#8BA1C2] mt-0.5">
-              Getting Things Done · Kanban
+              {t("app.subtitle")}
             </p>
           </div>
         </div>
@@ -67,7 +69,7 @@ export function TopBar({ board, onRename, onOpenMail, rightSlot }: Props) {
             onClick={onOpenMail}
             className="h-9 px-4 rounded-full bg-[#C9A96E] text-[#0A1931] text-[12px] font-semibold hover:bg-[#D8BC8A] transition-colors"
           >
-            ✉ Mail update
+            ✉ {t("app.mail")}
           </button>
         </div>
       </div>

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Board, Op, Task } from "../lib/types";
 import { PRIORITY_DOT } from "../lib/constants";
-import { monthLabel, sameDay, toISODate } from "../lib/dates";
+import { sameDay, toISODate } from "../lib/dates";
+import { monthName, weekdayNames, useT } from "../lib/i18n";
 
 interface Props {
   board: Board;
@@ -9,9 +10,8 @@ interface Props {
   send: (op: Op) => void;
 }
 
-const WEEKDAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-
 export function CalendarView({ tasks, send }: Props) {
+  const { t, lang } = useT();
   const [month, setMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -19,16 +19,12 @@ export function CalendarView({ tasks, send }: Props) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
 
-  const withoutDue = tasks.filter((t) => !t.dueDate && t.status !== "DONE");
+  const weekdays = weekdayNames(lang);
+  const withoutDue = tasks.filter((tk) => !tk.dueDate && tk.status !== "DONE");
 
-  // Build the grid (Mon-first).
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const startOffset = (first.getDay() + 6) % 7; // 0 = Monday
-  const daysInMonth = new Date(
-    month.getFullYear(),
-    month.getMonth() + 1,
-    0
-  ).getDate();
+  const startOffset = (first.getDay() + 6) % 7; // Monday-first
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const cells: (Date | null)[] = [];
   for (let i = 0; i < startOffset; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++)
@@ -36,36 +32,27 @@ export function CalendarView({ tasks, send }: Props) {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const today = new Date();
-
   const setDue = (id: string, date: Date) =>
     send({ type: "setDueDate", id, dueDate: toISODate(date) });
 
   return (
     <div className="space-y-4">
-      <div className="text-[12px] text-[#6B6B6B]">
-        <span className="font-semibold text-[#0A1931]">Calendario:</span> trascina
-        un task su una data per impostare la scadenza.
-      </div>
+      <div className="text-[12px] text-[#6B6B6B]">{t("cal.help")}</div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
-        {/* Calendar grid */}
         <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
           <div className="flex items-center justify-between mb-4">
             <button
-              onClick={() =>
-                setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
-              }
+              onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
               className="h-8 w-8 rounded-full border border-[#E8E6E1] hover:border-[#C9A96E]"
             >
               ‹
             </button>
             <div className="font-trajan text-[14px] uppercase tracking-widest text-[#0A1931]">
-              {monthLabel(month)}
+              {monthName(lang, month.getMonth())} {month.getFullYear()}
             </div>
             <button
-              onClick={() =>
-                setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
-              }
+              onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
               className="h-8 w-8 rounded-full border border-[#E8E6E1] hover:border-[#C9A96E]"
             >
               ›
@@ -73,11 +60,8 @@ export function CalendarView({ tasks, send }: Props) {
           </div>
 
           <div className="grid grid-cols-7 gap-1 mb-1">
-            {WEEKDAYS.map((w) => (
-              <div
-                key={w}
-                className="text-[10px] uppercase text-[#8A8A8A] text-center font-semibold"
-              >
+            {weekdays.map((w) => (
+              <div key={w} className="text-[10px] uppercase text-[#8A8A8A] text-center font-semibold">
                 {w}
               </div>
             ))}
@@ -87,9 +71,7 @@ export function CalendarView({ tasks, send }: Props) {
             {cells.map((date, i) => {
               if (!date) return <div key={i} />;
               const key = toISODate(date);
-              const dayTasks = tasks.filter(
-                (t) => t.dueDate && sameDay(new Date(t.dueDate), date)
-              );
+              const dayTasks = tasks.filter((tk) => tk.dueDate && sameDay(new Date(tk.dueDate), date));
               const isToday = sameDay(date, today);
               return (
                 <div
@@ -98,45 +80,35 @@ export function CalendarView({ tasks, send }: Props) {
                     e.preventDefault();
                     setOverKey(key);
                   }}
-                  onDragLeave={() =>
-                    setOverKey((k) => (k === key ? null : k))
-                  }
+                  onDragLeave={() => setOverKey((k) => (k === key ? null : k))}
                   onDrop={() => {
                     if (dragId) setDue(dragId, date);
                     setDragId(null);
                     setOverKey(null);
                   }}
                   className={`min-h-[74px] rounded-lg border p-1 ${
-                    overKey === key
-                      ? "border-[#C9A96E] bg-[#FAF9F6]"
-                      : "border-[#E8E6E1]"
+                    overKey === key ? "border-[#C9A96E] bg-[#FAF9F6]" : "border-[#E8E6E1]"
                   } ${isToday ? "bg-[#F5F3EF]" : ""}`}
                 >
                   <div
                     className={`text-[11px] text-right px-1 ${
-                      isToday
-                        ? "font-bold text-[#8B6F3E]"
-                        : "text-[#8A8A8A]"
+                      isToday ? "font-bold text-[#8B6F3E]" : "text-[#8A8A8A]"
                     }`}
                   >
                     {date.getDate()}
                   </div>
                   <div className="space-y-0.5 mt-0.5">
-                    {dayTasks.map((t) => (
+                    {dayTasks.map((tk) => (
                       <div
-                        key={t.id}
+                        key={tk.id}
                         draggable
-                        onDragStart={() => setDragId(t.id)}
+                        onDragStart={() => setDragId(tk.id)}
                         onDragEnd={() => setDragId(null)}
-                        title={t.title}
+                        title={tk.title}
                         className="flex items-center gap-1 bg-[#F5F3EF] rounded px-1 py-0.5 cursor-grab"
                       >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[t.priority]}`}
-                        />
-                        <span className="text-[10px] text-[#0A1931] truncate">
-                          {t.title}
-                        </span>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_DOT[tk.priority]}`} />
+                        <span className="text-[10px] text-[#0A1931] truncate">{tk.title}</span>
                       </div>
                     ))}
                   </div>
@@ -146,31 +118,24 @@ export function CalendarView({ tasks, send }: Props) {
           </div>
         </div>
 
-        {/* Unscheduled tasks to drag in */}
         <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
           <div className="font-trajan text-[11px] uppercase text-[#8A8A8A] mb-2">
-            Senza scadenza
+            {t("cal.noDue")}
           </div>
           {withoutDue.length === 0 ? (
-            <div className="text-[11px] text-[#A8A29E]">
-              Tutti i task hanno una data.
-            </div>
+            <div className="text-[11px] text-[#A8A29E]">{t("cal.allHaveDate")}</div>
           ) : (
             <div className="space-y-1.5">
-              {withoutDue.map((t) => (
+              {withoutDue.map((tk) => (
                 <div
-                  key={t.id}
+                  key={tk.id}
                   draggable
-                  onDragStart={() => setDragId(t.id)}
+                  onDragStart={() => setDragId(tk.id)}
                   onDragEnd={() => setDragId(null)}
                   className="flex items-center gap-2 bg-[#F5F3EF] rounded-lg border border-[#E8E6E1] px-2 py-1.5 cursor-grab hover:border-[#C9A96E]"
                 >
-                  <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[t.priority]}`}
-                  />
-                  <span className="text-[12px] text-[#0A1931] truncate">
-                    {t.title}
-                  </span>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[tk.priority]}`} />
+                  <span className="text-[12px] text-[#0A1931] truncate">{tk.title}</span>
                 </div>
               ))}
             </div>

@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useBoard } from "./lib/useBoard";
-import { PRIORITY_ORDER, TABS, type TabId } from "./lib/constants";
-import type { Task } from "./lib/types";
+import { TABS, type TabId } from "./lib/constants";
+import { useT } from "./lib/i18n";
 import { TopBar } from "./components/TopBar";
 import { Filters, type FilterState } from "./components/Filters";
 import { BoardView } from "./components/BoardView";
@@ -11,9 +11,11 @@ import { TrackingView } from "./components/TrackingView";
 import { InstructionsView } from "./components/InstructionsView";
 import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
+import { LangToggle } from "./components/LangToggle";
 
 export default function App() {
   const { board, conn, error, send } = useBoard();
+  const { t } = useT();
   const [tab, setTab] = useState<TabId>("board");
   const [mailOpen, setMailOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -25,41 +27,18 @@ export default function App() {
 
   const members = board?.members ?? [];
 
-  // Filtered + priority-sorted tasks (mirrors the original memo).
-  const filtered: Task[] = useMemo(() => {
-    if (!board) return [];
-    const q = filters.search.trim().toLowerCase();
-    return board.tasks
-      .filter((t) => {
-        const matchText =
-          !q ||
-          t.title.toLowerCase().includes(q) ||
-          t.desc.toLowerCase().includes(q);
-        const matchOwner = filters.owner === "all" || t.owner === filters.owner;
-        const matchPrio =
-          filters.priority === "all" || t.priority === filters.priority;
-        const matchFocus = !filters.focusP1 || t.priority === "P1";
-        return matchText && matchOwner && matchPrio && matchFocus;
-      })
-      .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
-  }, [board, filters]);
-
   if (!board) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F3EF]">
-        <div className="text-center">
+        <div className="text-center px-4">
           <div className="font-trajan text-[22px] tracking-widest text-[#0A1931]">
-            TEAM GTD
+            {t("app.loadingTitle")}
           </div>
           <div className="mt-3 text-[13px] text-[#8A8A8A]">
-            {conn === "offline"
-              ? "Connessione al server non riuscita. Riprova."
-              : "Connessione in corso…"}
+            {conn === "offline" ? t("app.connectFailed") : t("app.connecting")}
           </div>
           {error && (
-            <div className="mt-2 text-[11px] text-[#DC2626] max-w-[360px]">
-              {error}
-            </div>
+            <div className="mt-2 text-[11px] text-[#DC2626] max-w-[420px]">{error}</div>
           )}
         </div>
       </div>
@@ -73,63 +52,76 @@ export default function App() {
         conn={conn}
         onRename={(name) => send({ type: "renameBoard", name })}
         onOpenMail={() => setMailOpen(true)}
-        rightSlot={<ConnBadge conn={conn} />}
+        rightSlot={
+          <>
+            <ConnBadge conn={conn} />
+            <LangToggle />
+          </>
+        }
       />
 
       {/* Tabs */}
-      <div className="max-w-[1400px] mx-auto px-4 mt-4">
+      <div className="max-w-[1500px] mx-auto px-4 mt-4">
         <div className="flex flex-wrap gap-2">
-          {TABS.map((t) => {
-            const active = tab === t.id;
+          {TABS.map((tb) => {
+            const active = tab === tb.id;
             return (
               <button
-                key={t.id}
-                data-tab={t.id}
-                onClick={() => setTab(t.id)}
+                key={tb.id}
+                onClick={() => setTab(tb.id)}
                 className={`px-4 h-9 rounded-full text-[12px] font-semibold tracking-wide transition-colors border ${
                   active
                     ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]"
                     : "bg-white text-[#0A1931] border-[#E8E6E1] hover:border-[#C9A96E]"
                 }`}
               >
-                {t.label}
+                {t(`tabs.${tb.id}`)}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Filters — visible on board & calendar */}
-      {(tab === "board" || tab === "calendario") && (
-        <div className="max-w-[1400px] mx-auto px-4 mt-4">
-          <Filters
-            filters={filters}
-            setFilters={setFilters}
-            members={members}
-          />
-        </div>
-      )}
-
-      <div className="max-w-[1400px] mx-auto px-4 mt-4">
+      <div className="max-w-[1500px] mx-auto px-4 mt-4">
         {tab === "board" && (
           <BoardView
             board={board}
-            tasks={filtered}
             members={members}
             send={send}
+            filters={filters}
+            setFilters={setFilters}
           />
         )}
         {tab === "weekly" && <WeeklyView board={board} send={send} />}
         {tab === "calendario" && (
-          <CalendarView board={board} tasks={filtered} send={send} />
+          <div className="space-y-4">
+            <Filters filters={filters} setFilters={setFilters} members={members} />
+            <CalendarView
+              board={board}
+              tasks={filteredForCalendar(board.tasks, filters)}
+              send={send}
+            />
+          </div>
         )}
         {tab === "tracking" && <TrackingView board={board} />}
         {tab === "istruzioni" && <InstructionsView />}
       </div>
 
-      {mailOpen && (
-        <MailModal board={board} onClose={() => setMailOpen(false)} />
-      )}
+      {mailOpen && <MailModal board={board} onClose={() => setMailOpen(false)} />}
     </div>
   );
+}
+
+function filteredForCalendar(
+  tasks: import("./lib/types").Task[],
+  f: FilterState
+) {
+  const q = f.search.trim().toLowerCase();
+  return tasks.filter((tk) => {
+    const text = !q || tk.title.toLowerCase().includes(q) || tk.desc.toLowerCase().includes(q);
+    const owner = f.owner === "all" || tk.owner === f.owner;
+    const prio = f.priority === "all" || tk.priority === f.priority;
+    const focus = !f.focusP1 || tk.priority === "P1";
+    return text && owner && prio && focus;
+  });
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Board, Op, Weekly } from "../lib/types";
 import { WEEKLY_COLUMNS, genId } from "../lib/constants";
+import { useT } from "../lib/i18n";
 
 interface Props {
   board: Board;
@@ -8,54 +9,67 @@ interface Props {
 }
 
 export function WeeklyView({ board, send }: Props) {
-  const doneThisWeek = board.tasks.filter((t) => t.status === "DONE");
+  const { t } = useT();
+  const doneThisWeek = board.tasks.filter((tk) => tk.status === "DONE");
+  const [confirmClear, setConfirmClear] = useState(false);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="text-[12px] text-[#6B6B6B]">
-          <span className="font-semibold text-[#0A1931]">Weekly Review:</span> la
-          sezione FATTO si aggiorna da DONE. Usa le 5 colonne per il retro.
-        </div>
-        <button
-          onClick={() => {
-            if (confirm("Svuota tutte le colonne del weekly?"))
-              send({ type: "weeklyClear" });
-          }}
-          className="h-9 px-4 rounded-full text-[12px] font-semibold bg-white text-[#8A8A8A] border border-[#E8E6E1] hover:border-[#DC2626] hover:text-[#DC2626]"
-        >
-          Svuota weekly
-        </button>
+        <div className="text-[12px] text-[#6B6B6B]">{t("weekly.help")}</div>
+        {confirmClear ? (
+          <div className="flex items-center gap-2 text-[12px]">
+            <span className="text-[#DC2626]">{t("weekly.confirmClear")}</span>
+            <button
+              onClick={() => {
+                send({ type: "weeklyClear" });
+                setConfirmClear(false);
+              }}
+              className="font-semibold text-[#DC2626]"
+            >
+              {t("task.yes")}
+            </button>
+            <button onClick={() => setConfirmClear(false)} className="text-[#8A8A8A]">
+              {t("task.no")}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmClear(true)}
+            className="h-9 px-4 rounded-full text-[12px] font-semibold bg-white text-[#8A8A8A] border border-[#E8E6E1] hover:border-[#DC2626] hover:text-[#DC2626]"
+          >
+            {t("weekly.clear")}
+          </button>
+        )}
       </div>
 
-      {/* FATTO QUESTA SETTIMANA (auto) */}
+      {/* Done this week (auto) */}
       <div className="bg-[#ECFDF5] border border-[#A7F3D0] rounded-[14px] p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="font-trajan text-[11px] uppercase tracking-widest text-[#065F46]">
-            Fatto questa settimana
+            {t("weekly.doneThisWeek")}
           </span>
           <span className="bg-white border border-[#A7F3D0] text-[#065F46] text-[11px] font-semibold rounded-full px-2 py-0.5">
             {doneThisWeek.length}
           </span>
         </div>
         {doneThisWeek.length === 0 ? (
-          <div className="text-[12px] text-[#065F46]/70">Nessuna attività in DONE.</div>
+          <div className="text-[12px] text-[#065F46]/70">{t("weekly.noneDone")}</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {doneThisWeek.map((t) => (
+            {doneThisWeek.map((tk) => (
               <div
-                key={t.id}
+                key={tk.id}
                 className="text-[13px] text-[#065F46] bg-white rounded-lg border border-[#A7F3D0] px-3 py-1.5"
               >
-                {t.title}
-                <span className="text-[#8A8A8A] text-[11px]"> · {t.owner}</span>
+                {tk.title}
+                <span className="text-[#8A8A8A] text-[11px]"> · {tk.owner}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* 5 retro columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {WEEKLY_COLUMNS.map((col) => (
           <WeeklyColumn
@@ -85,11 +99,12 @@ function WeeklyColumn({
   items: { id: string; text: string }[];
   send: (op: Op) => void;
 }) {
+  const { t } = useT();
   const [draft, setDraft] = useState("");
   const add = () => {
-    const t = draft.trim();
-    if (!t) return;
-    send({ type: "weeklyAdd", column: colKey, item: { id: genId(), text: t } });
+    const v = draft.trim();
+    if (!v) return;
+    send({ type: "weeklyAdd", column: colKey, item: { id: genId(), text: v } });
     setDraft("");
   };
 
@@ -114,9 +129,7 @@ function WeeklyColumn({
               className="flex-1 text-[12px] text-[#0A1931] bg-[#F5F3EF] rounded-lg border border-[#E8E6E1] p-2 outline-none focus:border-[#C9A96E] resize-none"
             />
             <button
-              onClick={() =>
-                send({ type: "weeklyDelete", column: colKey, id: it.id })
-              }
+              onClick={() => send({ type: "weeklyDelete", column: colKey, id: it.id })}
               className="opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px] mt-1"
             >
               ✕
@@ -129,7 +142,7 @@ function WeeklyColumn({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="Aggiungi…"
+          placeholder={t("weekly.add")}
           className="flex-1 h-8 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[12px] outline-none focus:border-[#C9A96E]"
         />
         <button
