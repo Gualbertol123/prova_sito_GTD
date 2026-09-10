@@ -29,6 +29,7 @@ export interface Task {
   dueDate?: string; // ISO yyyy-mm-dd
   waitingSince?: string; // ISO yyyy-mm-dd
   updatedAt: number;
+  createdAt?: number; // ordering within a column (oldest first)
 }
 
 export interface WeeklyItem {
@@ -44,7 +45,8 @@ export interface Weekly {
   focus: WeeklyItem[]; // FOCUS NEXT WEEK
 }
 
-// The single board document — the entire shared state lives here.
+// The assembled board — the entire shared state, rebuilt from the Supabase
+// tables (board_meta + tasks + weekly) and kept live via realtime.
 export interface Board {
   id: "board";
   boardName: string;
@@ -52,12 +54,11 @@ export interface Board {
   tasks: Task[];
   weekly: Weekly;
   updatedAt: number;
-  rev: number; // monotonically increasing revision, bumped on every write
+  rev?: number; // optional; not used by the Supabase backend
 }
 
-// Operations the client sends to the API. The server applies them
-// authoritatively against the current board (with optimistic-concurrency
-// retries) so that concurrent edits from different users merge cleanly.
+// Operations the UI dispatches. The data layer translates each into the
+// corresponding Supabase write; realtime propagates the result to everyone.
 export type Op =
   | { type: "addTask"; task: Task }
   | { type: "updateTask"; id: string; patch: Partial<Task> }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Board } from "../lib/types";
-import type { ConnState } from "../lib/api";
+import type { ConnState } from "../lib/useBoard";
 
 interface Props {
   board: Board;

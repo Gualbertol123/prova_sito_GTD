@@ -1,4 +1,4 @@
-import type { ConnState } from "../lib/api";
+import type { ConnState } from "../lib/useBoard";
 
 const MAP: Record<ConnState, { label: string; dot: string; text: string }> = {
   connecting: { label: "Connessione…", dot: "bg-[#C9A96E]", text: "text-[#8A8A8A]" },

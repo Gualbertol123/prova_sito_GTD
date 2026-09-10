@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Board, Op } from "./types";
-import { applyOp } from "./reducer";
-import { connectRealtime, fetchBoard, sendOp, type ConnState } from "./api";
+import { fetchBoard, seedIfEmpty, writeOp } from "./db";
+import { applyOpLocal } from "./localReducer";
+import { supabase } from "./supabaseClient";
+import { isConfigured } from "./supabaseConfig";
+
+export type ConnState = "connecting" | "online" | "reconnecting" | "offline";
 
 export interface UseBoard {
   board: Board | null;
@@ -11,69 +15,96 @@ export interface UseBoard {
   reload: () => void;
 }
 
-// Central hook: loads the board, subscribes to realtime broadcasts, and
-// exposes an optimistic `send`. All state lives in memory only — nothing is
-// ever written to localStorage / sessionStorage / IndexedDB.
+// Loads the board from Supabase, keeps it live via Postgres realtime, and
+// dispatches optimistic ops. All state is in memory only.
 export function useBoard(): UseBoard {
   const [board, setBoard] = useState<Board | null>(null);
   const [conn, setConn] = useState<ConnState>("connecting");
   const [error, setError] = useState<string | null>(null);
 
-  // Keep the latest board in a ref so realtime callbacks can compare revs
-  // without re-subscribing.
-  const revRef = useRef<number>(-1);
-
-  const applyRemote = useCallback((incoming: Board) => {
-    // Only accept a newer (or equal-newer) revision to avoid flicker from
-    // out-of-order frames.
-    if (incoming.rev >= revRef.current) {
-      revRef.current = incoming.rev;
-      setBoard(incoming);
-    }
-  }, []);
+  const boardRef = useRef<Board | null>(null);
+  boardRef.current = board;
 
   const reload = useCallback(() => {
     fetchBoard()
       .then((b) => {
         setError(null);
-        applyRemote(b);
+        setBoard(b);
       })
-      .catch((e: unknown) => setError(String((e as Error).message ?? e)));
-  }, [applyRemote]);
+      .catch((e: unknown) => setError(errMsg(e)));
+  }, []);
 
   useEffect(() => {
-    reload();
-    const dispose = connectRealtime({
-      onState: applyRemote,
-      onConn: setConn,
-      onResync: reload,
-    });
-    return dispose;
-  }, [reload, applyRemote]);
+    if (!isConfigured) {
+      setConn("offline");
+      setError(
+        "Supabase non è configurato: inserisci URL e anon key in supabaseConfig.ts (o nelle variabili VITE_SUPABASE_*)."
+      );
+      return;
+    }
 
-  const send = useCallback(
-    (op: Op) => {
-      // Optimistic local apply for instant feedback.
-      setBoard((prev) => {
-        if (!prev) return prev;
-        const next = applyOp(prev, op);
-        revRef.current = next.rev;
-        return next;
+    let cancelled = false;
+
+    // Initial load (seed on first run).
+    (async () => {
+      try {
+        await seedIfEmpty();
+        if (cancelled) return;
+        reload();
+      } catch (e) {
+        if (!cancelled) setError(errMsg(e));
+      }
+    })();
+
+    // Debounced authoritative refresh on any realtime change.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleReload = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => reload(), 120);
+    };
+
+    const channel = supabase
+      .channel("board-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "weekly" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "board_meta" }, scheduleReload)
+      .subscribe((status) => {
+        if (cancelled) return;
+        if (status === "SUBSCRIBED") setConn("online");
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT")
+          setConn("reconnecting");
+        else if (status === "CLOSED") setConn("offline");
       });
-      // Persist + broadcast. The authoritative result replaces local state.
-      sendOp(op)
-        .then((b) => {
-          setError(null);
-          applyRemote(b);
-        })
-        .catch((e: unknown) => {
-          setError(String((e as Error).message ?? e));
-          // Re-sync from the server to undo a failed optimistic change.
-          reload();
-        });
-    },
-    [applyRemote, reload]
-  );
+
+    // Browser connectivity hints.
+    const onOffline = () => setConn("reconnecting");
+    window.addEventListener("offline", onOffline);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("offline", onOffline);
+      supabase.removeChannel(channel);
+    };
+  }, [reload]);
+
+  const send = useCallback((op: Op) => {
+    const current = boardRef.current;
+    if (!current) return;
+    // Optimistic apply for instant feedback.
+    const optimistic = applyOpLocal(current, op);
+    setBoard(optimistic);
+    // Persist; realtime will reconcile to authoritative state.
+    writeOp(op, current).catch((e: unknown) => {
+      setError(errMsg(e));
+      reload(); // undo the failed optimistic change
+    });
+  }, [reload]);
 
   return { board, conn, error, send, reload };
+}
+
+function errMsg(e: unknown): string {
+  if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
+  return String(e);
 }

@@ -1,16 +1,18 @@
 # TEAM GTD FINALE — realtime collaborative board
 
 A full rebuild of the original single-file GTD + Kanban artifact as a modern
-**React app with real-time multi-user collaboration**, hosted entirely on
-**Azure**. Multiple people can view and edit the same board at the same time;
-every change is persisted server-side and pushed live to everyone connected.
+**React app with real-time multi-user collaboration**, hosted **100% free**:
 
-**Nothing is stored or cached in the browser** — no `localStorage`,
-`sessionStorage`, IndexedDB or offline cache. The board always reflects the
-authoritative server state. All usage is remote.
+- **Frontend** → **Netlify** (free static hosting, builds from GitHub).
+- **Data + realtime** → **Supabase** (free Postgres + realtime + auto REST API).
+
+Multiple people can view and edit the same board at once; every change is
+saved to Supabase and pushed live to everyone connected. **Nothing is stored or
+cached in the browser** — the Supabase client runs with memory-only state and no
+session persistence, so closing the tab leaves no local copy.
 
 The look (navy `#0A1931`, gold `#C9A96E`, cream backgrounds) and fonts
-(**Cinzel** display + **Inter** body) are carried over from the original.
+(**Cinzel** display + **Inter** body) match the original.
 
 ---
 
@@ -18,15 +20,13 @@ The look (navy `#0A1931`, gold `#C9A96E`, cream backgrounds) and fonts
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban with 6 columns — Backlog · Next · In Progress · Waiting · Done · Maybe. Drag cards between columns, quick-add, per-column add, team members bar, priority distribution chart. |
-| **WEEKLY** | Weekly review: auto "Fatto questa settimana" (from DONE) plus 5 retro columns — WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
-| **CALENDARIO** | Month calendar; drag a task onto a date to set its due date. Unscheduled tasks listed alongside. |
-| **TRACKING 🔒** | Password-gated team-load monitor: active tasks, P1 count and Ok / Carico alto / Sovraccarico status per member. |
+| **BOARD** | Kanban — Backlog · Next · In Progress · Waiting · Done · Maybe. Drag cards, quick-add, per-column add, team members bar, priority chart. |
+| **WEEKLY** | Weekly review: auto "Fatto questa settimana" (from DONE) + 5 retro columns (WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS). |
+| **CALENDARIO** | Month calendar; drag a task onto a date to set its due date. |
+| **TRACKING 🔒** | Password-gated team-load monitor. |
 | **ISTRUZIONI** | Reference for statuses, priorities and workflow. |
 
-Task fields: title, description, owner, priority (P1–P4), status, notes,
-subtasks (with progress), due date, waiting-since. Plus a **Mail update**
-generator (DONE + FOCUS → clipboard / mail client).
+Plus a **Mail update** generator (DONE + FOCUS → clipboard / mail client).
 
 ---
 
@@ -34,140 +34,102 @@ generator (DONE + FOCUS → clipboard / mail client).
 
 ```
 Browser (React SPA, in-memory only)
-    │  fetch /api/board (GET)           ← initial + resync
-    │  fetch /api/board (POST op)       ← every edit
-    │  WebSocket via Azure Web PubSub   ← live board broadcasts
-    ▼
-Azure Static Web Apps  ──  managed Azure Functions (/api)
-                                  │
-             ┌────────────────────┴────────────────────┐
-             ▼                                          ▼
-     Azure Cosmos DB (serverless)            Azure Web PubSub
-     single "board" document,                fan-out of new board
-     optimistic-concurrency writes           state to all clients
+   │  @supabase/supabase-js  ── select / insert / update / delete
+   │  Postgres realtime (WebSocket)  ── live change events → refresh
+   ▼
+Supabase project (free)
+   board_meta · tasks · weekly   (Postgres tables, RLS open to anon key)
 ```
 
-- **Single source of truth:** one `board` document in Cosmos DB.
-- **Operation-based edits:** the client sends small operations (`moveTask`,
-  `updateTask`, `weeklyAdd`, …). The server applies each op against the
-  *current* document with **ETag optimistic-concurrency retries**, so two
-  people editing different things at the same time merge cleanly instead of
-  overwriting each other.
-- **Live sync:** after every successful write the server broadcasts the new
-  board to all clients over **Azure Web PubSub**. Clients also re-sync on
-  reconnect, so nothing is missed if a socket drops.
-- **Optimistic UI:** edits apply locally instantly, then reconcile with the
-  authoritative server response.
+- **Source of truth:** three Postgres tables. Each task is its own row, so two
+  people editing different tasks never collide.
+- **Live sync:** Supabase Postgres realtime broadcasts every insert/update/
+  delete; each client refreshes and re-renders.
+- **Snappy UI:** edits apply optimistically in memory, then reconcile with the
+  authoritative row from realtime.
+- **No local storage:** the Supabase client uses memory-only cache and
+  `persistSession:false`, so nothing lands in `localStorage`/IndexedDB.
 
 ### Repo layout
 
 ```
 web/            React + Vite + TypeScript + Tailwind frontend
-  src/lib/      types, constants, dates, realtime client, board reducer, hooks
+  src/lib/      supabase client, data layer (db.ts), realtime hook, seed
   src/components/  board, calendar, weekly, tracking, instructions, modals
-api/            Azure Functions (Node) — negotiate + board endpoints
-  src/shared/   cosmos, web pubsub, reducer (authoritative), seed data
-infra/          Bicep template provisioning all Azure resources
+supabase/schema.sql   run once to create tables + policies + realtime
+netlify.toml    Netlify build config
 legacy/         the original artifact, kept for reference
-staticwebapp.config.json   SWA routing + no-store headers
-.github/workflows/         CI/CD to Azure Static Web Apps
 ```
 
 ---
 
-## Deploy to Azure
+## Deploy — browser only, ~15 minutes
 
-You need the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
-and an Azure subscription.
+### Part 1 — Create the Supabase backend
 
-### 1. Provision infrastructure (Cosmos DB + Web PubSub + Static Web App)
+1. Go to **https://supabase.com** → sign in with GitHub → **New project**.
+   - Name: `team-gtd`, pick a strong DB password (you won't need it again),
+     region: **West EU (Ireland/Frankfurt)**. Create — it provisions in ~2 min.
+2. Left sidebar → **SQL Editor** → **New query**. Open `supabase/schema.sql`
+   from this repo, copy **all** of it, paste, and click **Run**. This creates
+   the tables, opens access for the anon key, and enables realtime.
+3. Left sidebar → **Project Settings → API**. Copy two values:
+   - **Project URL** (e.g. `https://abcd1234.supabase.co`)
+   - **anon public** key (a long `eyJ...` string)
 
-```bash
-az login
-az group create -n rg-team-gtd -l westeurope
+### Part 2 — Deploy the frontend on Netlify
 
-az deployment group create \
-  -g rg-team-gtd \
-  -f infra/main.bicep \
-  -p namePrefix=teamgtd swaLocation=westeurope webPubSubSku=Free_F1
-```
+1. Go to **https://app.netlify.com** → sign in with GitHub →
+   **Add new site → Import an existing project → GitHub** → pick
+   `Gualbertol123/prova_sito_GTD`.
+2. Netlify reads `netlify.toml`, so build command and publish dir are already
+   set. Just choose the branch **`claude/hopeful-noether-u6oblf`**
+   (or `main` once you've merged).
+3. Before the first deploy, open **Site configuration → Environment variables**
+   → **Add a variable** (add both):
+   | Key | Value |
+   |---|---|
+   | `VITE_SUPABASE_URL` | *(the Project URL from Part 1.3)* |
+   | `VITE_SUPABASE_ANON_KEY` | *(the anon public key)* |
+4. **Deploy site**. When it finishes, open the Netlify URL. The board seeds
+   itself on first load and the status pill top-right reads **Live**.
+5. Open the URL in a second browser and drag a card — it moves live in the
+   first. That's the real-time sync working.
 
-The Bicep template creates a serverless Cosmos DB account, an Azure Web PubSub
-(Free tier by default — fine for a small team; use `Standard_S1` for
-production), a Static Web App, and **wires the Cosmos/Web PubSub connection
-strings into the Static Web App's API app settings automatically**.
+> Prefer not to use environment variables? You can instead paste the two values
+> directly into `web/src/lib/supabaseConfig.ts` via GitHub's web editor and
+> commit — Netlify will rebuild automatically. (The anon key is not secret.)
 
-> Free Web PubSub allows ~20 concurrent connections and 20k messages/day.
-> For a bigger team or heavier use, redeploy with `webPubSubSku=Standard_S1`.
+### Alternative hosts
 
-### 2. Connect the repo (CI/CD)
-
-Get the Static Web App deployment token and add it to GitHub:
-
-```bash
-az staticwebapp secrets list \
-  -n <staticWebAppName-from-output> -g rg-team-gtd \
-  --query "properties.apiKey" -o tsv
-```
-
-Add it as a repository secret named `AZURE_STATIC_WEB_APPS_API_TOKEN`
-(**Settings → Secrets and variables → Actions**). Pushing to `main` then
-builds and deploys automatically via
-`.github/workflows/azure-static-web-apps.yml`.
-
-Alternatively deploy manually with the SWA CLI:
-
-```bash
-npm install -g @azure/static-web-apps-cli
-cd web && npm install && npm run build && cd ..
-swa deploy ./web/dist --api-location ./api \
-  --deployment-token <token> --env production
-```
-
-### 3. Done
-
-Open the Static Web App URL (`staticWebAppDefaultHostname` from the Bicep
-output). The board seeds itself on first load and is live for everyone.
+The frontend is plain static files, so **Vercel**, **Cloudflare Pages**, or
+**GitHub Pages** work identically — connect the repo, set build command
+`npm --prefix web install && npm --prefix web run build`, publish `web/dist`,
+and add the same two `VITE_SUPABASE_*` variables.
 
 ---
 
 ## Run locally
 
-Two terminals (frontend proxies `/api` to the Functions host on :7071):
-
 ```bash
-# Terminal 1 — API
-cd api
-cp local.settings.json.example local.settings.json   # then fill in the values
-npm install
-npm start            # requires Azure Functions Core Tools v4
-
-# Terminal 2 — frontend
 cd web
+cp .env.example .env      # fill in your Supabase URL + anon key
 npm install
-npm run dev          # http://localhost:5173
-```
-
-For local runtime you still need a real Cosmos DB and Web PubSub (or the
-[Cosmos DB emulator](https://learn.microsoft.com/azure/cosmos-db/local-emulator)).
-Put their connection strings in `api/local.settings.json`.
-
-Run the API unit tests:
-
-```bash
-cd api && node --test test/
+npm run dev               # http://localhost:5173
 ```
 
 ---
 
-## Configuration (API app settings)
+## Good to know
 
-| Setting | Purpose |
-| --- | --- |
-| `COSMOS_CONNECTION_STRING` | Cosmos DB account connection string |
-| `COSMOS_DATABASE` | database name (default `gtd`) |
-| `COSMOS_CONTAINER` | container name (default `board`) |
-| `WEBPUBSUB_CONNECTION_STRING` | Azure Web PubSub connection string |
-| `WEBPUBSUB_HUB` | hub name (default `boardhub`) |
-
-All are set automatically by the Bicep deployment.
+- **Free Supabase projects pause after ~7 days of inactivity.** If nobody
+  opens the board for a week, the first visitor sees errors until someone
+  clicks **Restore** in the Supabase dashboard (~1–2 min). Regular weekly use
+  keeps it awake. (This is the main tradeoff of the free tier.)
+- **Access is open.** Anyone with the site URL can read/write the board — there
+  is no login, matching the original app. The `TRACKING` tab keeps its own
+  password gate (the password lives in the app code, not here). To restrict the
+  whole board, add Supabase Auth and tighten the RLS policies in
+  `supabase/schema.sql`.
+- **Free limits** (500 MB database, 200 concurrent realtime connections, 2
+  projects) are far above what a small team needs.

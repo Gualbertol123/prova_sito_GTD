@@ -1,0 +1,22 @@
+# Netlify build configuration for the TEAM GTD React app.
+# The frontend lives in web/ and talks directly to Supabase — there is no
+# server to deploy here.
+
+[build]
+  command = "npm --prefix web install && npm --prefix web run build"
+  publish = "web/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Single-page app: serve index.html for any path.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Never let the browser cache the HTML shell — everything is remote/live.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-store"

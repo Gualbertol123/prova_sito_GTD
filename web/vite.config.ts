@@ -1,21 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// During local dev, proxy /api to the Azure Functions host (func start on :7071)
-// so the frontend and API share an origin exactly like Azure Static Web Apps.
+// Static SPA. No backend server — the app talks straight to Supabase from the
+// browser. Served at a domain root on Netlify.
 export default defineConfig({
   plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      "/api": {
-        target: "http://localhost:7071",
-        changeOrigin: true,
-      },
-    },
-  },
-  build: {
-    outDir: "dist",
-    sourcemap: false,
-  },
+  base: "/",
+  server: { port: 5173 },
+  build: { outDir: "dist", sourcemap: false },
 });

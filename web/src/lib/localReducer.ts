@@ -1,29 +1,29 @@
-"use strict";
+import type { Board, Op, Task } from "./types";
 
-// Authoritative board reducer. Must stay in sync with the client copy at
-// web/src/lib/reducer.ts — same operations, same semantics.
-function applyOp(board, op) {
+// Optimistic, in-memory only. Applies an op to the current board so the UI
+// updates instantly; the authoritative state is then reloaded from Supabase
+// when the realtime event for this change arrives.
+export function applyOpLocal(board: Board, op: Op): Board {
   const now = Date.now();
-  const b = {
+  const b: Board = {
     ...board,
-    tasks: board.tasks.map((t) => ({ ...t, subtasks: [...(t.subtasks || [])] })),
+    tasks: board.tasks.map((t) => ({ ...t, subtasks: [...t.subtasks] })),
     weekly: {
-      well: [...(board.weekly.well || [])],
-      learnings: [...(board.weekly.learnings || [])],
-      improve: [...(board.weekly.improve || [])],
-      blockers: [...(board.weekly.blockers || [])],
-      focus: [...(board.weekly.focus || [])],
+      well: [...board.weekly.well],
+      learnings: [...board.weekly.learnings],
+      improve: [...board.weekly.improve],
+      blockers: [...board.weekly.blockers],
+      focus: [...board.weekly.focus],
     },
     members: [...board.members],
     updatedAt: now,
-    rev: (board.rev || 0) + 1,
   };
 
-  const find = (id) => b.tasks.find((t) => t.id === id);
+  const find = (id: string): Task | undefined => b.tasks.find((t) => t.id === id);
 
   switch (op.type) {
     case "addTask":
-      b.tasks = [{ ...op.task, updatedAt: now }, ...b.tasks];
+      b.tasks = [...b.tasks, { ...op.task, createdAt: op.task.createdAt ?? now }];
       break;
     case "updateTask": {
       const t = find(op.id);
@@ -77,50 +77,23 @@ function applyOp(board, op) {
       b.members = op.members;
       break;
     case "renameBoard":
-      b.boardName = String(op.name || "").slice(0, 80) || b.boardName;
+      b.boardName = op.name;
       break;
     case "weeklyAdd":
-      if (b.weekly[op.column]) b.weekly[op.column] = [...b.weekly[op.column], op.item];
+      b.weekly[op.column] = [...b.weekly[op.column], op.item];
       break;
     case "weeklyUpdate":
-      if (b.weekly[op.column])
-        b.weekly[op.column] = b.weekly[op.column].map((i) =>
-          i.id === op.id ? { ...i, text: op.text } : i
-        );
+      b.weekly[op.column] = b.weekly[op.column].map((i) =>
+        i.id === op.id ? { ...i, text: op.text } : i
+      );
       break;
     case "weeklyDelete":
-      if (b.weekly[op.column])
-        b.weekly[op.column] = b.weekly[op.column].filter((i) => i.id !== op.id);
+      b.weekly[op.column] = b.weekly[op.column].filter((i) => i.id !== op.id);
       break;
     case "weeklyClear":
       b.weekly = { well: [], learnings: [], improve: [], blockers: [], focus: [] };
       break;
-    default:
-      throw new Error(`Unknown op: ${op && op.type}`);
   }
 
   return b;
 }
-
-const KNOWN_OPS = new Set([
-  "addTask",
-  "updateTask",
-  "deleteTask",
-  "moveTask",
-  "setDueDate",
-  "addSubtask",
-  "updateSubtask",
-  "deleteSubtask",
-  "setMembers",
-  "renameBoard",
-  "weeklyAdd",
-  "weeklyUpdate",
-  "weeklyDelete",
-  "weeklyClear",
-]);
-
-function isValidOp(op) {
-  return !!op && typeof op.type === "string" && KNOWN_OPS.has(op.type);
-}
-
-module.exports = { applyOp, isValidOp };
