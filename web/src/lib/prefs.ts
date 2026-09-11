@@ -1,11 +1,13 @@
-// Per-viewer UI preferences (language, which columns are shown). These are
-// personal display settings for THIS browser only — not board data — so
-// localStorage is the right home for them. The board's actual content still
-// lives only on the server and is never cached locally.
+// Per-viewer UI preferences. Personal display settings for THIS browser only —
+// not board data — so localStorage is the right home. Board content still lives
+// only on the server and is never cached locally.
 
 const KEYS = {
   lang: "gtd-lang",
   hidden: "gtd-hidden-cols",
+  view: "gtd-view-mode",
+  weights: "gtd-col-weights",
+  auth: "gtd-auth",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {
@@ -24,18 +26,58 @@ export function writePref(key: keyof typeof KEYS, value: string): void {
   }
 }
 
-// Columns the viewer has chosen to hide.
-export function readHidden(): string[] {
+export function removePref(key: keyof typeof KEYS): void {
   try {
-    const raw = readPref("hidden");
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+    localStorage.removeItem(KEYS[key]);
   } catch {
-    return [];
+    /* ignore */
   }
 }
 
+// Columns the viewer has chosen to hide.
+export function readHidden(): string[] {
+  return readJson<string[]>("hidden", []).filter((x) => typeof x === "string");
+}
 export function writeHidden(cols: string[]): void {
   writePref("hidden", JSON.stringify(cols));
+}
+
+// Board vs list view.
+export type ViewMode = "board" | "list";
+export function readViewMode(): ViewMode {
+  return readPref("view") === "list" ? "list" : "board";
+}
+export function writeViewMode(v: ViewMode): void {
+  writePref("view", v);
+}
+
+// Per-column flex-grow weights for the resizable board.
+export function readWeights(): Record<string, number> {
+  const w = readJson<Record<string, number>>("weights", {});
+  return w && typeof w === "object" ? w : {};
+}
+export function writeWeights(w: Record<string, number>): void {
+  writePref("weights", JSON.stringify(w));
+}
+
+// Cached login token: { exp: epoch-ms }.
+export function readAuthExp(): number | null {
+  const a = readJson<{ exp?: number }>("auth", {});
+  return typeof a?.exp === "number" ? a.exp : null;
+}
+export function writeAuth(exp: number): void {
+  writePref("auth", JSON.stringify({ exp }));
+}
+export function clearAuth(): void {
+  removePref("auth");
+}
+
+function readJson<T>(key: keyof typeof KEYS, fallback: T): T {
+  try {
+    const raw = readPref(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }

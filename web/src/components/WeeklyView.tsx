@@ -57,15 +57,32 @@ export function WeeklyView({ board, send }: Props) {
           <div className="text-[12px] text-[#065F46]/70">{t("weekly.noneDone")}</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {doneThisWeek.map((tk) => (
-              <div
-                key={tk.id}
-                className="text-[13px] text-[#065F46] bg-white rounded-lg border border-[#A7F3D0] px-3 py-1.5"
-              >
-                {tk.title}
-                <span className="text-[#8A8A8A] text-[11px]"> · {tk.owner}</span>
-              </div>
-            ))}
+            {doneThisWeek.map((tk) => {
+              const total = tk.subtasks.length;
+              const done = tk.subtasks.filter((s) => s.done).length;
+              return (
+                <div
+                  key={tk.id}
+                  className="text-[13px] text-[#065F46] bg-white rounded-lg border border-[#A7F3D0] px-3 py-1.5 flex items-center justify-between gap-2"
+                >
+                  <span className="min-w-0">
+                    <span className="font-medium">{tk.title}</span>
+                    <span className="text-[#8A8A8A] text-[11px]"> · {tk.owner}</span>
+                    {tk.desc && <span className="text-[#8A8A8A] text-[11px] block truncate">{tk.desc}</span>}
+                  </span>
+                  <span className="shrink-0 flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#ECFDF5] border border-[#A7F3D0]">
+                      {tk.priority}
+                    </span>
+                    {total > 0 && (
+                      <span className="text-[10px] text-[#8A8A8A]">
+                        ☑ {done}/{total} {t("weekly.subtasksDone")}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

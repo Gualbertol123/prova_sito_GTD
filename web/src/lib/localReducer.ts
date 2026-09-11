@@ -79,6 +79,14 @@ export function applyOpLocal(board: Board, op: Op): Board {
     case "renameBoard":
       b.boardName = op.name;
       break;
+    case "setSubtitle":
+      if (op.lang === "it") b.subtitleIt = op.text;
+      else b.subtitleEn = op.text;
+      break;
+    case "setAccess":
+      if (op.password !== undefined) b.accessPassword = op.password;
+      if (op.loginDays !== undefined) b.loginDays = op.loginDays;
+      break;
     case "weeklyAdd":
       b.weekly[op.column] = [...b.weekly[op.column], op.item];
       break;

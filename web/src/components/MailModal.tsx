@@ -9,12 +9,19 @@ export function MailModal({ board, onClose }: { board: Board; onClose: () => voi
   const text = useMemo(() => {
     const done = board.tasks.filter((tk) => tk.status === "DONE");
     const focus = board.weekly.focus;
+    const next = board.tasks.filter((tk) => tk.status === "NEXT");
+
     let e = `${t("mail.completed")}\n`;
     if (done.length === 0) e += `- ${t("mail.none")}\n`;
-    else done.forEach((w) => (e += `- ${w.title}\n`));
+    else done.forEach((w) => (e += `- ${w.title}${w.owner && w.owner !== "Unassigned" ? ` (${w.owner})` : ""}\n`));
+
     e += `\n${t("mail.nextSteps")}\n`;
-    if (focus.length === 0) e += `- ${t("mail.none")}\n`;
-    else focus.forEach((w) => (e += `- ${w.text}\n`));
+    const nextLines: string[] = [
+      ...focus.map((w) => w.text),
+      ...next.map((w) => `${w.title}${w.owner && w.owner !== "Unassigned" ? ` (${w.owner})` : ""}`),
+    ];
+    if (nextLines.length === 0) e += `- ${t("mail.none")}\n`;
+    else nextLines.forEach((l) => (e += `- ${l}\n`));
     return e;
   }, [board, t]);
 

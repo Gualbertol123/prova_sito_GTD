@@ -8,11 +8,15 @@
 
 -- ---- Tables ----------------------------------------------------------------
 
--- Single-row table holding board name + team members.
+-- Single-row table holding board name, team members and app settings.
 create table if not exists public.board_meta (
-  id          text primary key,
-  board_name  text  not null default 'TEAM GTD FINALE',
-  members     text[] not null default '{}'
+  id              text primary key,
+  board_name      text  not null default 'TEAM GTD FINALE',
+  members         text[] not null default '{}',
+  subtitle_it     text,
+  subtitle_en     text,
+  access_password text default 'IBDGTDTEAM',
+  login_days      integer default 7
 );
 
 -- One row per task.

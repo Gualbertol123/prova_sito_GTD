@@ -12,9 +12,11 @@ interface Props {
 }
 
 export function TopBar({ board, onRename, onOpenMail, rightSlot }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(board.boardName);
+  const subtitle =
+    (lang === "it" ? board.subtitleIt : board.subtitleEn)?.trim() || t("app.subtitle");
 
   const commit = () => {
     const v = draft.trim();
@@ -58,7 +60,7 @@ export function TopBar({ board, onRename, onOpenMail, rightSlot }: Props) {
               </h1>
             )}
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#8BA1C2] mt-0.5">
-              {t("app.subtitle")}
+              {subtitle}
             </p>
           </div>
         </div>

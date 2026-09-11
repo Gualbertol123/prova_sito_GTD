@@ -20,3 +20,9 @@
   for = "/index.html"
   [headers.values]
     Cache-Control = "no-store"
+
+# Keep the whole site out of search engines.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive, nosnippet"

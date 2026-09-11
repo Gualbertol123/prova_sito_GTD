@@ -55,6 +55,11 @@ export interface Board {
   weekly: Weekly;
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
+  // Editable settings (nullable until the settings migration is applied).
+  subtitleIt?: string;
+  subtitleEn?: string;
+  accessPassword?: string;
+  loginDays?: number;
 }
 
 // Operations the UI dispatches. The data layer translates each into the
@@ -70,6 +75,8 @@ export type Op =
   | { type: "deleteSubtask"; taskId: string; subtaskId: string }
   | { type: "setMembers"; members: string[] }
   | { type: "renameBoard"; name: string }
+  | { type: "setSubtitle"; lang: "it" | "en"; text: string }
+  | { type: "setAccess"; password?: string; loginDays?: number }
   | { type: "weeklyAdd"; column: keyof Weekly; item: WeeklyItem }
   | { type: "weeklyUpdate"; column: keyof Weekly; id: string; text: string }
   | { type: "weeklyDelete"; column: keyof Weekly; id: string }

@@ -9,6 +9,7 @@ import { WeeklyView } from "./components/WeeklyView";
 import { CalendarView } from "./components/CalendarView";
 import { TrackingView } from "./components/TrackingView";
 import { InstructionsView } from "./components/InstructionsView";
+import { SettingsView } from "./components/SettingsView";
 import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
 import { LangToggle } from "./components/LangToggle";
@@ -99,12 +100,14 @@ export default function App() {
             <CalendarView
               board={board}
               tasks={filteredForCalendar(board.tasks, filters)}
+              members={members}
               send={send}
             />
           </div>
         )}
         {tab === "tracking" && <TrackingView board={board} />}
         {tab === "istruzioni" && <InstructionsView />}
+        {tab === "settings" && <SettingsView board={board} send={send} />}
       </div>
 
       {mailOpen && <MailModal board={board} onClose={() => setMailOpen(false)} />}

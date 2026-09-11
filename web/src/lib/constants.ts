@@ -54,6 +54,11 @@ export const UNASSIGNED = "Unassigned";
 
 export const TRACKING_PASSWORD = "Matusalemme";
 
+// Universal access gate (soft, client-side). Editable in Settings once the
+// settings migration is applied; this is the fallback used before then.
+export const DEFAULT_ACCESS_PASSWORD = "IBDGTDTEAM";
+export const DEFAULT_LOGIN_DAYS = 7;
+
 // Weekly-review columns config (key, label, colour classes).
 export const WEEKLY_COLUMNS: {
   key: "well" | "learnings" | "improve" | "blockers" | "focus";
@@ -67,7 +72,13 @@ export const WEEKLY_COLUMNS: {
   { key: "focus", label: "FOCUS NEXT WEEK", color: "bg-white text-[#0A1931] border-[#E8E6E1]" },
 ];
 
-export type TabId = "board" | "weekly" | "calendario" | "tracking" | "istruzioni";
+export type TabId =
+  | "board"
+  | "weekly"
+  | "calendario"
+  | "tracking"
+  | "istruzioni"
+  | "settings";
 
 export const TABS: { id: TabId; label: string }[] = [
   { id: "board", label: "BOARD" },
@@ -75,6 +86,7 @@ export const TABS: { id: TabId; label: string }[] = [
   { id: "calendario", label: "CALENDARIO" },
   { id: "tracking", label: "TRACKING 🔒" },
   { id: "istruzioni", label: "ISTRUZIONI" },
+  { id: "settings", label: "IMPOSTAZIONI" },
 ];
 
 // Small helper: unique-ish id (used only for optimistic new items;

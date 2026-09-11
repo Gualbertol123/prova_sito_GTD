@@ -24,7 +24,8 @@ backgrounds) and fonts (**Cinzel** display + **Inter** body) match the original.
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban — Backlog · Next · In Progress · Waiting · Done · Maybe. Cards expand inline (no popups), search + filters, a full new-task bar (owner/priority/status/due), drag between columns, team members bar, priority chart, saved column width + collapse. |
+| **BOARD** | Kanban + a **List** view. Cards expand inline (no popups), search + filters, a full new-task bar (owner/priority/status/due), drag between columns, edge-to-edge columns with a show/hide-columns editor and an **edit-layout** mode to resize column widths (neighbours adjust), team members bar, priority chart. |
+| **SETTINGS** | Edit the header subtitle (IT + EN), the shared access password and the login duration; log out this device. |
 | **WEEKLY** | Weekly review: auto "Fatto questa settimana" (from DONE) + 5 retro columns (WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS). |
 | **CALENDARIO** | Month calendar; drag a task onto a date to set its due date. |
 | **TRACKING 🔒** | Password-gated team-load monitor. |
@@ -77,6 +78,10 @@ legacy/         the original artifact, kept for reference
 2. Left sidebar → **SQL Editor** → **New query**. Open `supabase/schema.sql`
    from this repo, copy **all** of it, paste, and click **Run**. This creates
    the tables, opens access for the anon key, and enables realtime.
+   Then run `supabase/migration-002-settings.sql` the same way — it adds the
+   editable subtitle, access password and login-duration columns. (Existing
+   deployments: just run migration-002; it's additive and safe on live data.
+   The app works before it's run, using built-in defaults.)
 3. Left sidebar → **Project Settings → API**. Copy two values:
    - **Project URL** (e.g. `https://abcd1234.supabase.co`)
    - **anon public** key (a long `eyJ...` string)
@@ -130,10 +135,12 @@ npm run dev               # http://localhost:5173
   opens the board for a week, the first visitor sees errors until someone
   clicks **Restore** in the Supabase dashboard (~1–2 min). Regular weekly use
   keeps it awake. (This is the main tradeoff of the free tier.)
-- **Access is open.** Anyone with the site URL can read/write the board — there
-  is no login, matching the original app. The `TRACKING` tab keeps its own
-  password gate (the password lives in the app code, not here). To restrict the
-  whole board, add Supabase Auth and tighten the RLS policies in
-  `supabase/schema.sql`.
+- **Access.** The whole board sits behind a **shared password** gate (set in
+  Settings, with a built-in default; the login is remembered per device for a
+  configurable number of days). This is a soft gate on the UI — the site is also
+  set to **noindex** so it stays out of search engines. It is not hard security:
+  the anon key still allows read/write at the database level, so for true
+  restriction add Supabase Auth and tighten the RLS policies in
+  `supabase/schema.sql`. The `TRACKING` tab keeps its own separate gate.
 - **Free limits** (500 MB database, 200 concurrent realtime connections, 2
   projects) are far above what a small team needs.

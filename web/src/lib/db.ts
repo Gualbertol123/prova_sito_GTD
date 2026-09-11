@@ -109,13 +109,18 @@ export async function fetchBoard(): Promise<Board> {
     if (weeklyGrouped[row.bucket]) weeklyGrouped[row.bucket].push(item);
   }
 
+  const m = meta.data as Record<string, unknown> | null;
   return {
     id: "board",
-    boardName: meta.data?.board_name ?? SEED_BOARD_NAME,
-    members: meta.data?.members ?? SEED_MEMBERS,
+    boardName: (m?.board_name as string) ?? SEED_BOARD_NAME,
+    members: (m?.members as string[]) ?? SEED_MEMBERS,
     tasks: ((tasks.data ?? []) as TaskRow[]).map(rowToTask),
     weekly: weeklyGrouped,
     updatedAt: Date.now(),
+    subtitleIt: (m?.subtitle_it as string) ?? undefined,
+    subtitleEn: (m?.subtitle_en as string) ?? undefined,
+    accessPassword: (m?.access_password as string) ?? undefined,
+    loginDays: (m?.login_days as number) ?? undefined,
   };
 }
 
@@ -239,6 +244,21 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
         supabase.from("board_meta").update({ board_name: op.name }).eq("id", "main")
       );
       break;
+    case "setSubtitle":
+      await must(
+        supabase
+          .from("board_meta")
+          .update(op.lang === "it" ? { subtitle_it: op.text } : { subtitle_en: op.text })
+          .eq("id", "main")
+      );
+      break;
+    case "setAccess": {
+      const upd: Record<string, unknown> = {};
+      if (op.password !== undefined) upd.access_password = op.password;
+      if (op.loginDays !== undefined) upd.login_days = op.loginDays;
+      await must(supabase.from("board_meta").update(upd).eq("id", "main"));
+      break;
+    }
     case "weeklyAdd":
       await must(
         supabase.from("weekly").insert({
