@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Subtask } from "../lib/types";
+import { useSyncedField } from "../lib/useSyncedField";
+import { AutoTextarea } from "./AutoTextarea";
 
-function Grip({ className = "" }: { className?: string }) {
+function Grip() {
   return (
-    <svg width="10" height="16" viewBox="0 0 10 16" className={`text-[#C9C5BE] shrink-0 ${className}`} aria-hidden>
+    <svg width="10" height="16" viewBox="0 0 10 16" className="text-[#C9C5BE] shrink-0" aria-hidden>
       {[3, 8, 13].map((cy) =>
         [3, 7].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.1" fill="currentColor" />)
       )}
@@ -19,8 +21,10 @@ interface Props {
   onDelete: (id: string) => void;
 }
 
-// Pointer-based drag-to-reorder. The grabbed row lifts and follows the cursor,
-// the rest reflow live as you move, and the target slot is highlighted.
+// Pointer-based drag-to-reorder styled like a small kanban column: each subtask
+// is a white card that grows with its text. The grabbed card lifts and follows
+// the cursor; the others slide (FLIP-animated) to their new positions; the
+// target slot is highlighted.
 export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete }: Props) {
   const [order, setOrder] = useState<string[]>(() => items.map((i) => i.id));
   const [dragId, setDragId] = useState<string | null>(null);
@@ -33,9 +37,9 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
   const containerRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const prevTops = useRef<Record<string, number>>({});
 
   const idsKey = items.map((i) => i.id).join("|");
-  // Re-sync from props whenever the set/order of items changes — but never mid-drag.
   useEffect(() => {
     if (!dragRef.current) setOrder(items.map((i) => i.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -44,6 +48,30 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
   const byId: Record<string, Subtask> = {};
   for (const it of items) byId[it.id] = it;
   const ordered = order.map((id) => byId[id]).filter(Boolean) as Subtask[];
+
+  // FLIP: animate rows sliding to their new positions after any reorder/reflow.
+  useLayoutEffect(() => {
+    const tops: Record<string, number> = {};
+    for (const id of order) {
+      const el = rowRefs.current[id];
+      if (!el) continue;
+      const top = el.getBoundingClientRect().top;
+      tops[id] = top;
+      const prev = prevTops.current[id];
+      if (prev != null && id !== dragId) {
+        const delta = prev - top;
+        if (Math.abs(delta) > 0.5) {
+          el.style.transition = "none";
+          el.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => {
+            el.style.transition = "transform 180ms cubic-bezier(0.2,0.8,0.2,1)";
+            el.style.transform = "";
+          });
+        }
+      }
+    }
+    prevTops.current = tops;
+  });
 
   const onMove = (e: PointerEvent) => {
     const d = dragRef.current;
@@ -83,11 +111,16 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
   const startDrag = (e: React.PointerEvent, id: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const row = rowRefs.current[id]?.getBoundingClientRect();
+    const el = rowRefs.current[id];
+    const row = el?.getBoundingClientRect();
     const cont = containerRef.current?.getBoundingClientRect();
+    if (el) {
+      el.style.transition = "none";
+      el.style.transform = "";
+    }
     dragRef.current = {
       id,
-      grabOffset: row ? e.clientY - row.top : 12,
+      grabOffset: row ? e.clientY - row.top : 16,
       left: cont?.left ?? 0,
       width: cont?.width ?? 0,
     };
@@ -102,72 +135,95 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
   const dragItem = dragId ? byId[dragId] : null;
 
   return (
-    <div ref={containerRef} className="space-y-1 relative">
-      {ordered.map((s) => {
-        const isDragging = s.id === dragId;
-        return (
-          <div
-            key={s.id}
-            ref={(el) => {
-              rowRefs.current[s.id] = el;
-            }}
-            className={`group flex items-center gap-1.5 rounded-md ${
-              isDragging
-                ? "border border-dashed border-[#C9A96E] bg-[#FBF6EC] opacity-70"
-                : "border border-transparent"
-            }`}
-          >
-            <span
-              onPointerDown={(e) => startDrag(e, s.id)}
-              title="↕"
-              className="cursor-grab active:cursor-grabbing touch-none px-0.5 py-1"
-              style={{ touchAction: "none" }}
-            >
-              <Grip />
-            </span>
-            <input
-              type="checkbox"
-              checked={s.done}
-              onChange={(e) => onToggle(s.id, e.target.checked)}
-              className="accent-[#C9A96E]"
-            />
-            <input
-              defaultValue={s.text}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== s.text) onText(s.id, v);
-              }}
-              className={`flex-1 bg-transparent text-[12px] outline-none ${
-                s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
-              }`}
-            />
-            <button
-              onClick={() => onDelete(s.id)}
-              className="opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px]"
-            >
-              ✕
-            </button>
-          </div>
-        );
-      })}
+    <div ref={containerRef} className="space-y-1.5 relative">
+      {ordered.map((s) => (
+        <SubtaskRow
+          key={s.id}
+          s={s}
+          isDragging={s.id === dragId}
+          registerRef={(el) => {
+            rowRefs.current[s.id] = el;
+          }}
+          onGrip={(e) => startDrag(e, s.id)}
+          onToggle={(done) => onToggle(s.id, done)}
+          onText={(text) => onText(s.id, text)}
+          onDelete={() => onDelete(s.id)}
+        />
+      ))}
 
-      {/* Floating clone that follows the cursor */}
+      {/* Floating card that follows the cursor */}
       {dragItem && d && (
-        <div
-          className="fixed z-50 pointer-events-none"
-          style={{ left: d.left, top: pointerY - d.grabOffset, width: d.width }}
-        >
-          <div className="flex items-center gap-1.5 rounded-md bg-white border border-[#C9A96E] shadow-lg px-0.5 py-0.5">
-            <span className="px-0.5 py-1">
-              <Grip />
-            </span>
-            <input type="checkbox" checked={dragItem.done} readOnly className="accent-[#C9A96E]" />
-            <span className={`flex-1 text-[12px] ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
+        <div className="fixed z-50 pointer-events-none" style={{ left: d.left, top: pointerY - d.grabOffset, width: d.width }}>
+          <div className="flex items-start gap-1.5 rounded-[10px] bg-white border border-[#C9A96E] shadow-xl p-2 rotate-[-1deg]">
+            <span className="pt-0.5"><Grip /></span>
+            <input type="checkbox" checked={dragItem.done} readOnly className="mt-0.5 accent-[#C9A96E]" />
+            <span className={`flex-1 text-[12px] leading-snug ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
               {dragItem.text}
             </span>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SubtaskRow({
+  s,
+  isDragging,
+  registerRef,
+  onGrip,
+  onToggle,
+  onText,
+  onDelete,
+}: {
+  s: Subtask;
+  isDragging: boolean;
+  registerRef: (el: HTMLDivElement | null) => void;
+  onGrip: (e: React.PointerEvent) => void;
+  onToggle: (done: boolean) => void;
+  onText: (text: string) => void;
+  onDelete: () => void;
+}) {
+  const field = useSyncedField(s.text);
+  return (
+    <div
+      ref={registerRef}
+      className={`group flex items-start gap-1.5 rounded-[10px] bg-white p-2 border shadow-sm ${
+        isDragging ? "border-dashed border-[#C9A96E] ring-2 ring-[#C9A96E]/30 opacity-60" : "border-[#E8E6E1]"
+      }`}
+    >
+      <span
+        onPointerDown={onGrip}
+        title="↕"
+        className="cursor-grab active:cursor-grabbing pt-1 px-0.5"
+        style={{ touchAction: "none" }}
+      >
+        <Grip />
+      </span>
+      <input
+        type="checkbox"
+        checked={s.done}
+        onChange={(e) => onToggle(e.target.checked)}
+        className="mt-1 accent-[#C9A96E]"
+      />
+      <AutoTextarea
+        value={field.value}
+        onFocus={field.onFocus}
+        onChange={(e) => field.setValue(e.target.value)}
+        onBlur={() => {
+          field.onBlur();
+          if (field.value.trim() && field.value !== s.text) onText(field.value.trim());
+        }}
+        className={`flex-1 bg-transparent text-[12px] leading-snug outline-none ${
+          s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
+        }`}
+      />
+      <button
+        onClick={onDelete}
+        className="opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px] mt-0.5 shrink-0"
+      >
+        ✕
+      </button>
     </div>
   );
 }

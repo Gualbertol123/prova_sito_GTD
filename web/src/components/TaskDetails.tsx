@@ -130,15 +130,15 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
         </div>
       )}
 
-      {/* Subtasks */}
-      <div className="bg-[#FAF9F6] rounded-[10px] border border-[#E8E6E1] p-2.5">
-        <div className="flex items-center justify-between mb-2">
+      {/* Subtasks — styled like a small kanban column */}
+      <div className="bg-[#EFECE6] rounded-[12px] border border-[#E3DFD7] p-2.5">
+        <div className="flex items-center justify-between mb-2 px-1">
           <span className="font-trajan text-[10px] uppercase tracking-wide text-[#8A8A8A]">
             {t("task.subtasks")} {total ? `${done}/${total} · ${pct}%` : ""}
           </span>
         </div>
         {total > 0 && (
-          <div className="h-1.5 rounded-full bg-[#E8E6E1] overflow-hidden mb-2">
+          <div className="h-1.5 rounded-full bg-[#DED9D0] overflow-hidden mb-2.5 mx-0.5">
             <div className="h-full bg-[#C9A96E] transition-all" style={{ width: `${pct}%` }} />
           </div>
         )}
