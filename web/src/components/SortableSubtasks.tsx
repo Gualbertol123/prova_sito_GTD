@@ -174,10 +174,10 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
         <div className="fixed z-50 pointer-events-none" style={{ left: d.left, top: pointerY - d.grabOffset, width: d.width }}>
           <div className="flex items-start gap-1.5 rounded-[10px] bg-white border border-[#C9A96E] shadow-xl p-2 rotate-[-1deg]">
             <span className="h-5 flex items-center shrink-0 px-0.5"><Grip /></span>
-            <span className="h-5 flex items-center shrink-0 w-4 justify-end text-[11px] font-semibold text-[#A8A29E] tabular-nums">{dragIndex}.</span>
             <span className="h-5 flex items-center shrink-0">
               <input type="checkbox" checked={dragItem.done} readOnly className="accent-[#C9A96E]" />
             </span>
+            <span className="h-5 flex items-center shrink-0 w-4 justify-end text-[11px] font-semibold text-[#A8A29E] tabular-nums">{dragIndex}.</span>
             <span className={`flex-1 text-[12px] leading-5 text-left ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
               {dragItem.text}
             </span>
@@ -226,9 +226,6 @@ function SubtaskRow({
       >
         <Grip />
       </span>
-      <span className={`${lead} w-4 justify-end text-[11px] font-semibold text-[#A8A29E] tabular-nums`}>
-        {index}.
-      </span>
       <span className={lead}>
         <input
           type="checkbox"
@@ -236,6 +233,9 @@ function SubtaskRow({
           onChange={(e) => onToggle(e.target.checked)}
           className="accent-[#C9A96E]"
         />
+      </span>
+      <span className={`${lead} w-4 justify-end text-[11px] font-semibold text-[#A8A29E] tabular-nums`}>
+        {index}.
       </span>
       <AutoTextarea
         value={field.value}

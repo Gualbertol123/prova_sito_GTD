@@ -153,7 +153,10 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
           }
           onDelete={(subtaskId) => send({ type: "deleteSubtask", taskId: task.id, subtaskId })}
         />
-        <div className="flex gap-1.5 mt-2">
+        <div className="flex items-center gap-1.5 mt-2">
+          <span className="w-5 text-right text-[11px] font-semibold text-[#A8A29E] tabular-nums shrink-0">
+            {total + 1}.
+          </span>
           <input
             value={newSub}
             onChange={(e) => setNewSub(e.target.value)}
