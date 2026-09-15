@@ -193,8 +193,8 @@ const IT: Dict = {
   "settings.favicon": "Favicon (icona scheda)",
   "settings.upload": "Carica",
   "settings.remove": "Rimuovi",
-  "settings.logoHint": "PNG, JPG, SVG o WebP. Max {kb} KB.",
-  "settings.faviconHint": "PNG, SVG o ICO. Max {kb} KB.",
+  "settings.logoHint": "PNG, JPG, SVG o WebP. Max {mb} MB.",
+  "settings.faviconHint": "PNG, SVG o ICO. Max {mb} MB.",
   "settings.imageTooBig": "Immagine troppo grande.",
   "settings.imageBad": "Formato non supportato.",
 
@@ -388,8 +388,8 @@ const EN: Dict = {
   "settings.favicon": "Favicon (tab icon)",
   "settings.upload": "Upload",
   "settings.remove": "Remove",
-  "settings.logoHint": "PNG, JPG, SVG or WebP. Max {kb} KB.",
-  "settings.faviconHint": "PNG, SVG or ICO. Max {kb} KB.",
+  "settings.logoHint": "PNG, JPG, SVG or WebP. Max {mb} MB.",
+  "settings.faviconHint": "PNG, SVG or ICO. Max {mb} MB.",
   "settings.imageTooBig": "Image too large.",
   "settings.imageBad": "Unsupported format.",
 

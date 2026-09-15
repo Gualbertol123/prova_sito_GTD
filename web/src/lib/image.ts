@@ -1,13 +1,25 @@
-// Client-side image handling for the custom logo / favicon. Validates the file
-// type, downsizes raster images onto a canvas to keep the stored data URL
-// small, and passes SVG/ICO through (size-checked). Returns a data URL string.
+// Client-side image handling for the custom logo / favicon.
+//
+// Accepts input files up to 5 MB each, then ALWAYS rasterises + downscales them
+// to a small icon before storing. The logo/favicon are saved (as data URLs) in
+// the shared board_meta row, which the live board re-reads on its refresh
+// cycle — so the stored image must stay small regardless of the input size.
 
-export const LOGO_MAX_KB = 250;
-export const FAVICON_MAX_KB = 100;
+export const INPUT_MAX_MB = 5;
+const INPUT_MAX_BYTES = INPUT_MAX_MB * 1024 * 1024;
+
+// Target dimension and stored-size cap for each kind (display sizes are tiny).
+const DIM = { logo: 320, favicon: 128 } as const;
+const STORED_MAX_BYTES = 400 * 1024;
 
 export const LOGO_ACCEPT = "image/png,image/jpeg,image/webp,image/svg+xml";
 export const FAVICON_ACCEPT =
   "image/png,image/svg+xml,image/x-icon,image/vnd.microsoft.icon,.ico";
+
+const ALLOWED: Record<"logo" | "favicon", RegExp> = {
+  logo: /^image\/(png|jpeg|webp|svg\+xml)$/,
+  favicon: /^image\/(png|svg\+xml|x-icon|vnd\.microsoft\.icon)$/,
+};
 
 export class ImageError extends Error {
   code: "bad" | "big";
@@ -16,13 +28,6 @@ export class ImageError extends Error {
     this.code = code;
   }
 }
-
-const RASTER = new Set(["image/png", "image/jpeg", "image/webp"]);
-const PASSTHROUGH = new Set([
-  "image/svg+xml",
-  "image/x-icon",
-  "image/vnd.microsoft.icon",
-]);
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -42,15 +47,19 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-// Downscale a raster image to fit maxDim, exporting a PNG data URL. Shrinks
-// further if it still exceeds maxBytes.
-async function downscale(dataUrl: string, maxDim: number, maxBytes: number): Promise<string> {
+// Rasterise onto a canvas at maxDim, shrinking further if the PNG still exceeds
+// the stored cap. Works for raster, SVG and ICO alike (all render into <img>).
+async function rasterise(dataUrl: string, maxDim: number): Promise<string> {
   const img = await loadImage(dataUrl);
-  let dim = Math.min(maxDim, Math.max(img.width, img.height) || maxDim);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const scale = dim / Math.max(img.width, img.height);
-    const w = Math.max(1, Math.round(img.width * scale));
-    const h = Math.max(1, Math.round(img.height * scale));
+  const natural = Math.max(img.naturalWidth || img.width || 0, img.naturalHeight || img.height || 0);
+  const baseW = img.naturalWidth || img.width || maxDim; // SVGs may report 0 → square
+  const baseH = img.naturalHeight || img.height || maxDim;
+
+  let dim = natural > 0 ? Math.min(maxDim, natural) : maxDim;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const scale = dim / Math.max(baseW, baseH);
+    const w = Math.max(1, Math.round(baseW * scale));
+    const h = Math.max(1, Math.round(baseH * scale));
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
@@ -58,30 +67,23 @@ async function downscale(dataUrl: string, maxDim: number, maxBytes: number): Pro
     if (!ctx) throw new ImageError("bad");
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
-    const out = canvas.toDataURL("image/png");
-    if (out.length * 0.75 <= maxBytes || dim <= 32) return out;
+    let out: string;
+    try {
+      out = canvas.toDataURL("image/png");
+    } catch {
+      throw new ImageError("bad"); // tainted canvas
+    }
+    if (out.length * 0.75 <= STORED_MAX_BYTES || dim <= 32) return out;
     dim = Math.round(dim * 0.75);
   }
   throw new ImageError("big");
 }
 
-export async function processImage(
-  file: File,
-  kind: "logo" | "favicon"
-): Promise<string> {
-  const type = file.type || "";
-  const maxBytes = (kind === "logo" ? LOGO_MAX_KB : FAVICON_MAX_KB) * 1024;
-  const maxDim = kind === "logo" ? 256 : 128;
-
-  const isIco = /\.ico$/i.test(file.name) || PASSTHROUGH.has(type);
-
-  if (RASTER.has(type)) {
-    const dataUrl = await readAsDataUrl(file);
-    return downscale(dataUrl, maxDim, maxBytes);
+export async function processImage(file: File, kind: "logo" | "favicon"): Promise<string> {
+  if (!ALLOWED[kind].test(file.type || "") && !/\.ico$/i.test(file.name)) {
+    throw new ImageError("bad");
   }
-  if (type === "image/svg+xml" || isIco) {
-    if (file.size > maxBytes) throw new ImageError("big");
-    return readAsDataUrl(file);
-  }
-  throw new ImageError("bad");
+  if (file.size > INPUT_MAX_BYTES) throw new ImageError("big");
+  const dataUrl = await readAsDataUrl(file);
+  return rasterise(dataUrl, DIM[kind]);
 }

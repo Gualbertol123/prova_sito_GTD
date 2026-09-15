@@ -8,8 +8,7 @@ import {
   ImageError,
   LOGO_ACCEPT,
   FAVICON_ACCEPT,
-  LOGO_MAX_KB,
-  FAVICON_MAX_KB,
+  INPUT_MAX_MB,
 } from "../lib/image";
 
 interface Props {
@@ -76,7 +75,7 @@ export function SettingsView({ board, send }: Props) {
           </div>
           <div className="min-w-0">
             <div className="text-[12px] font-semibold text-[#0A1931]">{t("settings.logo")}</div>
-            <div className="text-[11px] text-[#8A8A8A]">{t("settings.logoHint", { kb: LOGO_MAX_KB })}</div>
+            <div className="text-[11px] text-[#8A8A8A]">{t("settings.logoHint", { mb: INPUT_MAX_MB })}</div>
             <div className="flex gap-2 mt-2">
               <input ref={logoInput} type="file" accept={LOGO_ACCEPT} hidden onChange={(e) => upload(e.target.files?.[0], "logo")} />
               <button onClick={() => logoInput.current?.click()} className={`${smallBtn} bg-[#0A1931] text-[#C9A96E] border-[#0A1931]`}>
@@ -102,7 +101,7 @@ export function SettingsView({ board, send }: Props) {
           </div>
           <div className="min-w-0">
             <div className="text-[12px] font-semibold text-[#0A1931]">{t("settings.favicon")}</div>
-            <div className="text-[11px] text-[#8A8A8A]">{t("settings.faviconHint", { kb: FAVICON_MAX_KB })}</div>
+            <div className="text-[11px] text-[#8A8A8A]">{t("settings.faviconHint", { mb: INPUT_MAX_MB })}</div>
             <div className="flex gap-2 mt-2">
               <input ref={faviconInput} type="file" accept={FAVICON_ACCEPT} hidden onChange={(e) => upload(e.target.files?.[0], "favicon")} />
               <button onClick={() => faviconInput.current?.click()} className={`${smallBtn} bg-[#0A1931] text-[#C9A96E] border-[#0A1931]`}>
