@@ -10,6 +10,7 @@ import { CalendarView } from "./components/CalendarView";
 import { TrackingView } from "./components/TrackingView";
 import { InstructionsView } from "./components/InstructionsView";
 import { SettingsView } from "./components/SettingsView";
+import { DailyReflection } from "./components/DailyReflection";
 import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
 import { LangToggle } from "./components/LangToggle";
@@ -121,6 +122,11 @@ export default function App() {
               members={members}
               send={send}
             />
+          </div>
+        )}
+        {tab === "reflection" && (
+          <div className="max-w-[900px] mx-auto">
+            <DailyReflection board={board} members={members} send={send} />
           </div>
         )}
         {tab === "tracking" && <TrackingView board={board} />}

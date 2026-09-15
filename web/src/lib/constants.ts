@@ -76,6 +76,7 @@ export type TabId =
   | "board"
   | "weekly"
   | "calendario"
+  | "reflection"
   | "tracking"
   | "istruzioni"
   | "settings";
@@ -84,6 +85,7 @@ export const TABS: { id: TabId; label: string }[] = [
   { id: "board", label: "BOARD" },
   { id: "weekly", label: "WEEKLY" },
   { id: "calendario", label: "CALENDARIO" },
+  { id: "reflection", label: "RIFLESSIONE" },
   { id: "tracking", label: "TRACKING 🔒" },
   { id: "istruzioni", label: "ISTRUZIONI" },
   { id: "settings", label: "IMPOSTAZIONI" },
