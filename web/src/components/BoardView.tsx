@@ -43,7 +43,15 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const weightsRef = useRef(weights);
   weightsRef.current = weights;
   const containerRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ left: Status; right: Status; startX: number; total: number; width: number } | null>(null);
+  const drag = useRef<{
+    left: Status;
+    right: Status;
+    startX: number;
+    lwStart: number;
+    rwStart: number;
+    total: number;
+    avail: number;
+  } | null>(null);
   const pending = useRef<Record<string, number> | null>(null);
 
   const setViewPref = (v: ViewMode) => {
@@ -82,16 +90,19 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   };
 
   // ---- Column resize (edit mode) --------------------------------------------
+  // Convert the cumulative pixel drag into a weight delta using the widths at
+  // drag START (never the already-moved weights), so the boundary tracks the
+  // cursor 1:1 instead of compounding.
   const onMove = useCallback((e: PointerEvent) => {
     const d = drag.current;
     if (!d) return;
-    const perPx = d.total / d.width;
-    let dw = (e.clientX - d.startX) * perPx;
-    const lw0 = weightsRef.current[d.left] ?? 1;
-    const rw0 = weightsRef.current[d.right] ?? 1;
-    // clamp so neither goes below the minimum
-    dw = Math.max(-(lw0 - MIN_WEIGHT), Math.min(rw0 - MIN_WEIGHT, dw));
-    const next = { ...weightsRef.current, [d.left]: lw0 + dw, [d.right]: rw0 - dw };
+    const sum = d.lwStart + d.rwStart; // conserved between the two columns
+    // pixels-per-weight for these two columns at their combined width
+    const combinedPx = (sum / d.total) * d.avail;
+    let dw = combinedPx > 0 ? ((e.clientX - d.startX) / combinedPx) * sum : 0;
+    // clamp so neither column drops below the minimum weight
+    dw = Math.max(-(d.lwStart - MIN_WEIGHT), Math.min(d.rwStart - MIN_WEIGHT, dw));
+    const next = { ...weightsRef.current, [d.left]: d.lwStart + dw, [d.right]: d.rwStart - dw };
     pending.current = next;
     setWeights(next);
   }, []);
@@ -105,10 +116,19 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
     e.preventDefault();
     e.stopPropagation();
     const width = containerRef.current?.clientWidth ?? 1;
+    const gaps = Math.max(0, visibleCols.length - 1) * 12; // gap-3 between columns
+    const avail = Math.max(1, width - gaps);
     const total = visibleCols.reduce((s, st) => s + getW(st), 0);
-    drag.current = { left, right, startX: e.clientX, total, width };
-    // seed pending with current weights (in case pointerup fires with no move)
-    pending.current = { ...weightsRef.current, [left]: getW(left), [right]: getW(right) };
+    drag.current = {
+      left,
+      right,
+      startX: e.clientX,
+      lwStart: getW(left),
+      rwStart: getW(right),
+      total,
+      avail,
+    };
+    pending.current = { ...weightsRef.current };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
@@ -253,11 +273,8 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
 
       {/* Team panel (collapsed by default to declutter the top) */}
       {teamOpen && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
-            <MembersBar board={board} send={send} />
-          </div>
-          <PriorityDistribution tasks={board.tasks} />
+        <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
+          <MembersBar board={board} send={send} />
         </div>
       )}
 
@@ -268,6 +285,9 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
         </div>
         <QuickAdd members={members} send={send} />
       </div>
+
+      {/* Priority distribution — its own space */}
+      <PriorityDistribution tasks={board.tasks} />
 
       {view === "list" ? (
         <ListView tasks={listTasks} members={members} send={send} />
@@ -304,7 +324,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                     e.preventDefault();
                     drop(status);
                   }}
-                  style={{ flexGrow: getW(status), flexShrink: 1, flexBasis: 0, minWidth: 168, minHeight: 140 }}
+                  style={{ flexGrow: getW(status), flexShrink: 1, flexBasis: 0, minWidth: 136, minHeight: 140 }}
                   className={`relative rounded-[14px] p-2 transition-colors ${
                     overCol === status ? "drop-target" : "bg-[#EFECE6]"
                   } ${editLayout ? "ring-1 ring-[#C9A96E]/40" : ""}`}
