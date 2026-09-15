@@ -149,13 +149,15 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
 
   const d = dragRef.current;
   const dragItem = dragId ? byId[dragId] : null;
+  const dragIndex = dragId ? order.indexOf(dragId) + 1 : 0;
 
   return (
     <div ref={containerRef} className="space-y-1.5 relative">
-      {ordered.map((s) => (
+      {ordered.map((s, i) => (
         <SubtaskRow
           key={s.id}
           s={s}
+          index={i + 1}
           isDragging={s.id === dragId}
           registerRef={(el) => {
             rowRefs.current[s.id] = el;
@@ -171,9 +173,12 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
       {dragItem && d && (
         <div className="fixed z-50 pointer-events-none" style={{ left: d.left, top: pointerY - d.grabOffset, width: d.width }}>
           <div className="flex items-start gap-1.5 rounded-[10px] bg-white border border-[#C9A96E] shadow-xl p-2 rotate-[-1deg]">
-            <span className="pt-0.5"><Grip /></span>
-            <input type="checkbox" checked={dragItem.done} readOnly className="mt-0.5 accent-[#C9A96E]" />
-            <span className={`flex-1 text-[12px] leading-snug text-center ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
+            <span className="h-5 flex items-center shrink-0 px-0.5"><Grip /></span>
+            <span className="h-5 flex items-center shrink-0 w-4 justify-end text-[11px] font-semibold text-[#A8A29E] tabular-nums">{dragIndex}.</span>
+            <span className="h-5 flex items-center shrink-0">
+              <input type="checkbox" checked={dragItem.done} readOnly className="accent-[#C9A96E]" />
+            </span>
+            <span className={`flex-1 text-[12px] leading-5 text-left ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
               {dragItem.text}
             </span>
           </div>
@@ -185,6 +190,7 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
 
 function SubtaskRow({
   s,
+  index,
   isDragging,
   registerRef,
   onGrip,
@@ -193,6 +199,7 @@ function SubtaskRow({
   onDelete,
 }: {
   s: Subtask;
+  index: number;
   isDragging: boolean;
   registerRef: (el: HTMLDivElement | null) => void;
   onGrip: (e: React.PointerEvent) => void;
@@ -201,6 +208,9 @@ function SubtaskRow({
   onDelete: () => void;
 }) {
   const field = useSyncedField(s.text);
+  // Leading controls sit in a one-line-tall box (h-5) and center within it, so
+  // they align to the FIRST line of the text even when it wraps to many lines.
+  const lead = "h-5 flex items-center shrink-0";
   return (
     <div
       ref={registerRef}
@@ -211,17 +221,22 @@ function SubtaskRow({
       <span
         onPointerDown={onGrip}
         title="↕"
-        className="cursor-grab active:cursor-grabbing pt-1 px-0.5"
+        className={`${lead} cursor-grab active:cursor-grabbing px-0.5`}
         style={{ touchAction: "none" }}
       >
         <Grip />
       </span>
-      <input
-        type="checkbox"
-        checked={s.done}
-        onChange={(e) => onToggle(e.target.checked)}
-        className="mt-1 accent-[#C9A96E]"
-      />
+      <span className={`${lead} w-4 justify-end text-[11px] font-semibold text-[#A8A29E] tabular-nums`}>
+        {index}.
+      </span>
+      <span className={lead}>
+        <input
+          type="checkbox"
+          checked={s.done}
+          onChange={(e) => onToggle(e.target.checked)}
+          className="accent-[#C9A96E]"
+        />
+      </span>
       <AutoTextarea
         value={field.value}
         onFocus={field.onFocus}
@@ -230,13 +245,13 @@ function SubtaskRow({
           field.onBlur();
           if (field.value.trim() && field.value !== s.text) onText(field.value.trim());
         }}
-        className={`flex-1 bg-transparent text-[12px] leading-snug text-center outline-none ${
+        className={`flex-1 bg-transparent text-[12px] leading-5 text-left p-0 outline-none ${
           s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
         }`}
       />
       <button
         onClick={onDelete}
-        className="opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px] mt-0.5 shrink-0"
+        className={`${lead} opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px]`}
       >
         ✕
       </button>
