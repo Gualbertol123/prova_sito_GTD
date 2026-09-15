@@ -33,6 +33,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const { t, lang } = useT();
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(readHidden()));
   const [editorOpen, setEditorOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [view, setView] = useState<ViewMode>(() => readViewMode());
   const [editLayout, setEditLayout] = useState(false);
   const [weights, setWeights] = useState<Record<string, number>>(() => readWeights());
@@ -123,6 +124,9 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
+        <div className="font-trajan text-[10px] uppercase tracking-widest text-[#8A8A8A] mb-2 flex items-center gap-1.5">
+          <span>⌕</span> {t("filters.section")}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Board / List toggle */}
           <div className="inline-flex items-center rounded-full border border-[#E8E6E1] bg-[#F5F3EF] p-0.5">
@@ -179,6 +183,15 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
           )}
 
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setTeamOpen((o) => !o)}
+              className={`h-9 px-4 rounded-full text-[12px] font-semibold border transition-colors inline-flex items-center gap-1.5 ${
+                teamOpen ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]" : "bg-white text-[#0A1931] border-[#E8E6E1] hover:border-[#C9A96E]"
+              }`}
+            >
+              👥 {t("team.button")}
+              <span className="text-[10px] bg-[#C9A96E] text-[#0A1931] rounded-full px-1.5 py-0.5">{board.members.length}</span>
+            </button>
             {view === "board" && (
               <button
                 onClick={() => setEditLayout((e) => !e)}
@@ -238,15 +251,22 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
         )}
       </div>
 
-      {/* Quick add */}
-      <QuickAdd members={members} send={send} />
-
-      {/* Team + priority distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
-          <MembersBar board={board} send={send} />
+      {/* Team panel (collapsed by default to declutter the top) */}
+      {teamOpen && (
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
+          <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
+            <MembersBar board={board} send={send} />
+          </div>
+          <PriorityDistribution tasks={board.tasks} />
         </div>
-        <PriorityDistribution tasks={board.tasks} />
+      )}
+
+      {/* New-task row — visually distinct from the search/filter row above */}
+      <div className="rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-3">
+        <div className="font-trajan text-[10px] uppercase tracking-widest text-[#8B6F3E] mb-2 flex items-center gap-1.5">
+          <span>＋</span> {t("quick.section")}
+        </div>
+        <QuickAdd members={members} send={send} />
       </div>
 
       {view === "list" ? (

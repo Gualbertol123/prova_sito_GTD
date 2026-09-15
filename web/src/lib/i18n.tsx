@@ -178,6 +178,26 @@ const IT: Dict = {
   "mail.copy": "Copia testo",
   "mail.copied": "Copiato ✓",
   "mail.subject": "aggiornamento",
+
+  "filters.section": "Cerca / Filtra",
+  "quick.section": "Nuova attività",
+  "team.button": "Team",
+
+  "task.fileDir": "Cartella file",
+  "task.fileDirPlaceholder": "Percorso del file di rete condiviso…",
+  "task.copy": "Copia",
+  "task.copied": "Copiato ✓",
+
+  "settings.branding": "Logo e favicon",
+  "settings.logo": "Logo (riquadro rotondo)",
+  "settings.favicon": "Favicon (icona scheda)",
+  "settings.upload": "Carica",
+  "settings.remove": "Rimuovi",
+  "settings.logoHint": "PNG, JPG, SVG o WebP. Max {kb} KB.",
+  "settings.faviconHint": "PNG, SVG o ICO. Max {kb} KB.",
+  "settings.imageTooBig": "Immagine troppo grande.",
+  "settings.imageBad": "Formato non supportato.",
+
   "common.close": "Chiudi",
 };
 
@@ -353,6 +373,26 @@ const EN: Dict = {
   "mail.copy": "Copy text",
   "mail.copied": "Copied ✓",
   "mail.subject": "update",
+
+  "filters.section": "Search / Filter",
+  "quick.section": "New task",
+  "team.button": "Team",
+
+  "task.fileDir": "File Directory",
+  "task.fileDirPlaceholder": "Shared network file path…",
+  "task.copy": "Copy",
+  "task.copied": "Copied ✓",
+
+  "settings.branding": "Logo & favicon",
+  "settings.logo": "Logo (round box)",
+  "settings.favicon": "Favicon (tab icon)",
+  "settings.upload": "Upload",
+  "settings.remove": "Remove",
+  "settings.logoHint": "PNG, JPG, SVG or WebP. Max {kb} KB.",
+  "settings.faviconHint": "PNG, SVG or ICO. Max {kb} KB.",
+  "settings.imageTooBig": "Image too large.",
+  "settings.imageBad": "Unsupported format.",
+
   "common.close": "Close",
 };
 

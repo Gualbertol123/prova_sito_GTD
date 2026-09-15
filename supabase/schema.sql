@@ -16,7 +16,9 @@ create table if not exists public.board_meta (
   subtitle_it     text,
   subtitle_en     text,
   access_password text default 'IBDGTDTEAM',
-  login_days      integer default 7
+  login_days      integer default 7,
+  logo_url        text,
+  favicon_url     text
 );
 
 -- One row per task.
@@ -31,6 +33,7 @@ create table if not exists public.tasks (
   subtasks       jsonb  not null default '[]'::jsonb,
   due_date       text,                          -- ISO yyyy-mm-dd
   waiting_since  text,                          -- ISO yyyy-mm-dd
+  file_dir       text,                          -- shared network file path
   updated_at     bigint not null default 0,
   created_at     bigint not null default 0      -- ordering within a column
 );

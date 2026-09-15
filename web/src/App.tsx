@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useBoard } from "./lib/useBoard";
 import { TABS, type TabId } from "./lib/constants";
 import { useT } from "./lib/i18n";
@@ -28,6 +28,23 @@ export default function App() {
 
   const members = board?.members ?? [];
 
+  // Apply the custom favicon (shared) to this tab.
+  const faviconUrl = board?.faviconUrl;
+  useEffect(() => {
+    if (!faviconUrl) return;
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    const prev = link.href;
+    link.href = faviconUrl;
+    return () => {
+      if (prev) link!.href = prev;
+    };
+  }, [faviconUrl]);
+
   if (!board) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F3EF]">
@@ -53,6 +70,7 @@ export default function App() {
         conn={conn}
         onRename={(name) => send({ type: "renameBoard", name })}
         onOpenMail={() => setMailOpen(true)}
+        send={send}
         rightSlot={
           <>
             <ConnBadge conn={conn} />

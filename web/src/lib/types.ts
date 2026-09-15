@@ -28,6 +28,7 @@ export interface Task {
   subtasks: Subtask[];
   dueDate?: string; // ISO yyyy-mm-dd
   waitingSince?: string; // ISO yyyy-mm-dd
+  fileDir?: string; // shared network file path
   updatedAt: number;
   createdAt?: number; // ordering within a column (oldest first)
 }
@@ -60,6 +61,8 @@ export interface Board {
   subtitleEn?: string;
   accessPassword?: string;
   loginDays?: number;
+  logoUrl?: string;
+  faviconUrl?: string;
 }
 
 // Operations the UI dispatches. The data layer translates each into the
@@ -77,6 +80,7 @@ export type Op =
   | { type: "renameBoard"; name: string }
   | { type: "setSubtitle"; lang: "it" | "en"; text: string }
   | { type: "setAccess"; password?: string; loginDays?: number }
+  | { type: "setBranding"; logoUrl?: string | null; faviconUrl?: string | null }
   | { type: "weeklyAdd"; column: keyof Weekly; item: WeeklyItem }
   | { type: "weeklyUpdate"; column: keyof Weekly; id: string; text: string }
   | { type: "weeklyDelete"; column: keyof Weekly; id: string }

@@ -35,6 +35,19 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
   const title = useSyncedField(task.title);
   const notes = useSyncedField(task.notes);
   const desc = useSyncedField(task.desc);
+  const fileDir = useSyncedField(task.fileDir ?? "");
+  const [copied, setCopied] = useState(false);
+
+  const copyFileDir = async () => {
+    if (!fileDir.value) return;
+    try {
+      await navigator.clipboard.writeText(fileDir.value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — ignore */
+    }
+  };
 
   const done = task.subtasks.filter((s) => s.done).length;
   const total = task.subtasks.length;
@@ -218,7 +231,37 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
         />
       </div>
 
-      <div className="flex items-center justify-between pt-1">
+      {/* File Directory — shared network path with a copy button */}
+      <div>
+        <div className="font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb-1">
+          {t("task.fileDir")}
+        </div>
+        <div className="flex items-center gap-2 bg-[#F5F3EF] border border-[#E8E6E1] rounded-lg pl-2 pr-1 focus-within:border-[#C9A96E]">
+          <span className="text-[#A8A29E] text-[12px] shrink-0">🗂</span>
+          <input
+            value={fileDir.value}
+            onFocus={fileDir.onFocus}
+            onChange={(e) => fileDir.setValue(e.target.value)}
+            onBlur={() => {
+              fileDir.onBlur();
+              if (fileDir.value !== (task.fileDir ?? "")) patch({ fileDir: fileDir.value });
+            }}
+            placeholder={t("task.fileDirPlaceholder")}
+            spellCheck={false}
+            className="flex-1 min-w-0 bg-transparent py-2 text-[12px] font-mono text-[#0A1931] outline-none"
+          />
+          <button
+            onClick={copyFileDir}
+            disabled={!fileDir.value}
+            title={t("task.copy")}
+            className="shrink-0 h-8 px-3 my-0.5 rounded-md bg-[#0A1931] text-[#C9A96E] text-[11px] font-semibold disabled:opacity-30"
+          >
+            {copied ? t("task.copied") : t("task.copy")}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <button
             onClick={() => move(-1)}
@@ -249,25 +292,28 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
           </select>
         </div>
         {confirmDel ? (
-          <div className="flex items-center gap-2 text-[12px]">
-            <span className="text-[#DC2626]">{t("task.confirmDelete")}</span>
+          <div className="flex items-center gap-2 text-[13px] bg-[#FEF2F2] border border-[#FECACA] rounded-full pl-3 pr-1 py-1">
+            <span className="text-[#DC2626] font-semibold">{t("task.confirmDelete")}</span>
             <button
               onClick={() => {
                 send({ type: "deleteTask", id: task.id });
                 onDeleted?.();
               }}
-              className="font-semibold text-[#DC2626]"
+              className="h-8 px-4 rounded-full bg-[#DC2626] text-white text-[12px] font-semibold"
             >
               {t("task.yes")}
             </button>
-            <button onClick={() => setConfirmDel(false)} className="text-[#8A8A8A]">
+            <button
+              onClick={() => setConfirmDel(false)}
+              className="h-8 px-4 rounded-full bg-white text-[#6B6B6B] border border-[#E8E6E1] text-[12px] font-semibold"
+            >
               {t("task.no")}
             </button>
           </div>
         ) : (
           <button
             onClick={() => setConfirmDel(true)}
-            className="text-[12px] text-[#8A8A8A] hover:text-[#DC2626] underline underline-offset-2"
+            className="h-8 px-4 rounded-full text-[12px] font-semibold text-[#8A8A8A] border border-[#E8E6E1] hover:text-[#DC2626] hover:border-[#FECACA]"
           >
             {t("task.delete")}
           </button>

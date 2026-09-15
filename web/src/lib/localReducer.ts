@@ -87,6 +87,10 @@ export function applyOpLocal(board: Board, op: Op): Board {
       if (op.password !== undefined) b.accessPassword = op.password;
       if (op.loginDays !== undefined) b.loginDays = op.loginDays;
       break;
+    case "setBranding":
+      if (op.logoUrl !== undefined) b.logoUrl = op.logoUrl ?? undefined;
+      if (op.faviconUrl !== undefined) b.faviconUrl = op.faviconUrl ?? undefined;
+      break;
     case "weeklyAdd":
       b.weekly[op.column] = [...b.weekly[op.column], op.item];
       break;

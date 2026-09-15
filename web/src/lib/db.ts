@@ -30,6 +30,7 @@ interface TaskRow {
   subtasks: Task["subtasks"];
   due_date: string | null;
   waiting_since: string | null;
+  file_dir: string | null;
   updated_at: number;
   created_at: number;
 }
@@ -46,6 +47,7 @@ function rowToTask(r: TaskRow): Task {
     subtasks: Array.isArray(r.subtasks) ? r.subtasks : [],
     dueDate: r.due_date ?? undefined,
     waitingSince: r.waiting_since ?? undefined,
+    fileDir: r.file_dir ?? undefined,
     updatedAt: r.updated_at,
     createdAt: r.created_at,
   };
@@ -63,6 +65,7 @@ function taskToRow(t: Task): TaskRow {
     subtasks: t.subtasks ?? [],
     due_date: t.dueDate ?? null,
     waiting_since: t.waitingSince ?? null,
+    file_dir: t.fileDir ?? null,
     updated_at: t.updatedAt ?? Date.now(),
     created_at: t.createdAt ?? Date.now(),
   };
@@ -80,6 +83,7 @@ function patchToRow(patch: Partial<Task>): Record<string, unknown> {
   if ("subtasks" in patch) out.subtasks = patch.subtasks;
   if ("dueDate" in patch) out.due_date = patch.dueDate ?? null;
   if ("waitingSince" in patch) out.waiting_since = patch.waitingSince ?? null;
+  if ("fileDir" in patch) out.file_dir = patch.fileDir ?? null;
   out.updated_at = Date.now();
   return out;
 }
@@ -121,6 +125,8 @@ export async function fetchBoard(): Promise<Board> {
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
     accessPassword: (m?.access_password as string) ?? undefined,
     loginDays: (m?.login_days as number) ?? undefined,
+    logoUrl: (m?.logo_url as string) ?? undefined,
+    faviconUrl: (m?.favicon_url as string) ?? undefined,
   };
 }
 
@@ -168,7 +174,11 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
   switch (op.type) {
     case "addTask": {
       const t = { ...op.task, createdAt: op.task.createdAt ?? Date.now() };
-      await must(supabase.from("tasks").insert(taskToRow(t)));
+      const row = taskToRow(t) as unknown as Record<string, unknown>;
+      // Don't send file_dir on new tasks unless it has a value — keeps inserts
+      // working even before migration-003 adds the column.
+      if (row.file_dir == null) delete row.file_dir;
+      await must(supabase.from("tasks").insert(row));
       break;
     }
     case "updateTask":
@@ -256,6 +266,13 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       const upd: Record<string, unknown> = {};
       if (op.password !== undefined) upd.access_password = op.password;
       if (op.loginDays !== undefined) upd.login_days = op.loginDays;
+      await must(supabase.from("board_meta").update(upd).eq("id", "main"));
+      break;
+    }
+    case "setBranding": {
+      const upd: Record<string, unknown> = {};
+      if (op.logoUrl !== undefined) upd.logo_url = op.logoUrl; // null clears
+      if (op.faviconUrl !== undefined) upd.favicon_url = op.faviconUrl;
       await must(supabase.from("board_meta").update(upd).eq("id", "main"));
       break;
     }
