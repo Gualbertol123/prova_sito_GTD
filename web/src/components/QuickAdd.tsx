@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Op, Priority, Status, Task } from "../lib/types";
 import { STATUS_ORDER, genId } from "../lib/constants";
 import { priorityLabel, statusLabel, useT } from "../lib/i18n";
+import { useMe } from "../lib/identity";
 
 const PRIOS: Priority[] = ["P1", "P2", "P3", "P4"];
 
@@ -14,8 +15,11 @@ interface Props {
 // nothing is assumed.
 export function QuickAdd({ members, send }: Props) {
   const { t, lang } = useT();
+  const { me } = useMe();
   const [title, setTitle] = useState("");
-  const [owner, setOwner] = useState(members[0] ?? "Unassigned");
+  const [owner, setOwner] = useState(
+    me && members.includes(me) ? me : members[0] ?? "Unassigned"
+  );
   const [priority, setPriority] = useState<Priority>("P2");
   const [status, setStatus] = useState<Status>("NEXT");
   const [due, setDue] = useState("");

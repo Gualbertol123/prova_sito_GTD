@@ -14,6 +14,7 @@ import { DailyReflection } from "./components/DailyReflection";
 import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
 import { LangToggle } from "./components/LangToggle";
+import { IdentityPicker } from "./components/IdentityPicker";
 
 export default function App() {
   const { board, conn, error, send } = useBoard();
@@ -74,6 +75,7 @@ export default function App() {
         send={send}
         rightSlot={
           <>
+            <IdentityPicker members={members} />
             <ConnBadge conn={conn} />
             <LangToggle />
           </>

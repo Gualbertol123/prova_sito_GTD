@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Board, Op, Reflection } from "../lib/types";
 import { useT, localeCode, type Lang } from "../lib/i18n";
+import { useMe } from "../lib/identity";
 import { toISODate } from "../lib/dates";
-import { readMe, writeMe, readReviewedToday, writeReviewedToday } from "../lib/prefs";
+import { readReviewedToday, writeReviewedToday } from "../lib/prefs";
 
 function isoMinus(iso: string, days: number): string {
   const d = new Date(iso);
@@ -29,19 +30,8 @@ interface Props {
 
 export function DailyReflection({ board, members, send }: Props) {
   const { t, lang } = useT();
+  const { me, setMe } = useMe();
   const today = toISODate(new Date());
-
-  const [me, setMe] = useState(() => {
-    const saved = readMe();
-    return saved && members.includes(saved) ? saved : members[0] ?? "";
-  });
-  useEffect(() => {
-    if (me && !members.includes(me)) setMe(members[0] ?? "");
-  }, [members, me]);
-  const changeMe = (v: string) => {
-    setMe(v);
-    writeMe(v);
-  };
 
   const id = `${today}::${me}`;
   const existing = board.reflections.find((r) => r.id === id) ?? null;
@@ -55,11 +45,11 @@ export function DailyReflection({ board, members, send }: Props) {
         <label className="inline-flex items-center gap-2 text-[11px] text-[#8A8A8A]">
           {t("reflection.me")}
           <select
-            value={me}
-            onChange={(e) => changeMe(e.target.value)}
+            value={members.includes(me) ? me : ""}
+            onChange={(e) => setMe(e.target.value)}
             className="h-8 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[12px] text-[#0A1931] outline-none focus:border-[#C9A96E]"
           >
-            {members.length === 0 && <option value="">{t("reflection.pickMe")}</option>}
+            <option value="">{t("reflection.pickMe")}</option>
             {members.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
