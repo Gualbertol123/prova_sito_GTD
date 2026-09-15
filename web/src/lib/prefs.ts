@@ -10,6 +10,7 @@ const KEYS = {
   auth: "gtd-auth",
   me: "gtd-me",
   reviewed: "gtd-reviewed",
+  prio: "gtd-prio-collapsed",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {
@@ -72,6 +73,15 @@ export function writeAuth(exp: number): void {
 }
 export function clearAuth(): void {
   removePref("auth");
+}
+
+// Priority-distribution collapsed state (default collapsed to save space).
+export function readPrioCollapsed(): boolean {
+  const v = readPref("prio");
+  return v === null ? true : v === "1";
+}
+export function writePrioCollapsed(v: boolean): void {
+  writePref("prio", v ? "1" : "0");
 }
 
 // Which member "I" am (per device), for the Daily Reflection form.

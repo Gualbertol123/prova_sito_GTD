@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Task, Priority } from "../lib/types";
 import { useT } from "../lib/i18n";
+import { readPrioCollapsed, writePrioCollapsed } from "../lib/prefs";
 
 const PRIOS: { p: Priority; bar: string; dot: string }[] = [
   { p: "P1", bar: "bg-[#DC2626]", dot: "bg-[#DC2626]" },
@@ -10,20 +12,48 @@ const PRIOS: { p: Priority; bar: string; dot: string }[] = [
 
 export function PriorityDistribution({ tasks }: { tasks: Task[] }) {
   const { t } = useT();
+  const [collapsed, setCollapsed] = useState(() => readPrioCollapsed());
   const active = tasks.filter((tk) => tk.status !== "DONE");
   const counts = PRIOS.map(({ p }) => active.filter((tk) => tk.priority === p).length);
   const max = Math.max(1, ...counts);
   const total = active.length;
 
+  const toggle = () => {
+    setCollapsed((c) => {
+      writePrioCollapsed(!c);
+      return !c;
+    });
+  };
+
   return (
     <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
-          {t("prio.distribution")}
-        </h4>
+      <button
+        onClick={toggle}
+        className="w-full flex items-center justify-between"
+        title={t("prio.distribution")}
+      >
+        <span className="flex items-center gap-2">
+          <span className={`text-[#8A8A8A] text-[11px] transition-transform ${collapsed ? "" : "rotate-90"}`}>▶</span>
+          <span className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+            {t("prio.distribution")}
+          </span>
+        </span>
         <span className="text-[11px] text-[#8A8A8A]">{total}</span>
-      </div>
-      <div className="space-y-2.5">
+      </button>
+      {collapsed && total > 0 && (
+        <div className="flex items-center gap-3 mt-2">
+          {PRIOS.map(({ p, dot }, i) =>
+            counts[i] > 0 ? (
+              <span key={p} className="inline-flex items-center gap-1 text-[11px] text-[#6B6B6B]">
+                <span className={`w-2 h-2 rounded-full ${dot}`} />
+                {p} <span className="font-semibold text-[#0A1931]">{counts[i]}</span>
+              </span>
+            ) : null
+          )}
+        </div>
+      )}
+      {!collapsed && (
+      <div className="space-y-2.5 mt-3">
         {PRIOS.map(({ p, bar, dot }, i) => (
           <div key={p} className="flex items-center gap-3">
             <span className="w-16 shrink-0 flex items-center gap-1.5 text-[11px] font-semibold text-[#0A1931]">
@@ -45,6 +75,7 @@ export function PriorityDistribution({ tasks }: { tasks: Task[] }) {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
