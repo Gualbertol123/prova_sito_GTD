@@ -49,39 +49,55 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
   for (const it of items) byId[it.id] = it;
   const ordered = order.map((id) => byId[id]).filter(Boolean) as Subtask[];
 
-  // FLIP: animate rows sliding to their new positions after any reorder/reflow.
+  // FLIP: animate rows sliding to their new positions — only when the ORDER
+  // changes (not on every pointer move), measuring with transforms cleared so
+  // in-flight animations don't corrupt the positions.
+  const orderKey = order.join("|");
   useLayoutEffect(() => {
     const tops: Record<string, number> = {};
     for (const id of order) {
       const el = rowRefs.current[id];
       if (!el) continue;
-      const top = el.getBoundingClientRect().top;
-      tops[id] = top;
+      el.style.transition = "none";
+      el.style.transform = "";
+    }
+    for (const id of order) {
+      const el = rowRefs.current[id];
+      if (el) tops[id] = el.getBoundingClientRect().top;
+    }
+    for (const id of order) {
+      if (id === dragId) continue;
+      const el = rowRefs.current[id];
+      if (!el) continue;
       const prev = prevTops.current[id];
-      if (prev != null && id !== dragId) {
-        const delta = prev - top;
-        if (Math.abs(delta) > 0.5) {
-          el.style.transition = "none";
-          el.style.transform = `translateY(${delta}px)`;
-          requestAnimationFrame(() => {
-            el.style.transition = "transform 180ms cubic-bezier(0.2,0.8,0.2,1)";
-            el.style.transform = "";
-          });
-        }
+      const cur = tops[id];
+      if (prev != null && cur != null && Math.abs(prev - cur) > 0.5) {
+        el.style.transform = `translateY(${prev - cur}px)`;
+        requestAnimationFrame(() => {
+          el.style.transition = "transform 260ms cubic-bezier(0.2,0.7,0.2,1)";
+          el.style.transform = "";
+        });
       }
     }
     prevTops.current = tops;
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderKey]);
 
   const onMove = (e: PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
     setPointerY(e.clientY);
+    const cont = containerRef.current;
+    if (!cont) return;
+    // Use layout coordinates (offsetTop/offsetHeight) — immune to the in-flight
+    // animation transforms — so hit-testing never fights the animation.
+    const y = e.clientY - cont.getBoundingClientRect().top;
     const without = orderRef.current.filter((id) => id !== d.id);
     let insert = without.length;
     for (let i = 0; i < without.length; i++) {
-      const r = rowRefs.current[without[i]]?.getBoundingClientRect();
-      if (r && e.clientY < r.top + r.height / 2) {
+      const el = rowRefs.current[without[i]];
+      if (!el) continue;
+      if (y < el.offsetTop + el.offsetHeight / 2) {
         insert = i;
         break;
       }
@@ -157,7 +173,7 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
           <div className="flex items-start gap-1.5 rounded-[10px] bg-white border border-[#C9A96E] shadow-xl p-2 rotate-[-1deg]">
             <span className="pt-0.5"><Grip /></span>
             <input type="checkbox" checked={dragItem.done} readOnly className="mt-0.5 accent-[#C9A96E]" />
-            <span className={`flex-1 text-[12px] leading-snug ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
+            <span className={`flex-1 text-[12px] leading-snug text-center ${dragItem.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"}`}>
               {dragItem.text}
             </span>
           </div>
@@ -214,7 +230,7 @@ function SubtaskRow({
           field.onBlur();
           if (field.value.trim() && field.value !== s.text) onText(field.value.trim());
         }}
-        className={`flex-1 bg-transparent text-[12px] leading-snug outline-none ${
+        className={`flex-1 bg-transparent text-[12px] leading-snug text-center outline-none ${
           s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
         }`}
       />
