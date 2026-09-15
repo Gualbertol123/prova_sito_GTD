@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { Op, Priority, Task } from "../lib/types";
+import type { Op, Priority, Status, Task } from "../lib/types";
 import { STATUS_ORDER, genId } from "../lib/constants";
-import { priorityLabel, useT } from "../lib/i18n";
+import { priorityLabel, statusLabel, useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
 import { daysSince } from "../lib/dates";
+import { AutoTextarea } from "./AutoTextarea";
 
 const PRIOS: Priority[] = ["P1", "P2", "P3", "P4"];
 
@@ -27,7 +28,7 @@ interface Props {
 // The full editable body for a task. Reused by the inline board card and the
 // calendar side panel — no popups anywhere.
 export function TaskDetails({ task, members, send, onDeleted }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [confirmDel, setConfirmDel] = useState(false);
   const [newSub, setNewSub] = useState("");
 
@@ -56,8 +57,7 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
 
   return (
     <div className="space-y-3">
-      <textarea
-        rows={1}
+      <AutoTextarea
         value={title.value}
         onFocus={title.onFocus}
         onChange={(e) => title.setValue(e.target.value)}
@@ -65,7 +65,7 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
           title.onBlur();
           if (title.value.trim() && title.value !== task.title) patch({ title: title.value.trim() });
         }}
-        className="w-full font-semibold text-[14px] text-[#0A1931] bg-[#F5F3EF] rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#C9A96E] resize-none"
+        className="w-full font-semibold text-[14px] leading-snug text-[#0A1931] bg-[#F5F3EF] rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#C9A96E]"
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -188,8 +188,7 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
         <div className="font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb-1">
           {t("task.description")}
         </div>
-        <textarea
-          rows={2}
+        <AutoTextarea
           value={desc.value}
           onFocus={desc.onFocus}
           onChange={(e) => desc.setValue(e.target.value)}
@@ -198,7 +197,7 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
             if (desc.value !== task.desc) patch({ desc: desc.value });
           }}
           placeholder={t("task.descPlaceholder")}
-          className="w-full rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E] resize-none"
+          className="w-full min-h-[3.2rem] rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E]"
         />
       </div>
 
@@ -206,8 +205,7 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
         <div className="font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb-1">
           {t("task.notes")}
         </div>
-        <textarea
-          rows={2}
+        <AutoTextarea
           value={notes.value}
           onFocus={notes.onFocus}
           onChange={(e) => notes.setValue(e.target.value)}
@@ -216,7 +214,7 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
             if (notes.value !== task.notes) patch({ notes: notes.value });
           }}
           placeholder={t("task.notesPlaceholder")}
-          className="w-full rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E] resize-none"
+          className="w-full min-h-[3.2rem] rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E]"
         />
       </div>
 
@@ -238,6 +236,17 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
           >
             ›
           </button>
+          {/* Move directly to any section */}
+          <select
+            value={task.status}
+            onChange={(e) => send({ type: "moveTask", id: task.id, status: e.target.value as Status })}
+            title={t("quick.status")}
+            className="h-8 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] px-2 text-[12px] text-[#0A1931] outline-none focus:border-[#C9A96E] cursor-pointer"
+          >
+            {STATUS_ORDER.map((s) => (
+              <option key={s} value={s}>{statusLabel(lang, s)}</option>
+            ))}
+          </select>
         </div>
         {confirmDel ? (
           <div className="flex items-center gap-2 text-[12px]">

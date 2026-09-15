@@ -254,23 +254,40 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
       ) : (
         <>
           <p className="text-[12px] text-[#6B6B6B]">{t("board.help")}</p>
-          <div ref={containerRef} className="flex flex-wrap gap-3 items-start">
+          <div
+            ref={containerRef}
+            onDragLeave={(e) => {
+              // Clear the highlight only when the cursor actually leaves the board.
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCol(null);
+            }}
+            className="flex flex-wrap gap-3 items-start"
+          >
             {visibleCols.map((status, i) => {
               const colTasks = tasks.filter((tk) => tk.status === status);
               const isLast = i === visibleCols.length - 1;
               return (
                 <div
                   key={status}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setOverCol(status);
+                  onDragEnter={(e) => {
+                    if (dragId) {
+                      e.preventDefault();
+                      setOverCol(status);
+                    }
                   }}
-                  onDragLeave={() => setOverCol((c) => (c === status ? null : c))}
-                  onDrop={() => drop(status)}
-                  style={{ flexGrow: getW(status), flexShrink: 1, flexBasis: 0, minWidth: 168 }}
-                  className={`relative rounded-[14px] bg-[#EFECE6] p-2 ${overCol === status ? "drop-target" : ""} ${
-                    editLayout ? "ring-1 ring-[#C9A96E]/40" : ""
-                  }`}
+                  onDragOver={(e) => {
+                    if (!dragId) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (overCol !== status) setOverCol(status);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    drop(status);
+                  }}
+                  style={{ flexGrow: getW(status), flexShrink: 1, flexBasis: 0, minWidth: 168, minHeight: 140 }}
+                  className={`relative rounded-[14px] p-2 transition-colors ${
+                    overCol === status ? "drop-target" : "bg-[#EFECE6]"
+                  } ${editLayout ? "ring-1 ring-[#C9A96E]/40" : ""}`}
                 >
                   <div className="flex items-center justify-between px-2 py-2 gap-2">
                     <div className="min-w-0">
@@ -301,6 +318,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                         onDragEnd={(e) => {
                           (e.currentTarget as HTMLElement).classList.remove("dragging");
                           setDragId(null);
+                          setOverCol(null);
                         }}
                       />
                     ))}

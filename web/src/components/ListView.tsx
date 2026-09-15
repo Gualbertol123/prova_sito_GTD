@@ -54,8 +54,10 @@ export function ListView({ tasks, members, send }: Props) {
                   >
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[tk.priority]}`} />
-                        <span className="text-[13px] font-medium text-[#0A1931]">{tk.title}</span>
+                        <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${PRIORITY_DOT[tk.priority]}`} />
+                        <span className="text-[13px] font-medium text-[#0A1931] break-words [overflow-wrap:anywhere]">
+                          {tk.title}
+                        </span>
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-[12px] text-[#6B6B6B]">{ownerLabel(t, tk.owner)}</td>

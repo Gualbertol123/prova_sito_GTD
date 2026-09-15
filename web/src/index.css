@@ -38,9 +38,10 @@ body {
   opacity: 0.4;
 }
 
-/* Column drop hover */
+/* Column drop hover — clear, obvious target while dragging a card */
 .drop-target {
+  background: #f3ead7;
   outline: 2px dashed #c9a96e;
-  outline-offset: -4px;
-  background: #faf9f6;
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 9999px rgba(201, 169, 110, 0.06);
 }
