@@ -162,9 +162,9 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
             onChange={(e) => setNewSub(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addSub()}
             placeholder={t("task.addSubtask")}
-            className="flex-1 h-8 rounded-full bg-white border border-[#E8E6E1] px-3 text-[12px] outline-none focus:border-[#C9A96E]"
+            className="flex-1 min-w-0 h-8 rounded-full bg-white border border-[#E8E6E1] px-3 text-[12px] outline-none focus:border-[#C9A96E]"
           />
-          <button onClick={addSub} className="h-8 px-3 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold">
+          <button onClick={addSub} className="h-8 w-8 shrink-0 flex items-center justify-center rounded-full bg-[#0A1931] text-[#C9A96E] text-[14px] font-semibold">
             +
           </button>
         </div>

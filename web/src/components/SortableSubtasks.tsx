@@ -245,7 +245,7 @@ function SubtaskRow({
           field.onBlur();
           if (field.value.trim() && field.value !== s.text) onText(field.value.trim());
         }}
-        className={`flex-1 bg-transparent text-[12px] leading-5 text-left p-0 outline-none ${
+        className={`flex-1 min-w-0 bg-transparent text-[12px] leading-5 text-left p-0 outline-none ${
           s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
         }`}
       />
