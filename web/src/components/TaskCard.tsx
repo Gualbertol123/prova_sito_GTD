@@ -34,9 +34,15 @@ export function TaskCard({ task, members, send, draggable, onDragStart, onDragEn
     >
       <button onClick={() => setOpen((o) => !o)} className="w-full text-left p-3 flex items-start gap-2">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${PRIORITY_DOT[task.priority]}`} />
-        <span className="flex-1 min-w-0 font-semibold text-[13px] text-[#0A1931] leading-snug break-words [overflow-wrap:anywhere]">
-          {task.title}
-        </span>
+        {open ? (
+          <span className="flex-1 min-w-0 text-[10px] font-semibold uppercase tracking-widest text-[#A8A29E] mt-0.5">
+            ▾ {t("task.collapse")}
+          </span>
+        ) : (
+          <span className="flex-1 min-w-0 font-semibold text-[13px] text-[#0A1931] leading-snug break-words [overflow-wrap:anywhere]">
+            {task.title}
+          </span>
+        )}
         <span className="shrink-0 text-[10px] font-semibold tracking-wide uppercase px-2 py-1 rounded-full bg-[#0A1931] text-[#C9A96E]">
           {statusLabel(lang, task.status)}
         </span>
