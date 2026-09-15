@@ -1,5 +1,5 @@
 // Shared domain types for the TEAM GTD board.
-// These mirror the shape stored in Cosmos DB and broadcast over Web PubSub.
+// These mirror the rows stored in Supabase and streamed live via Postgres realtime.
 
 export type Status =
   | "BACKLOG"
