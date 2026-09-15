@@ -38,6 +38,20 @@ create table if not exists public.tasks (
   created_at     bigint not null default 0      -- ordering within a column
 );
 
+-- One row per team member per day — the Daily Reflection.
+create table if not exists public.reflections (
+  id          text primary key,   -- "<date>::<member>"
+  member      text not null,
+  date        text not null,      -- yyyy-mm-dd
+  done        text not null default '',
+  well        text not null default '',
+  improve     text not null default '',
+  learning    text not null default '',
+  updated_at  bigint not null default 0,
+  created_at  bigint not null default 0
+);
+create index if not exists reflections_date_idx on public.reflections (date);
+
 -- One row per weekly-review item.
 create table if not exists public.weekly (
   id          text primary key,
@@ -52,19 +66,23 @@ create table if not exists public.weekly (
 -- site URL can edit the board. To lock it down later, replace these policies
 -- with ones that require authentication.
 
-alter table public.board_meta enable row level security;
-alter table public.tasks      enable row level security;
-alter table public.weekly     enable row level security;
+alter table public.board_meta  enable row level security;
+alter table public.tasks       enable row level security;
+alter table public.weekly      enable row level security;
+alter table public.reflections enable row level security;
 
-drop policy if exists "anon all board_meta" on public.board_meta;
-drop policy if exists "anon all tasks"      on public.tasks;
-drop policy if exists "anon all weekly"     on public.weekly;
+drop policy if exists "anon all board_meta"  on public.board_meta;
+drop policy if exists "anon all tasks"        on public.tasks;
+drop policy if exists "anon all weekly"       on public.weekly;
+drop policy if exists "anon all reflections"  on public.reflections;
 
 create policy "anon all board_meta" on public.board_meta
   for all to anon, authenticated using (true) with check (true);
 create policy "anon all tasks" on public.tasks
   for all to anon, authenticated using (true) with check (true);
 create policy "anon all weekly" on public.weekly
+  for all to anon, authenticated using (true) with check (true);
+create policy "anon all reflections" on public.reflections
   for all to anon, authenticated using (true) with check (true);
 
 -- ---- Realtime --------------------------------------------------------------
@@ -74,3 +92,4 @@ create policy "anon all weekly" on public.weekly
 alter publication supabase_realtime add table public.board_meta;
 alter publication supabase_realtime add table public.tasks;
 alter publication supabase_realtime add table public.weekly;
+alter publication supabase_realtime add table public.reflections;

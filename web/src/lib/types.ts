@@ -46,14 +46,28 @@ export interface Weekly {
   focus: WeeklyItem[]; // FOCUS NEXT WEEK
 }
 
+// One team member's reflection for a given day (one per member per day).
+export interface Reflection {
+  id: string; // "<date>::<member>"
+  member: string;
+  date: string; // yyyy-mm-dd
+  done: string; // Done today
+  well: string; // What went well
+  improve: string; // What to improve
+  learning: string; // Learning notes
+  updatedAt?: number;
+  createdAt?: number;
+}
+
 // The assembled board — the entire shared state, rebuilt from the Supabase
-// tables (board_meta + tasks + weekly) and kept live via realtime.
+// tables (board_meta + tasks + weekly + reflections) and kept live via realtime.
 export interface Board {
   id: "board";
   boardName: string;
   members: string[];
   tasks: Task[];
   weekly: Weekly;
+  reflections: Reflection[];
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
   // Editable settings (nullable until the settings migration is applied).
@@ -84,4 +98,6 @@ export type Op =
   | { type: "weeklyAdd"; column: keyof Weekly; item: WeeklyItem }
   | { type: "weeklyUpdate"; column: keyof Weekly; id: string; text: string }
   | { type: "weeklyDelete"; column: keyof Weekly; id: string }
-  | { type: "weeklyClear" };
+  | { type: "weeklyClear" }
+  | { type: "reflectionSave"; reflection: Reflection }
+  | { type: "reflectionDelete"; id: string };

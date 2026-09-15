@@ -16,6 +16,7 @@ export function applyOpLocal(board: Board, op: Op): Board {
       focus: [...board.weekly.focus],
     },
     members: [...board.members],
+    reflections: [...(board.reflections ?? [])],
     updatedAt: now,
   };
 
@@ -104,6 +105,15 @@ export function applyOpLocal(board: Board, op: Op): Board {
       break;
     case "weeklyClear":
       b.weekly = { well: [], learnings: [], improve: [], blockers: [], focus: [] };
+      break;
+    case "reflectionSave": {
+      const i = b.reflections.findIndex((r) => r.id === op.reflection.id);
+      if (i >= 0) b.reflections[i] = op.reflection;
+      else b.reflections = [op.reflection, ...b.reflections];
+      break;
+    }
+    case "reflectionDelete":
+      b.reflections = b.reflections.filter((r) => r.id !== op.id);
       break;
   }
 

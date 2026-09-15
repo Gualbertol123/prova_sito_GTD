@@ -5,6 +5,7 @@ import { priorityLabel, statusLabel, useT } from "../lib/i18n";
 import { TaskCard } from "./TaskCard";
 import { QuickAdd } from "./QuickAdd";
 import { MembersBar } from "./MembersBar";
+import { DailyReflection } from "./DailyReflection";
 import { PriorityDistribution } from "./PriorityDistribution";
 import { ListView } from "./ListView";
 import {
@@ -273,8 +274,11 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
 
       {/* Team panel (collapsed by default to declutter the top) */}
       {teamOpen && (
-        <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
+        <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3 space-y-4">
           <MembersBar board={board} send={send} />
+          <div className="border-t border-[#E8E6E1] pt-4">
+            <DailyReflection board={board} members={members} send={send} />
+          </div>
         </div>
       )}
 

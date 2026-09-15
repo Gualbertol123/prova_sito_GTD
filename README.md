@@ -78,12 +78,14 @@ legacy/         the original artifact, kept for reference
 2. Left sidebar → **SQL Editor** → **New query**. Open `supabase/schema.sql`
    from this repo, copy **all** of it, paste, and click **Run**. This creates
    the tables, opens access for the anon key, and enables realtime.
-   Then run `supabase/migration-002-settings.sql` and
-   `supabase/migration-003-branding-filedir.sql` the same way — they add the
-   editable subtitle, access password, login-duration, custom logo/favicon and
-   per-task file-directory columns. (Existing deployments: just run the
-   migrations you haven't yet; they're additive and safe on live data. The app
-   works before they run, using built-in defaults.)
+   Then run `supabase/migration-002-settings.sql`,
+   `supabase/migration-003-branding-filedir.sql` and
+   `supabase/migration-004-reflections.sql` the same way — they add the editable
+   subtitle, access password, login-duration, custom logo/favicon, per-task
+   file-directory columns and the Daily Reflection table. (Existing deployments:
+   just run the migrations you haven't yet; they're additive and safe on live
+   data. The app works before they run, using built-in defaults — the Daily
+   Reflection section stays empty until migration-004 is applied.)
 3. Left sidebar → **Project Settings → API**. Copy two values:
    - **Project URL** (e.g. `https://abcd1234.supabase.co`)
    - **anon public** key (a long `eyJ...` string)

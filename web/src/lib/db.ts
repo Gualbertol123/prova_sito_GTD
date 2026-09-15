@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, Op, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, Op, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -88,13 +88,69 @@ function patchToRow(patch: Partial<Task>): Record<string, unknown> {
   return out;
 }
 
+interface ReflectionRow {
+  id: string;
+  member: string;
+  date: string;
+  done: string;
+  well: string;
+  improve: string;
+  learning: string;
+  updated_at: number;
+  created_at: number;
+}
+
+function rowToReflection(r: ReflectionRow): Reflection {
+  return {
+    id: r.id,
+    member: r.member,
+    date: r.date,
+    done: r.done ?? "",
+    well: r.well ?? "",
+    improve: r.improve ?? "",
+    learning: r.learning ?? "",
+    updatedAt: r.updated_at,
+    createdAt: r.created_at,
+  };
+}
+
+function reflectionToRow(r: Reflection): ReflectionRow {
+  return {
+    id: r.id,
+    member: r.member,
+    date: r.date,
+    done: r.done ?? "",
+    well: r.well ?? "",
+    improve: r.improve ?? "",
+    learning: r.learning ?? "",
+    updated_at: r.updatedAt ?? Date.now(),
+    created_at: r.createdAt ?? Date.now(),
+  };
+}
+
 // ---- Read -------------------------------------------------------------------
 
+async function fetchReflections(): Promise<Reflection[]> {
+  // Tolerant: the table may not exist yet (before migration-004). Any failure
+  // here must NOT break the board — reflections simply come back empty.
+  try {
+    const { data, error } = await supabase
+      .from("reflections")
+      .select("*")
+      .order("date", { ascending: false });
+    if (error || !data) return [];
+    return (data as ReflectionRow[]).map(rowToReflection);
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchBoard(): Promise<Board> {
-  const [meta, tasks, weekly] = await Promise.all([
+  const [meta, tasks, weekly, reflectionList] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("weekly").select("*").order("created_at", { ascending: true }),
+    fetchReflections(),
   ]);
 
   if (meta.error) throw meta.error;
@@ -120,6 +176,7 @@ export async function fetchBoard(): Promise<Board> {
     members: (m?.members as string[]) ?? SEED_MEMBERS,
     tasks: ((tasks.data ?? []) as TaskRow[]).map(rowToTask),
     weekly: weeklyGrouped,
+    reflections: reflectionList,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
@@ -295,6 +352,16 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
     case "weeklyClear":
       // Delete-all needs a filter in supabase-js; match every real row.
       await must(supabase.from("weekly").delete().neq("id", "__never__"));
+      break;
+    case "reflectionSave":
+      await must(
+        supabase
+          .from("reflections")
+          .upsert(reflectionToRow(op.reflection), { onConflict: "id" })
+      );
+      break;
+    case "reflectionDelete":
+      await must(supabase.from("reflections").delete().eq("id", op.id));
       break;
   }
 }
