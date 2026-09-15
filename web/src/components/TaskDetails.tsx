@@ -5,18 +5,9 @@ import { priorityLabel, statusLabel, useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
 import { daysSince } from "../lib/dates";
 import { AutoTextarea } from "./AutoTextarea";
+import { SortableSubtasks } from "./SortableSubtasks";
 
 const PRIOS: Priority[] = ["P1", "P2", "P3", "P4"];
-
-function Grip() {
-  return (
-    <svg width="10" height="16" viewBox="0 0 10 16" className="text-[#C9C5BE] shrink-0" aria-hidden>
-      {[3, 8, 13].map((cy) =>
-        [3, 7].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.1" fill="currentColor" />)
-      )}
-    </svg>
-  );
-}
 
 interface Props {
   task: Task;
@@ -151,38 +142,17 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
             <div className="h-full bg-[#C9A96E] transition-all" style={{ width: `${pct}%` }} />
           </div>
         )}
-        <div className="space-y-1">
-          {task.subtasks.map((s) => (
-            <div key={s.id} className="group flex items-center gap-1.5">
-              <Grip />
-              <input
-                type="checkbox"
-                checked={s.done}
-                onChange={(e) =>
-                  send({ type: "updateSubtask", taskId: task.id, subtaskId: s.id, patch: { done: e.target.checked } })
-                }
-                className="accent-[#C9A96E]"
-              />
-              <input
-                defaultValue={s.text}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v && v !== s.text)
-                    send({ type: "updateSubtask", taskId: task.id, subtaskId: s.id, patch: { text: v } });
-                }}
-                className={`flex-1 bg-transparent text-[12px] outline-none ${
-                  s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
-                }`}
-              />
-              <button
-                onClick={() => send({ type: "deleteSubtask", taskId: task.id, subtaskId: s.id })}
-                className="opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px]"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
+        <SortableSubtasks
+          items={task.subtasks}
+          onReorder={(subtasks) => patch({ subtasks })}
+          onToggle={(subtaskId, done) =>
+            send({ type: "updateSubtask", taskId: task.id, subtaskId, patch: { done } })
+          }
+          onText={(subtaskId, text) =>
+            send({ type: "updateSubtask", taskId: task.id, subtaskId, patch: { text } })
+          }
+          onDelete={(subtaskId) => send({ type: "deleteSubtask", taskId: task.id, subtaskId })}
+        />
         <div className="flex gap-1.5 mt-2">
           <input
             value={newSub}
