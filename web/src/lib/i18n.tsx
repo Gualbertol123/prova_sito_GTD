@@ -22,6 +22,7 @@ const IT: Dict = {
 
   "tabs.board": "BOARD",
   "tabs.weekly": "WEEKLY",
+  "tabs.projects": "PROGETTI",
   "tabs.calendario": "CALENDARIO",
   "tabs.reflection": "RIFLESSIONE",
   "tabs.tracking": "TRACKING 🔒",
@@ -222,6 +223,22 @@ const IT: Dict = {
   "review.daysAgo": "{n} giorni fa",
   "review.yesterday": "Ieri",
 
+  "projects.title": "Progetti",
+  "projects.new": "Nuovo progetto",
+  "projects.newName": "Nome del progetto",
+  "projects.none": "Nessun progetto. Creane uno.",
+  "projects.empty": "Seleziona o crea un progetto.",
+  "projects.rename": "Rinomina",
+  "projects.delete": "Elimina progetto",
+  "projects.confirmDelete": "Eliminare questo progetto?",
+  "projects.addItem": "Aggiungi voce…",
+  "projects.items": "Voci",
+
+  "track.reflections": "Riflessioni del team",
+  "track.reflAll": "Tutti",
+  "track.reflNone": "Nessuna riflessione registrata.",
+  "track.reflEmptyMember": "Nessuna riflessione per questo membro.",
+
   "common.close": "Chiudi",
 };
 
@@ -241,6 +258,7 @@ const EN: Dict = {
 
   "tabs.board": "BOARD",
   "tabs.weekly": "WEEKLY",
+  "tabs.projects": "PROJECTS",
   "tabs.calendario": "CALENDAR",
   "tabs.reflection": "REFLECTION",
   "tabs.tracking": "TRACKING 🔒",
@@ -440,6 +458,22 @@ const EN: Dict = {
   "review.random": "Random review",
   "review.daysAgo": "{n} days ago",
   "review.yesterday": "Yesterday",
+
+  "projects.title": "Projects",
+  "projects.new": "New project",
+  "projects.newName": "Project name",
+  "projects.none": "No projects yet. Create one.",
+  "projects.empty": "Select or create a project.",
+  "projects.rename": "Rename",
+  "projects.delete": "Delete project",
+  "projects.confirmDelete": "Delete this project?",
+  "projects.addItem": "Add item…",
+  "projects.items": "Items",
+
+  "track.reflections": "Team reflections",
+  "track.reflAll": "All",
+  "track.reflNone": "No reflections logged yet.",
+  "track.reflEmptyMember": "No reflections for this member.",
 
   "common.close": "Close",
 };

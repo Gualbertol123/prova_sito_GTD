@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Board } from "../lib/types";
 import { TRACKING_PASSWORD } from "../lib/constants";
-import { ownerLabel, useT } from "../lib/i18n";
+import { localeCode, ownerLabel, useT } from "../lib/i18n";
 
 export function TrackingView({ board }: { board: Board }) {
   const { t } = useT();
@@ -96,6 +96,73 @@ export function TrackingView({ board }: { board: Board }) {
           );
         })}
       </div>
+
+      <ReflectionsReview board={board} />
+    </div>
+  );
+}
+
+function ReflectionsReview({ board }: { board: Board }) {
+  const { t, lang } = useT();
+  const [who, setWho] = useState("all");
+  const entries = board.reflections
+    .filter((r) => who === "all" || r.member === who)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const line = (icon: string, text: string, color: string) =>
+    text.trim() ? (
+      <div className="text-[12px] text-[#0A1931]">
+        <span className={`font-semibold ${color}`}>{icon} </span>
+        <span className="whitespace-pre-wrap">{text}</span>
+      </div>
+    ) : null;
+
+  return (
+    <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <h3 className="font-trajan text-[13px] uppercase tracking-widest text-[#0A1931]">
+          🧠 {t("track.reflections")}
+        </h3>
+        <select
+          value={who}
+          onChange={(e) => setWho(e.target.value)}
+          className="h-8 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[12px] text-[#0A1931] outline-none focus:border-[#C9A96E]"
+        >
+          <option value="all">{t("track.reflAll")}</option>
+          {board.members.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </div>
+
+      {board.reflections.length === 0 ? (
+        <div className="text-[12px] text-[#A8A29E]">{t("track.reflNone")}</div>
+      ) : entries.length === 0 ? (
+        <div className="text-[12px] text-[#A8A29E]">{t("track.reflEmptyMember")}</div>
+      ) : (
+        <div className="space-y-2">
+          {entries.map((r) => (
+            <div key={r.id} className="rounded-lg border border-[#E8E6E1] bg-[#FAF9F6] p-3">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-5 h-5 rounded-full bg-[#0A1931] text-white text-[9px] font-bold flex items-center justify-center">
+                  {r.member.charAt(0).toUpperCase()}
+                </span>
+                <span className="text-[12px] font-semibold text-[#0A1931]">{r.member}</span>
+                <span className="text-[11px] text-[#8A8A8A] ml-auto">
+                  {new Date(r.date).toLocaleDateString(localeCode(lang))}
+                </span>
+              </div>
+              <div className="space-y-0.5 pl-1">
+                {line("✓", r.done, "text-[#065F46]")}
+                {line("★", r.well, "text-[#C9A96E]")}
+                {line("↻", r.improve, "text-[#92400E]")}
+                {line("🧠", r.learning, "text-[#0A1931]")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

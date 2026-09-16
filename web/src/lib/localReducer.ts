@@ -17,6 +17,7 @@ export function applyOpLocal(board: Board, op: Op): Board {
     },
     members: [...board.members],
     reflections: [...(board.reflections ?? [])],
+    projects: [...(board.projects ?? [])],
     updatedAt: now,
   };
 
@@ -114,6 +115,17 @@ export function applyOpLocal(board: Board, op: Op): Board {
     }
     case "reflectionDelete":
       b.reflections = b.reflections.filter((r) => r.id !== op.id);
+      break;
+    case "projectAdd":
+      b.projects = [...b.projects, op.project];
+      break;
+    case "projectUpdate":
+      b.projects = b.projects.map((p) =>
+        p.id === op.id ? { ...p, ...op.patch, updatedAt: now } : p
+      );
+      break;
+    case "projectDelete":
+      b.projects = b.projects.filter((p) => p.id !== op.id);
       break;
   }
 

@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, Op, Reflection, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, Op, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -130,6 +130,47 @@ function reflectionToRow(r: Reflection): ReflectionRow {
 
 // ---- Read -------------------------------------------------------------------
 
+interface ProjectRow {
+  id: string;
+  name: string;
+  items: Task["subtasks"];
+  created_at: number;
+  updated_at: number;
+}
+
+function rowToProject(r: ProjectRow): Project {
+  return {
+    id: r.id,
+    name: r.name ?? "",
+    items: Array.isArray(r.items) ? r.items : [],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function projectToRow(p: Project): ProjectRow {
+  return {
+    id: p.id,
+    name: p.name ?? "",
+    items: p.items ?? [],
+    created_at: p.createdAt ?? Date.now(),
+    updated_at: p.updatedAt ?? Date.now(),
+  };
+}
+
+async function fetchProjects(): Promise<Project[]> {
+  try {
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (error || !data) return [];
+    return (data as ProjectRow[]).map(rowToProject);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchReflections(): Promise<Reflection[]> {
   // Tolerant: the table may not exist yet (before migration-004). Any failure
   // here must NOT break the board — reflections simply come back empty.
@@ -146,11 +187,12 @@ async function fetchReflections(): Promise<Reflection[]> {
 }
 
 export async function fetchBoard(): Promise<Board> {
-  const [meta, tasks, weekly, reflectionList] = await Promise.all([
+  const [meta, tasks, weekly, reflectionList, projectList] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
     supabase.from("weekly").select("*").order("created_at", { ascending: true }),
     fetchReflections(),
+    fetchProjects(),
   ]);
 
   if (meta.error) throw meta.error;
@@ -177,6 +219,7 @@ export async function fetchBoard(): Promise<Board> {
     tasks: ((tasks.data ?? []) as TaskRow[]).map(rowToTask),
     weekly: weeklyGrouped,
     reflections: reflectionList,
+    projects: projectList,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
@@ -362,6 +405,19 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       break;
     case "reflectionDelete":
       await must(supabase.from("reflections").delete().eq("id", op.id));
+      break;
+    case "projectAdd":
+      await must(supabase.from("projects").insert(projectToRow(op.project)));
+      break;
+    case "projectUpdate": {
+      const upd: Record<string, unknown> = { updated_at: Date.now() };
+      if (op.patch.name !== undefined) upd.name = op.patch.name;
+      if (op.patch.items !== undefined) upd.items = op.patch.items;
+      await must(supabase.from("projects").update(upd).eq("id", op.id));
+      break;
+    }
+    case "projectDelete":
+      await must(supabase.from("projects").delete().eq("id", op.id));
       break;
   }
 }

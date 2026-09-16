@@ -5,6 +5,7 @@ import { useT } from "./lib/i18n";
 import { TopBar } from "./components/TopBar";
 import { Filters, type FilterState } from "./components/Filters";
 import { BoardView } from "./components/BoardView";
+import { ProjectsView } from "./components/ProjectsView";
 import { WeeklyView } from "./components/WeeklyView";
 import { CalendarView } from "./components/CalendarView";
 import { TrackingView } from "./components/TrackingView";
@@ -114,6 +115,7 @@ export default function App() {
             setFilters={setFilters}
           />
         )}
+        {tab === "projects" && <ProjectsView board={board} send={send} />}
         {tab === "weekly" && <WeeklyView board={board} send={send} />}
         {tab === "calendario" && (
           <div className="space-y-4">

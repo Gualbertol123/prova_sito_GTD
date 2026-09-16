@@ -22,11 +22,12 @@ full file map, how to run and deploy it, and how to extend it.
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. |
+| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. |
+| **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
 | **WEEKLY** | Weekly review. A "Recap — everything completed" block auto-fills from DONE tasks (with owner + subtask progress), plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | Daily Reflection: pick who you are (remembered per device), log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes). Shows recent entries, and a **spaced-repetition review** that resurfaces past learning notes at 1/3/7/14/30-day intervals (+ a random review). |
-| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded). Its password lives in code — see §8. |
+| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §8. |
 | **INSTRUCTIONS** | Reference for statuses, priorities and workflow. |
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); shared access password; login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
 
@@ -87,7 +88,7 @@ live in `localStorage` (`prefs.ts`):
 
 ## 3. Data model (Supabase)
 
-Four tables, all with **RLS enabled and an open policy for the anon key** (any
+Five tables, all with **RLS enabled and an open policy for the anon key** (any
 signed-out visitor with the anon key can read/write — see §8) and all in the
 `supabase_realtime` publication.
 
@@ -108,6 +109,9 @@ column).
 `member`, `date`, `done`, `well`, `improve`, `learning`, `updated_at`,
 `created_at`.
 
+**`projects`** — one row per project: `id`, `name`, `items jsonb`
+(`[{id,text,done}]`, same shape as subtasks), `created_at`, `updated_at`.
+
 SQL files in `supabase/`:
 
 - `schema.sql` — the **complete** schema for a fresh project (all tables +
@@ -117,6 +121,7 @@ SQL files in `supabase/`:
 - `migration-003-branding-filedir.sql` — adds `logo_url` / `favicon_url` and
   `tasks.file_dir`.
 - `migration-004-reflections.sql` — adds the `reflections` table.
+- `migration-005-projects.sql` — adds the `projects` table.
 
 The migrations are additive and safe on live data; run any you haven't yet. The
 app degrades gracefully before they're applied (settings can't save, reflections

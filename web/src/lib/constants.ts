@@ -74,6 +74,7 @@ export const WEEKLY_COLUMNS: {
 
 export type TabId =
   | "board"
+  | "projects"
   | "weekly"
   | "calendario"
   | "reflection"
@@ -83,6 +84,7 @@ export type TabId =
 
 export const TABS: { id: TabId; label: string }[] = [
   { id: "board", label: "BOARD" },
+  { id: "projects", label: "PROGETTI" },
   { id: "weekly", label: "WEEKLY" },
   { id: "calendario", label: "CALENDARIO" },
   { id: "reflection", label: "RIFLESSIONE" },

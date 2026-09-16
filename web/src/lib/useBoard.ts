@@ -77,6 +77,7 @@ export function useBoard(): UseBoard {
       .on("postgres_changes", { event: "*", schema: "public", table: "weekly" }, scheduleReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "board_meta" }, scheduleReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "reflections" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, scheduleReload)
       .subscribe((status) => {
         if (cancelled) return;
         if (status === "SUBSCRIBED") {

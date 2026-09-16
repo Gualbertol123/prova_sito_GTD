@@ -59,8 +59,17 @@ export interface Reflection {
   createdAt?: number;
 }
 
+// A project — simply a named checklist of items (same shape as subtasks).
+export interface Project {
+  id: string;
+  name: string;
+  items: Subtask[];
+  createdAt?: number;
+  updatedAt?: number;
+}
+
 // The assembled board — the entire shared state, rebuilt from the Supabase
-// tables (board_meta + tasks + weekly + reflections) and kept live via realtime.
+// tables (board_meta + tasks + weekly + reflections + projects) and kept live.
 export interface Board {
   id: "board";
   boardName: string;
@@ -68,6 +77,7 @@ export interface Board {
   tasks: Task[];
   weekly: Weekly;
   reflections: Reflection[];
+  projects: Project[];
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
   // Editable settings (nullable until the settings migration is applied).
@@ -100,4 +110,7 @@ export type Op =
   | { type: "weeklyDelete"; column: keyof Weekly; id: string }
   | { type: "weeklyClear" }
   | { type: "reflectionSave"; reflection: Reflection }
-  | { type: "reflectionDelete"; id: string };
+  | { type: "reflectionDelete"; id: string }
+  | { type: "projectAdd"; project: Project }
+  | { type: "projectUpdate"; id: string; patch: Partial<Project> }
+  | { type: "projectDelete"; id: string };
