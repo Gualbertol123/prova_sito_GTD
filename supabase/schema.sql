@@ -52,6 +52,13 @@ create table if not exists public.reflections (
 );
 create index if not exists reflections_date_idx on public.reflections (date);
 
+-- Per-member password for the personal Reflection tab (editable in Supabase).
+create table if not exists public.reflection_access (
+  member      text primary key,
+  password    text  not null default 'password',
+  updated_at  bigint not null default 0
+);
+
 -- One row per project — each project is a checklist of items (like subtasks).
 create table if not exists public.projects (
   id          text primary key,
@@ -81,12 +88,14 @@ alter table public.tasks       enable row level security;
 alter table public.weekly      enable row level security;
 alter table public.reflections enable row level security;
 alter table public.projects    enable row level security;
+alter table public.reflection_access enable row level security;
 
 drop policy if exists "anon all board_meta"  on public.board_meta;
 drop policy if exists "anon all tasks"        on public.tasks;
 drop policy if exists "anon all weekly"       on public.weekly;
 drop policy if exists "anon all reflections"  on public.reflections;
 drop policy if exists "anon all projects"     on public.projects;
+drop policy if exists "anon all reflection_access" on public.reflection_access;
 
 create policy "anon all board_meta" on public.board_meta
   for all to anon, authenticated using (true) with check (true);
@@ -98,6 +107,8 @@ create policy "anon all reflections" on public.reflections
   for all to anon, authenticated using (true) with check (true);
 create policy "anon all projects" on public.projects
   for all to anon, authenticated using (true) with check (true);
+create policy "anon all reflection_access" on public.reflection_access
+  for all to anon, authenticated using (true) with check (true);
 
 -- ---- Realtime --------------------------------------------------------------
 -- Add the tables to the realtime publication so change events are broadcast.
@@ -108,3 +119,4 @@ alter publication supabase_realtime add table public.tasks;
 alter publication supabase_realtime add table public.weekly;
 alter publication supabase_realtime add table public.reflections;
 alter publication supabase_realtime add table public.projects;
+alter publication supabase_realtime add table public.reflection_access;

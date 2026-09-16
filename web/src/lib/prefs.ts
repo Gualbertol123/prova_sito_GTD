@@ -11,6 +11,7 @@ const KEYS = {
   me: "gtd-me",
   reviewed: "gtd-reviewed",
   prio: "gtd-prio-collapsed",
+  reflauth: "gtd-refl-auth",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {
@@ -82,6 +83,34 @@ export function readPrioCollapsed(): boolean {
 }
 export function writePrioCollapsed(v: boolean): void {
   writePref("prio", v ? "1" : "0");
+}
+
+// Per-device reflection login cache: member -> expiry epoch ms, or "never"
+// (indefinite). A member is authed while their value is "never" or in the future.
+type ReflAuthMap = Record<string, number | "never">;
+
+function reflAuthMap(): ReflAuthMap {
+  const m = readJson<ReflAuthMap>("reflauth", {});
+  return m && typeof m === "object" ? m : {};
+}
+export function isReflAuthed(member: string): boolean {
+  const v = reflAuthMap()[member];
+  return v === "never" || (typeof v === "number" && v > Date.now());
+}
+export function reflAuthValue(member: string): number | "never" | null {
+  const v = reflAuthMap()[member];
+  return v === "never" || typeof v === "number" ? v : null;
+}
+// days: a number of days, or "never" for indefinite.
+export function setReflAuth(member: string, days: number | "never"): void {
+  const m = reflAuthMap();
+  m[member] = days === "never" ? "never" : Date.now() + days * 86400000;
+  writePref("reflauth", JSON.stringify(m));
+}
+export function clearReflAuth(member: string): void {
+  const m = reflAuthMap();
+  delete m[member];
+  writePref("reflauth", JSON.stringify(m));
 }
 
 // Which member "I" am (per device), for the Daily Reflection form.

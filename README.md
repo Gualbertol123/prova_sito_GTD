@@ -26,7 +26,7 @@ full file map, how to run and deploy it, and how to extend it.
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
 | **WEEKLY** | Weekly review. A "Recap — everything completed" block auto-fills from DONE tasks (with owner + subtask progress), plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
-| **REFLECTION** | Daily Reflection: pick who you are (remembered per device), log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes). Shows recent entries, and a **spaced-repetition review** that resurfaces past learning notes at 1/3/7/14/30-day intervals (+ a random review). |
+| **REFLECTION** | **Personal**, behind a per-user password (default `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can view and change your own password. Passwords live in the `reflection_access` table — an admin can reset any of them in Supabase. |
 | **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §8. |
 | **INSTRUCTIONS** | Reference for statuses, priorities and workflow. |
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); shared access password; login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
@@ -122,6 +122,9 @@ SQL files in `supabase/`:
   `tasks.file_dir`.
 - `migration-004-reflections.sql` — adds the `reflections` table.
 - `migration-005-projects.sql` — adds the `projects` table.
+- `migration-006-reflection-access.sql` — adds `reflection_access` (per-member
+  Reflection password; edit the `password` column in the Supabase Table Editor
+  to reset someone's password).
 
 The migrations are additive and safe on live data; run any you haven't yet. The
 app degrades gracefully before they're applied (settings can't save, reflections

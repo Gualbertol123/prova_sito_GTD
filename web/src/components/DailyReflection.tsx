@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Board, Op, Reflection } from "../lib/types";
 import { useT, localeCode, type Lang } from "../lib/i18n";
 import { useMe } from "../lib/identity";
 import { toISODate } from "../lib/dates";
-import { readReviewedToday, writeReviewedToday } from "../lib/prefs";
+import { ensureReflectionAccess } from "../lib/db";
+import {
+  readReviewedToday,
+  writeReviewedToday,
+  isReflAuthed,
+  setReflAuth,
+  clearReflAuth,
+  reflAuthValue,
+} from "../lib/prefs";
 
 function isoMinus(iso: string, days: number): string {
   const d = new Date(iso);
@@ -28,44 +36,236 @@ interface Props {
   send: (op: Op) => void;
 }
 
+const DURATIONS: { k: string; days: number | "never" }[] = [
+  { k: "reflAuth.d1", days: 1 },
+  { k: "reflAuth.d7", days: 7 },
+  { k: "reflAuth.d30", days: 30 },
+  { k: "reflAuth.d365", days: 365 },
+  { k: "reflAuth.never", days: "never" },
+];
+
+function RememberSelect({
+  value,
+  onChange,
+}: {
+  value: number | "never";
+  onChange: (v: number | "never") => void;
+}) {
+  const { t } = useT();
+  return (
+    <label className="inline-flex items-center gap-2 text-[11px] text-[#8A8A8A]">
+      {t("reflAuth.remember")}
+      <select
+        value={String(value)}
+        onChange={(e) => onChange(e.target.value === "never" ? "never" : Number(e.target.value))}
+        className="h-8 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[12px] text-[#0A1931] outline-none focus:border-[#C9A96E]"
+      >
+        {DURATIONS.map((d) => (
+          <option key={d.k} value={String(d.days)}>{t(d.k)}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function DailyReflection({ board, members, send }: Props) {
   const { t, lang } = useT();
   const { me, setMe } = useMe();
   const today = toISODate(new Date());
+  const [tick, setTick] = useState(0);
+  const bump = () => setTick((n) => n + 1);
+
+  // Seed a reflection_access row per member (default 'password') so every
+  // member is visible/resettable in the Supabase table editor.
+  const membersKey = members.join("|");
+  useEffect(() => {
+    ensureReflectionAccess(members);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [membersKey]);
+
+  const authed = !!me && isReflAuthed(me);
+
+  if (!authed) {
+    return (
+      <ReflectionLogin
+        board={board}
+        members={members}
+        onAuthed={(user) => {
+          setMe(user);
+          bump();
+        }}
+      />
+    );
+  }
 
   const id = `${today}::${me}`;
   const existing = board.reflections.find((r) => r.id === id) ?? null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-t={tick}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="font-trajan text-[12px] uppercase tracking-widest text-[#C9A96E]">
-          {t("reflection.title")}
+          {t("reflAuth.title")} · {me}
         </h3>
-        <label className="inline-flex items-center gap-2 text-[11px] text-[#8A8A8A]">
-          {t("reflection.me")}
+        <button
+          onClick={() => {
+            clearReflAuth(me);
+            bump();
+          }}
+          className="h-8 px-4 rounded-full text-[12px] font-semibold text-[#8A8A8A] border border-[#E8E6E1] hover:border-[#DC2626] hover:text-[#DC2626]"
+        >
+          {t("reflAuth.logout")}
+        </button>
+      </div>
+
+      <ReflectionForm key={id} id={id} me={me} date={today} existing={existing} send={send} />
+
+      <SpacedReview me={me} today={today} reflections={board.reflections} />
+
+      <RecentList reflections={board.reflections} member={me} lang={lang} />
+
+      <AccountSection me={me} board={board} send={send} />
+    </div>
+  );
+}
+
+function ReflectionLogin({
+  board,
+  members,
+  onAuthed,
+}: {
+  board: Board;
+  members: string[];
+  onAuthed: (user: string) => void;
+}) {
+  const { t } = useT();
+  const { me } = useMe();
+  const [user, setUser] = useState(me && members.includes(me) ? me : members[0] ?? "");
+  const [pwd, setPwd] = useState("");
+  const [remember, setRemember] = useState<number | "never">(30);
+  const [err, setErr] = useState(false);
+
+  const submit = () => {
+    if (!user) return;
+    const expected = board.reflectionPasswords[user] ?? "password";
+    if (pwd === expected) {
+      setReflAuth(user, remember);
+      onAuthed(user);
+    } else {
+      setErr(true);
+    }
+  };
+
+  return (
+    <div className="max-w-[420px] mx-auto mt-8 bg-white rounded-[16px] border border-[#E8E6E1] p-6">
+      <div className="w-12 h-12 rounded-full bg-[#0A1931] text-[#C9A96E] flex items-center justify-center mx-auto text-[20px]">
+        📓
+      </div>
+      <h3 className="font-trajan text-[14px] uppercase tracking-widest text-[#0A1931] mt-4 text-center">
+        {t("reflAuth.title")}
+      </h3>
+      <p className="text-[12px] text-[#8A8A8A] mt-2 mb-4 text-center">{t("reflAuth.prompt")}</p>
+      <div className="space-y-2">
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-wide text-[#8A8A8A]">{t("reflAuth.user")}</span>
           <select
-            value={members.includes(me) ? me : ""}
-            onChange={(e) => setMe(e.target.value)}
-            className="h-8 rounded-full bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[12px] text-[#0A1931] outline-none focus:border-[#C9A96E]"
+            value={user}
+            onChange={(e) => {
+              setUser(e.target.value);
+              setErr(false);
+            }}
+            className="mt-1 w-full h-10 rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[13px] outline-none focus:border-[#C9A96E]"
           >
-            <option value="">{t("reflection.pickMe")}</option>
             {members.map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
         </label>
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-wide text-[#8A8A8A]">{t("reflAuth.password")}</span>
+          <input
+            type="password"
+            value={pwd}
+            autoFocus
+            onChange={(e) => {
+              setPwd(e.target.value);
+              setErr(false);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            className={`mt-1 w-full h-10 rounded-lg bg-[#F5F3EF] border px-3 text-[13px] outline-none ${
+              err ? "border-[#DC2626]" : "border-[#E8E6E1] focus:border-[#C9A96E]"
+            }`}
+          />
+        </label>
+        {err && <p className="text-[11px] text-[#DC2626]">{t("reflAuth.wrong")}</p>}
+        <div className="pt-1">
+          <RememberSelect value={remember} onChange={setRemember} />
+        </div>
       </div>
+      <button
+        onClick={submit}
+        className="mt-4 w-full h-10 rounded-full bg-[#0A1931] text-[#C9A96E] text-[13px] font-semibold"
+      >
+        {t("reflAuth.enter")}
+      </button>
+      <p className="text-[11px] text-[#A8A29E] mt-3 text-center">{t("reflAuth.hint")}</p>
+    </div>
+  );
+}
 
-      {me ? (
-        <ReflectionForm key={id} id={id} me={me} date={today} existing={existing} send={send} />
-      ) : (
-        <div className="text-[12px] text-[#A8A29E]">{t("reflection.pickMe")}</div>
-      )}
+function AccountSection({ me, board, send }: { me: string; board: Board; send: (op: Op) => void }) {
+  const { t } = useT();
+  const current = board.reflectionPasswords[me] ?? "password";
+  const [show, setShow] = useState(false);
+  const [np, setNp] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [remember, setRemember] = useState<number | "never">(() =>
+    reflAuthValue(me) === "never" ? "never" : 30
+  );
 
-      <SpacedReview me={me} today={today} reflections={board.reflections} />
+  const change = () => {
+    const v = np.trim();
+    if (!v || v === current) return;
+    send({ type: "reflectionPasswordSet", member: me, password: v });
+    setNp("");
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
 
-      <RecentList reflections={board.reflections} lang={lang} />
+  return (
+    <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4 space-y-3">
+      <h4 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+        {t("reflAuth.account")}
+      </h4>
+      <div className="flex items-center gap-2 text-[12px] flex-wrap">
+        <span className="text-[#8A8A8A]">{t("reflAuth.password")}:</span>
+        <span className="font-mono text-[#0A1931]">
+          {show ? current : "•".repeat(Math.max(6, current.length))}
+        </span>
+        <button onClick={() => setShow((s) => !s)} className="text-[11px] text-[#8B6F3E] underline underline-offset-2">
+          {show ? t("reflAuth.hide") : t("reflAuth.show")}
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={np}
+          onChange={(e) => setNp(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && change()}
+          placeholder={t("reflAuth.newPassword")}
+          className="flex-1 min-w-0 h-9 rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[13px] outline-none focus:border-[#C9A96E]"
+        />
+        <button onClick={change} className="h-9 px-4 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold shrink-0">
+          {t("settings.save")}
+        </button>
+      </div>
+      {saved && <div className="text-[12px] text-[#065F46]">{t("reflAuth.changed")}</div>}
+      <RememberSelect
+        value={remember}
+        onChange={(v) => {
+          setRemember(v);
+          setReflAuth(me, v);
+        }}
+      />
     </div>
   );
 }
@@ -241,14 +441,23 @@ function SpacedReview({
   );
 }
 
-function RecentList({ reflections, lang }: { reflections: Reflection[]; lang: Lang }) {
+function RecentList({
+  reflections,
+  member,
+  lang,
+}: {
+  reflections: Reflection[];
+  member: string;
+  lang: Lang;
+}) {
   const { t } = useT();
   const recent = useMemo(
     () =>
-      [...reflections]
+      reflections
+        .filter((r) => r.member === member)
         .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-        .slice(0, 8),
-    [reflections]
+        .slice(0, 14),
+    [reflections, member]
   );
 
   if (recent.length === 0) {

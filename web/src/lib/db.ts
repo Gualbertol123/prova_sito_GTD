@@ -171,6 +171,37 @@ async function fetchProjects(): Promise<Project[]> {
   }
 }
 
+async function fetchReflectionPasswords(): Promise<Record<string, string>> {
+  try {
+    const { data, error } = await supabase.from("reflection_access").select("*");
+    if (error || !data) return {};
+    const map: Record<string, string> = {};
+    for (const row of data as { member: string; password: string }[]) {
+      if (row.member) map[row.member] = row.password ?? "password";
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+// Make sure every current member has a row (default password 'password') so the
+// admin can see/reset them all in the Supabase table editor. Existing rows are
+// never overwritten.
+export async function ensureReflectionAccess(members: string[]): Promise<void> {
+  if (members.length === 0) return;
+  try {
+    await supabase
+      .from("reflection_access")
+      .upsert(
+        members.map((m) => ({ member: m, password: "password", updated_at: Date.now() })),
+        { onConflict: "member", ignoreDuplicates: true }
+      );
+  } catch {
+    /* table not present yet — ignore */
+  }
+}
+
 async function fetchReflections(): Promise<Reflection[]> {
   // Tolerant: the table may not exist yet (before migration-004). Any failure
   // here must NOT break the board — reflections simply come back empty.
@@ -187,13 +218,15 @@ async function fetchReflections(): Promise<Reflection[]> {
 }
 
 export async function fetchBoard(): Promise<Board> {
-  const [meta, tasks, weekly, reflectionList, projectList] = await Promise.all([
-    supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
-    supabase.from("tasks").select("*").order("created_at", { ascending: true }),
-    supabase.from("weekly").select("*").order("created_at", { ascending: true }),
-    fetchReflections(),
-    fetchProjects(),
-  ]);
+  const [meta, tasks, weekly, reflectionList, projectList, reflectionPasswords] =
+    await Promise.all([
+      supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
+      supabase.from("tasks").select("*").order("created_at", { ascending: true }),
+      supabase.from("weekly").select("*").order("created_at", { ascending: true }),
+      fetchReflections(),
+      fetchProjects(),
+      fetchReflectionPasswords(),
+    ]);
 
   if (meta.error) throw meta.error;
   if (tasks.error) throw tasks.error;
@@ -220,6 +253,7 @@ export async function fetchBoard(): Promise<Board> {
     weekly: weeklyGrouped,
     reflections: reflectionList,
     projects: projectList,
+    reflectionPasswords,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
@@ -418,6 +452,16 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
     }
     case "projectDelete":
       await must(supabase.from("projects").delete().eq("id", op.id));
+      break;
+    case "reflectionPasswordSet":
+      await must(
+        supabase
+          .from("reflection_access")
+          .upsert(
+            { member: op.member, password: op.password, updated_at: Date.now() },
+            { onConflict: "member" }
+          )
+      );
       break;
   }
 }

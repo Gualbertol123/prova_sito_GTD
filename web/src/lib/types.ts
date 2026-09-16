@@ -78,6 +78,7 @@ export interface Board {
   weekly: Weekly;
   reflections: Reflection[];
   projects: Project[];
+  reflectionPasswords: Record<string, string>; // member -> password (soft gate)
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
   // Editable settings (nullable until the settings migration is applied).
@@ -113,4 +114,5 @@ export type Op =
   | { type: "reflectionDelete"; id: string }
   | { type: "projectAdd"; project: Project }
   | { type: "projectUpdate"; id: string; patch: Partial<Project> }
-  | { type: "projectDelete"; id: string };
+  | { type: "projectDelete"; id: string }
+  | { type: "reflectionPasswordSet"; member: string; password: string };

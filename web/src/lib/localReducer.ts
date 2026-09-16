@@ -18,6 +18,7 @@ export function applyOpLocal(board: Board, op: Op): Board {
     members: [...board.members],
     reflections: [...(board.reflections ?? [])],
     projects: [...(board.projects ?? [])],
+    reflectionPasswords: { ...(board.reflectionPasswords ?? {}) },
     updatedAt: now,
   };
 
@@ -126,6 +127,9 @@ export function applyOpLocal(board: Board, op: Op): Board {
       break;
     case "projectDelete":
       b.projects = b.projects.filter((p) => p.id !== op.id);
+      break;
+    case "reflectionPasswordSet":
+      b.reflectionPasswords = { ...b.reflectionPasswords, [op.member]: op.password };
       break;
   }
 
