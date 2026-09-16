@@ -255,10 +255,13 @@ function RecentList({ reflections, lang }: { reflections: Reflection[]; lang: La
     return <div className="text-[12px] text-[#A8A29E]">{t("reflection.none")}</div>;
   }
 
-  const row = (icon: string, text: string, color: string) =>
+  const row = (label: string, text: string, color: string) =>
     text.trim() ? (
-      <div className="text-[11px] text-[#6B6B6B]">
-        <span className={color}>{icon}</span> {text}
+      <div className="flex gap-2">
+        <span className={`w-[104px] shrink-0 text-[9px] font-semibold uppercase tracking-wide pt-0.5 ${color}`}>
+          {label}
+        </span>
+        <span className="flex-1 min-w-0 text-[12px] text-[#0A1931] whitespace-pre-wrap break-words">{text}</span>
       </div>
     ) : null;
 
@@ -270,18 +273,18 @@ function RecentList({ reflections, lang }: { reflections: Reflection[]; lang: La
       <div className="space-y-2">
         {recent.map((r) => (
           <div key={r.id} className="rounded-lg border border-[#E8E6E1] bg-white p-2.5">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-2">
               <span className="w-5 h-5 rounded-full bg-[#0A1931] text-white text-[9px] font-bold flex items-center justify-center">
                 {r.member.charAt(0).toUpperCase()}
               </span>
               <span className="text-[12px] font-semibold text-[#0A1931]">{r.member}</span>
               <span className="text-[10px] text-[#A8A29E] ml-auto">{dayLabel(r.date, lang, t)}</span>
             </div>
-            <div className="space-y-0.5">
-              {row("✓", r.done, "text-[#065F46]")}
-              {row("★", r.well, "text-[#C9A96E]")}
-              {row("↻", r.improve, "text-[#92400E]")}
-              {row("🧠", r.learning, "")}
+            <div className="space-y-1.5">
+              {row(t("reflection.done"), r.done, "text-[#065F46]")}
+              {row(t("reflection.well"), r.well, "text-[#8B6F3E]")}
+              {row(t("reflection.improve"), r.improve, "text-[#92400E]")}
+              {row(t("reflection.learning"), r.learning, "text-[#3A5A8A]")}
             </div>
           </div>
         ))}

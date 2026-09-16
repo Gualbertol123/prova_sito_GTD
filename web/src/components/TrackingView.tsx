@@ -110,11 +110,13 @@ function ReflectionsReview({ board }: { board: Board }) {
     .slice()
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
-  const line = (icon: string, text: string, color: string) =>
+  const line = (label: string, text: string, color: string) =>
     text.trim() ? (
-      <div className="text-[12px] text-[#0A1931]">
-        <span className={`font-semibold ${color}`}>{icon} </span>
-        <span className="whitespace-pre-wrap">{text}</span>
+      <div className="flex gap-2">
+        <span className={`w-[104px] shrink-0 text-[9px] font-semibold uppercase tracking-wide pt-0.5 ${color}`}>
+          {label}
+        </span>
+        <span className="flex-1 min-w-0 text-[12px] text-[#0A1931] whitespace-pre-wrap break-words">{text}</span>
       </div>
     ) : null;
 
@@ -153,11 +155,11 @@ function ReflectionsReview({ board }: { board: Board }) {
                   {new Date(r.date).toLocaleDateString(localeCode(lang))}
                 </span>
               </div>
-              <div className="space-y-0.5 pl-1">
-                {line("✓", r.done, "text-[#065F46]")}
-                {line("★", r.well, "text-[#C9A96E]")}
-                {line("↻", r.improve, "text-[#92400E]")}
-                {line("🧠", r.learning, "text-[#0A1931]")}
+              <div className="space-y-1.5 pl-1">
+                {line(t("reflection.done"), r.done, "text-[#065F46]")}
+                {line(t("reflection.well"), r.well, "text-[#8B6F3E]")}
+                {line(t("reflection.improve"), r.improve, "text-[#92400E]")}
+                {line(t("reflection.learning"), r.learning, "text-[#3A5A8A]")}
               </div>
             </div>
           ))}
