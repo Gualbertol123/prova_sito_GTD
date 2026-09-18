@@ -36,6 +36,8 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const [teamOpen, setTeamOpen] = useState(false);
   const [archOpen, setArchOpen] = useState(false);
   const [archQuery, setArchQuery] = useState("");
+  const [doneOpen, setDoneOpen] = useState(false);
+  const [doneQuery, setDoneQuery] = useState("");
   const [view, setView] = useState<ViewMode>(() => readViewMode());
   const [editLayout, setEditLayout] = useState(false);
   const [weights, setWeights] = useState<Record<string, number>>(() => readWeights());
@@ -93,6 +95,16 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
         (tk) => tk.title.toLowerCase().includes(aq) || tk.desc.toLowerCase().includes(aq)
       )
     : archivedAll;
+
+  // Done bar mirrors the DONE column (this week's completed) as a full-width
+  // section with its own search, sitting above the Archived bar.
+  const doneWeekAll = board.tasks.filter((tk) => tk.status === "DONE" && !isArchived(tk));
+  const dq = doneQuery.trim().toLowerCase();
+  const doneShown = dq
+    ? doneWeekAll.filter(
+        (tk) => tk.title.toLowerCase().includes(dq) || tk.desc.toLowerCase().includes(dq)
+      )
+    : doneWeekAll;
 
   const drop = (status: Status) => {
     if (dragId) send({ type: "moveTask", id: dragId, status });
@@ -393,6 +405,63 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                 </div>
               );
             })}
+          </div>
+
+          {/* Done — this week's completed DONE tasks, mirroring the DONE column
+              as a full-width searchable bar (a duplicate view, not a move). */}
+          <div className="bg-[#EFECE6] rounded-[14px] border border-[#E3DFD7] p-3">
+            <button
+              onClick={() => setDoneOpen((o) => !o)}
+              className="w-full flex items-center gap-2 text-left"
+            >
+              <span className={`text-[#8A8A8A] text-[11px] transition-transform ${doneOpen ? "rotate-90" : ""}`}>▶</span>
+              <span className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+                {t("doneBar.title")}
+              </span>
+              <span className="text-[11px] font-semibold text-[#8A8A8A] bg-white rounded-full px-2 py-0.5 border border-[#E8E6E1]">
+                {doneWeekAll.length}
+              </span>
+              <span className="text-[10px] text-[#A8A29E] ml-1 hidden sm:inline">{t("doneBar.hint")}</span>
+            </button>
+            {doneOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="relative max-w-[320px]">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8A29E] text-[13px]">⌕</span>
+                  <input
+                    value={doneQuery}
+                    onChange={(e) => setDoneQuery(e.target.value)}
+                    placeholder={t("doneBar.search")}
+                    className="w-full h-9 rounded-full bg-white border border-[#E8E6E1] pl-8 pr-4 text-[13px] outline-none focus:border-[#C9A96E]"
+                  />
+                </div>
+                {doneShown.length === 0 ? (
+                  <div className="text-[12px] text-[#A8A29E] py-2">{t("doneBar.none")}</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {doneShown.map((tk) => (
+                      <TaskCard
+                        key={tk.id}
+                        task={tk}
+                        members={members}
+                        send={send}
+                        draggable={!editLayout}
+                        onDragStart={(e) => {
+                          setDragId(tk.id);
+                          e.dataTransfer.setData("text/plain", tk.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          (e.currentTarget as HTMLElement).classList.add("dragging");
+                        }}
+                        onDragEnd={(e) => {
+                          (e.currentTarget as HTMLElement).classList.remove("dragging");
+                          setDragId(null);
+                          setOverCol(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Archived — DONE tasks completed more than a week ago (always shown) */}

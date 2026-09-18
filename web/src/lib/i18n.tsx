@@ -94,6 +94,10 @@ const IT: Dict = {
   "archived.hint": "Completate da più di una settimana.",
   "archived.none": "Niente in archivio.",
   "archived.search": "Cerca in archivio…",
+  "doneBar.title": "Fatte",
+  "doneBar.hint": "Completate in questa settimana.",
+  "doneBar.none": "Niente completato in questa settimana.",
+  "doneBar.search": "Cerca tra le fatte…",
 
   "task.due": "Scadenza",
   "task.overdue": "in ritardo",
@@ -355,6 +359,10 @@ const EN: Dict = {
   "archived.hint": "Completed more than a week ago.",
   "archived.none": "Nothing archived.",
   "archived.search": "Search the archive…",
+  "doneBar.title": "Done",
+  "doneBar.hint": "Completed this week.",
+  "doneBar.none": "Nothing completed this week.",
+  "doneBar.search": "Search done…",
 
   "task.due": "Due",
   "task.overdue": "overdue",

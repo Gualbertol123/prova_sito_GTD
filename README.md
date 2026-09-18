@@ -22,7 +22,7 @@ full file map, how to run and deploy it, and how to extend it.
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. |
+| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
 | **WEEKLY** | Weekly review. A "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
@@ -146,7 +146,10 @@ prova_sito_GTD/
 │   ├── schema.sql                ← full schema for a fresh project
 │   ├── migration-002-settings.sql
 │   ├── migration-003-branding-filedir.sql
-│   └── migration-004-reflections.sql
+│   ├── migration-004-reflections.sql
+│   ├── migration-005-projects.sql
+│   ├── migration-006-reflection-access.sql
+│   └── migration-007-done-at.sql
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
     ├── package.json              ← deps: react, react-dom, @supabase/supabase-js
