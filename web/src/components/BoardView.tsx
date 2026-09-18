@@ -40,6 +40,9 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const [doneQuery, setDoneQuery] = useState("");
   const [view, setView] = useState<ViewMode>(() => readViewMode());
   const [editLayout, setEditLayout] = useState(false);
+  // Screenshot helper: hide owner names on the board. Deliberately NOT stored
+  // in prefs — names are always back on next time the board loads.
+  const [showNames, setShowNames] = useState(true);
   const [weights, setWeights] = useState<Record<string, number>>(() => readWeights());
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<Status | null>(null);
@@ -246,6 +249,17 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
               </button>
             )}
             <button
+              onClick={() => setShowNames((v) => !v)}
+              title={t("view.namesHint")}
+              className={`h-9 px-4 rounded-full text-[12px] font-semibold border transition-colors inline-flex items-center gap-1.5 ${
+                showNames
+                  ? "bg-white text-[#0A1931] border-[#E8E6E1] hover:border-[#C9A96E]"
+                  : "bg-[#C9A96E] text-[#0A1931] border-[#C9A96E]"
+              }`}
+            >
+              {showNames ? "🙂" : "🕶"} {t("view.names")}
+            </button>
+            <button
               onClick={() => setEditorOpen((o) => !o)}
               className={`h-9 px-4 rounded-full text-[12px] font-semibold border transition-colors inline-flex items-center gap-1.5 ${
                 editorOpen ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]" : "bg-white text-[#0A1931] border-[#E8E6E1] hover:border-[#C9A96E]"
@@ -306,14 +320,14 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
         <div className="font-trajan text-[10px] uppercase tracking-widest text-[#8B6F3E] mb-2 flex items-center gap-1.5">
           <span>＋</span> {t("quick.section")}
         </div>
-        <QuickAdd members={members} send={send} />
+        <QuickAdd members={members} send={send} showNames={showNames} />
       </div>
 
       {/* Priority distribution — its own space */}
       <PriorityDistribution tasks={board.tasks} />
 
       {view === "list" ? (
-        <ListView tasks={listTasks} members={members} send={send} />
+        <ListView tasks={listTasks} members={members} send={send} showNames={showNames} />
       ) : (
         <>
           <p className="text-[12px] text-[#6B6B6B]">{t("board.help")}</p>
@@ -371,6 +385,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                         task={tk}
                         members={members}
                         send={send}
+                        showNames={showNames}
                         draggable={!editLayout}
                         onDragStart={(e) => {
                           setDragId(tk.id);
@@ -444,6 +459,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                         task={tk}
                         members={members}
                         send={send}
+                        showNames={showNames}
                         draggable={!editLayout}
                         onDragStart={(e) => {
                           setDragId(tk.id);
@@ -500,6 +516,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                         task={tk}
                         members={members}
                         send={send}
+                        showNames={showNames}
                         draggable={!editLayout}
                         onDragStart={(e) => {
                           setDragId(tk.id);

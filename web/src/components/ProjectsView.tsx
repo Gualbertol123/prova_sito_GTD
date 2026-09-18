@@ -171,7 +171,11 @@ function ProjectPanel({ project, send }: { project: Project; send: (op: Op) => v
           items={project.items}
           onReorder={(items) => setItems(items)}
           onToggle={(id, doneNow) =>
-            setItems(project.items.map((i) => (i.id === id ? { ...i, done: doneNow } : i)))
+            setItems(
+              project.items.map((i) =>
+                i.id === id ? { ...i, done: doneNow, doneAt: doneNow ? Date.now() : undefined } : i
+              )
+            )
           }
           onText={(id, text) => setItems(project.items.map((i) => (i.id === id ? { ...i, text } : i)))}
           onDelete={(id) => setItems(project.items.filter((i) => i.id !== id))}

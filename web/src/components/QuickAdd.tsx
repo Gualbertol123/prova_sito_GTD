@@ -9,11 +9,12 @@ const PRIOS: Priority[] = ["P1", "P2", "P3", "P4"];
 interface Props {
   members: string[];
   send: (op: Op) => void;
+  showNames?: boolean; // false hides the owner name (screenshot mode)
 }
 
 // Full new-task bar: choose owner, priority, status and due date up front —
 // nothing is assumed.
-export function QuickAdd({ members, send }: Props) {
+export function QuickAdd({ members, send, showNames = true }: Props) {
   const { t, lang } = useT();
   const { me } = useMe();
   const [title, setTitle] = useState("");
@@ -57,17 +58,24 @@ export function QuickAdd({ members, send }: Props) {
         placeholder={t("quick.title")}
         className={`${field} flex-1 min-w-[200px] px-5`}
       />
-      <select
-        value={owner}
-        onChange={(e) => setOwner(e.target.value)}
-        title={t("quick.owner")}
-        className={`${field} px-3`}
-      >
-        <option value="Unassigned">{t("members.unassigned")}</option>
-        {members.map((m) => (
-          <option key={m} value={m}>{m}</option>
-        ))}
-      </select>
+      {showNames ? (
+        <select
+          value={owner}
+          onChange={(e) => setOwner(e.target.value)}
+          title={t("quick.owner")}
+          className={`${field} px-3`}
+        >
+          <option value="Unassigned">{t("members.unassigned")}</option>
+          {members.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      ) : (
+        // Screenshot mode: the selected owner is still used on submit, just not shown.
+        <span className={`${field} px-4 inline-flex items-center text-[#A8A29E]`} title={t("quick.owner")}>
+          —
+        </span>
+      )}
       <select
         value={priority}
         onChange={(e) => setPriority(e.target.value as Priority)}

@@ -15,6 +15,7 @@ export interface Subtask {
   id: string;
   text: string;
   done: boolean;
+  doneAt?: number; // set when ticked, cleared when unticked — drives the weekly report
 }
 
 export interface Task {
@@ -69,8 +70,17 @@ export interface Project {
   updatedAt?: number;
 }
 
+// An anonymous suggestion for improving the site. No author is stored anywhere
+// — the posting device keeps its own ids locally so it can delete them again.
+export interface Suggestion {
+  id: string;
+  body: string;
+  createdAt: number;
+}
+
 // The assembled board — the entire shared state, rebuilt from the Supabase
-// tables (board_meta + tasks + weekly + reflections + projects) and kept live.
+// tables (board_meta + tasks + weekly + reflections + projects + suggestions)
+// and kept live.
 export interface Board {
   id: "board";
   boardName: string;
@@ -79,6 +89,7 @@ export interface Board {
   weekly: Weekly;
   reflections: Reflection[];
   projects: Project[];
+  suggestions: Suggestion[];
   reflectionPasswords: Record<string, string>; // member -> password (soft gate)
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
@@ -116,4 +127,6 @@ export type Op =
   | { type: "projectAdd"; project: Project }
   | { type: "projectUpdate"; id: string; patch: Partial<Project> }
   | { type: "projectDelete"; id: string }
-  | { type: "reflectionPasswordSet"; member: string; password: string };
+  | { type: "reflectionPasswordSet"; member: string; password: string }
+  | { type: "suggestionAdd"; suggestion: Suggestion }
+  | { type: "suggestionDelete"; id: string };

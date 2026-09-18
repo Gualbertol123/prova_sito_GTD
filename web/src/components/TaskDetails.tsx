@@ -13,12 +13,13 @@ interface Props {
   task: Task;
   members: string[];
   send: (op: Op) => void;
+  showNames?: boolean; // false hides the owner name (screenshot mode)
   onDeleted?: () => void;
 }
 
 // The full editable body for a task. Reused by the inline board card and the
 // calendar side panel — no popups anywhere.
-export function TaskDetails({ task, members, send, onDeleted }: Props) {
+export function TaskDetails({ task, members, send, showNames = true, onDeleted }: Props) {
   const { t, lang } = useT();
   const [confirmDel, setConfirmDel] = useState(false);
   const [newSub, setNewSub] = useState("");
@@ -75,18 +76,22 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full pl-1 pr-2 h-8 border border-[#E8E6E1]">
           <span className="w-6 h-6 rounded-full bg-[#0A1931] text-white text-[10px] font-bold flex items-center justify-center">
-            {initial}
+            {showNames ? initial : "•"}
           </span>
-          <select
-            value={task.owner}
-            onChange={(e) => patch({ owner: e.target.value })}
-            className="bg-transparent text-[12px] text-[#0A1931] outline-none cursor-pointer"
-          >
-            <option value="Unassigned">{t("members.unassigned")}</option>
-            {members.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
+          {showNames ? (
+            <select
+              value={task.owner}
+              onChange={(e) => patch({ owner: e.target.value })}
+              className="bg-transparent text-[12px] text-[#0A1931] outline-none cursor-pointer"
+            >
+              <option value="Unassigned">{t("members.unassigned")}</option>
+              {members.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-[12px] text-[#A8A29E] px-1">—</span>
+          )}
         </div>
 
         <label className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full px-3 h-8 border border-[#E8E6E1] text-[12px] text-[#6B6B6B]">
@@ -146,7 +151,12 @@ export function TaskDetails({ task, members, send, onDeleted }: Props) {
           items={task.subtasks}
           onReorder={(subtasks) => patch({ subtasks })}
           onToggle={(subtaskId, done) =>
-            send({ type: "updateSubtask", taskId: task.id, subtaskId, patch: { done } })
+            send({
+              type: "updateSubtask",
+              taskId: task.id,
+              subtaskId,
+              patch: { done, doneAt: done ? Date.now() : undefined },
+            })
           }
           onText={(subtaskId, text) =>
             send({ type: "updateSubtask", taskId: task.id, subtaskId, patch: { text } })

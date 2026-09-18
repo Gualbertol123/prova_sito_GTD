@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Subtask } from "../lib/types";
+import { useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
 import { AutoTextarea } from "./AutoTextarea";
 
@@ -207,10 +208,26 @@ function SubtaskRow({
   onText: (text: string) => void;
   onDelete: () => void;
 }) {
+  const { t } = useT();
   const field = useSyncedField(s.text);
+  const editHint = t("task.subtaskEditHint");
   // Leading controls sit in a one-line-tall box (h-5) and center within it, so
   // they align to the FIRST line of the text even when it wraps to many lines.
   const lead = "h-5 flex items-center shrink-0";
+
+  // Commit on blur AND on Enter, so an edit is never left hanging in the box.
+  // Empty is a legitimate edit (the row stays; ✕ deletes it). Escape sets this
+  // flag so the blur it triggers discards the edit instead of saving it — the
+  // blur handler still sees the pre-revert value from this render's closure.
+  const cancelled = useRef(false);
+  const commit = () => {
+    if (cancelled.current) {
+      cancelled.current = false;
+      return;
+    }
+    const v = field.value.trim();
+    if (v !== s.text) onText(v);
+  };
   return (
     <div
       ref={registerRef}
@@ -241,11 +258,25 @@ function SubtaskRow({
         value={field.value}
         onFocus={field.onFocus}
         onChange={(e) => field.setValue(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter commits (Shift+Enter keeps a newline); Escape reverts.
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            commit();
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            cancelled.current = true;
+            field.setValue(s.text);
+            e.currentTarget.blur();
+          }
+        }}
         onBlur={() => {
           field.onBlur();
-          if (field.value.trim() && field.value !== s.text) onText(field.value.trim());
+          commit();
         }}
-        className={`flex-1 min-w-0 bg-transparent text-[12px] leading-5 text-left p-0 outline-none ${
+        title={editHint}
+        className={`flex-1 min-w-0 bg-transparent text-[12px] leading-5 text-left p-0 outline-none cursor-text rounded-sm px-1 -mx-1 hover:bg-[#F5F3EF] focus:bg-[#F5F3EF] focus:ring-1 focus:ring-[#C9A96E] ${
           s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
         }`}
       />

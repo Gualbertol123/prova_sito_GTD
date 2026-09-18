@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, Op, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, Op, Project, Reflection, Suggestion, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -175,6 +175,31 @@ async function fetchProjects(): Promise<Project[]> {
   }
 }
 
+interface SuggestionRow {
+  id: string;
+  body: string;
+  created_at: number;
+}
+
+// Tolerant like the other late-migration reads: an absent table just means no
+// suggestions yet, never a broken board.
+async function fetchSuggestions(): Promise<Suggestion[]> {
+  try {
+    const { data, error } = await supabase
+      .from("suggestions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error || !data) return [];
+    return (data as SuggestionRow[]).map((r) => ({
+      id: r.id,
+      body: r.body ?? "",
+      createdAt: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function fetchReflectionPasswords(): Promise<Record<string, string>> {
   try {
     const { data, error } = await supabase.from("reflection_access").select("*");
@@ -222,15 +247,23 @@ async function fetchReflections(): Promise<Reflection[]> {
 }
 
 export async function fetchBoard(): Promise<Board> {
-  const [meta, tasks, weekly, reflectionList, projectList, reflectionPasswords] =
-    await Promise.all([
-      supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
-      supabase.from("tasks").select("*").order("created_at", { ascending: true }),
-      supabase.from("weekly").select("*").order("created_at", { ascending: true }),
-      fetchReflections(),
-      fetchProjects(),
-      fetchReflectionPasswords(),
-    ]);
+  const [
+    meta,
+    tasks,
+    weekly,
+    reflectionList,
+    projectList,
+    suggestionList,
+    reflectionPasswords,
+  ] = await Promise.all([
+    supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
+    supabase.from("tasks").select("*").order("created_at", { ascending: true }),
+    supabase.from("weekly").select("*").order("created_at", { ascending: true }),
+    fetchReflections(),
+    fetchProjects(),
+    fetchSuggestions(),
+    fetchReflectionPasswords(),
+  ]);
 
   if (meta.error) throw meta.error;
   if (tasks.error) throw tasks.error;
@@ -257,6 +290,7 @@ export async function fetchBoard(): Promise<Board> {
     weekly: weeklyGrouped,
     reflections: reflectionList,
     projects: projectList,
+    suggestions: suggestionList,
     reflectionPasswords,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
@@ -467,6 +501,18 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
     }
     case "projectDelete":
       await must(supabase.from("projects").delete().eq("id", op.id));
+      break;
+    case "suggestionAdd":
+      await must(
+        supabase.from("suggestions").insert({
+          id: op.suggestion.id,
+          body: op.suggestion.body,
+          created_at: op.suggestion.createdAt,
+        })
+      );
+      break;
+    case "suggestionDelete":
+      await must(supabase.from("suggestions").delete().eq("id", op.id));
       break;
     case "reflectionPasswordSet":
       await must(

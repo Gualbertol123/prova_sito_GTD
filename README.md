@@ -22,13 +22,13 @@ full file map, how to run and deploy it, and how to extend it.
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. |
+| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
-| **WEEKLY** | Weekly review. A "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
+| **WEEKLY** | **Weekly report generator** (see §5) — pick a period and download a `.docx` on the Intesa Sanpaolo template. Below it, the weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (default `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can view and change your own password. Passwords live in the `reflection_access` table — an admin can reset any of them in Supabase. |
-| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §8. |
-| **INSTRUCTIONS** | Reference for statuses, priorities and workflow. |
+| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §9. |
+| **IDEAS** | Anonymous suggestions for improving the site. Nothing identifying is stored — the row is only `{id, body, created_at}`, and the composer ignores the "You" identity the rest of the app uses. The browser that posted an idea keeps its ids in `localStorage` so it can delete its own; that list never leaves the device, and nobody can delete anyone else's. |
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); shared access password; login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
 
 Header extras: editable board title + subtitle (double-click), a **"You"**
@@ -83,13 +83,15 @@ live in `localStorage` (`prefs.ts`):
 | `gtd-me` | which member "you" are |
 | `gtd-reviewed` | learnings reviewed today (spaced review) |
 | `gtd-auth` | access-gate token `{exp}` (login cache) |
+| `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
+| `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
 
 ---
 
 ## 3. Data model (Supabase)
 
-Five tables, all with **RLS enabled and an open policy for the anon key** (any
-signed-out visitor with the anon key can read/write — see §8) and all in the
+Seven tables, all with **RLS enabled and an open policy for the anon key** (any
+signed-out visitor with the anon key can read/write — see §9) and all in the
 `supabase_realtime` publication.
 
 **`board_meta`** — one row, `id = 'main'`, holds board-wide state:
@@ -100,7 +102,11 @@ URLs).
 **`tasks`** — one row per task: `id`, `title`, `description` (app `desc`),
 `owner`, `priority`, `status`, `notes`, `subtasks jsonb`, `due_date`,
 `waiting_since`, `file_dir`, `done_at` (completion time → auto-archive after a
-week), `updated_at`, `created_at` (ordering within a column).
+week), `updated_at`, `created_at` (ordering within a column). Each entry in
+`subtasks` is `{id, text, done, doneAt?}` — `doneAt` is stamped when the subtask
+is ticked and cleared when it is unticked, which is what lets the weekly report
+attribute partial progress to a week. It lives inside the existing jsonb, so it
+needs no migration.
 
 **`weekly`** — one row per weekly-review item: `id`, `bucket`
 (well/learnings/improve/blockers/focus), `body`, `created_at`.
@@ -110,7 +116,14 @@ week), `updated_at`, `created_at` (ordering within a column).
 `created_at`.
 
 **`projects`** — one row per project: `id`, `name`, `items jsonb`
-(`[{id,text,done}]`, same shape as subtasks), `created_at`, `updated_at`.
+(`[{id,text,done,doneAt}]`, same shape as subtasks), `created_at`, `updated_at`.
+
+**`reflection_access`** — one row per member: `member`, `password`, `updated_at`.
+The per-member Reflection gate; an admin resets a password by editing the
+`password` cell in the Supabase Table Editor.
+
+**`suggestions`** — one row per anonymous idea: `id`, `body`, `created_at`.
+Deliberately **no author column**.
 
 SQL files in `supabase/`:
 
@@ -127,6 +140,8 @@ SQL files in `supabase/`:
   to reset someone's password).
 - `migration-007-done-at.sql` — adds `tasks.done_at` (completion time) for
   auto-archiving DONE tasks after a week.
+- `migration-008-suggestions.sql` — adds the `suggestions` table (anonymous
+  improvement ideas).
 
 The migrations are additive and safe on live data; run any you haven't yet. The
 app degrades gracefully before they're applied (settings can't save, reflections
@@ -156,6 +171,7 @@ prova_sito_GTD/
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
     ├── public/robots.txt         ← Disallow: / (noindex)
+    ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
     └── src/
         ├── main.tsx              ← mounts <LangProvider><IdentityProvider><AuthGate><App/>
         ├── App.tsx               ← tabs, top bar, filters state, favicon effect, routing
@@ -174,6 +190,8 @@ prova_sito_GTD/
         │   ├── prefs.ts          ← all localStorage read/write helpers
         │   ├── image.ts          ← logo/favicon validate + rasterise + downscale
         │   ├── dates.ts          ← date math/formatting helpers
+        │   ├── reportData.ts     ← week maths + what counts as "completed in the period"
+        │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
             ├── TopBar.tsx        ← logo, editable title + subtitle, mail button, right slot
@@ -193,18 +211,71 @@ prova_sito_GTD/
             ├── WeeklyView.tsx    ← recap + 5 retro columns
             ├── DailyReflection.tsx ← reflection form + recent + spaced review
             ├── TrackingView.tsx  ← password-gated workload monitor
-            ├── InstructionsView.tsx
+            ├── SuggestionsView.tsx ← anonymous improvement ideas
             ├── SettingsView.tsx  ← branding upload, access password, login duration
             └── MailModal.tsx     ← mail-update text generator
 ```
 
-Rough size: ~4.7k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
-`BoardView.tsx`, `db.ts`, `TaskDetails.tsx`, `DailyReflection.tsx`,
-`SortableSubtasks.tsx`.
+Rough size: ~6.5k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
+`BoardView.tsx`, `db.ts`, `reportDocx.ts`, `TaskDetails.tsx`,
+`DailyReflection.tsx`, `SortableSubtasks.tsx`.
 
 ---
 
-## 5. Run locally
+## 5. Weekly report (.docx)
+
+The **WEEKLY** tab generates a Word report of everything the team completed in a
+period. Pick the period (this week by default, any of the last 12 weeks, or a
+custom from/to range) and press **Download report**.
+
+**It is built on the real template**, `web/public/report-template.docx`. Rather
+than re-creating the layout, `reportDocx.ts` unzips that file, replaces only the
+body of `word/document.xml`, and zips it back. Everything else is carried over
+untouched, which is what keeps the output indistinguishable from a hand-written
+report:
+
+| Carried over from the template | Why it matters |
+| --- | --- |
+| `word/styles.xml` | **Garamond 11pt** body text — the report inherits it, and the generated runs set no font of their own |
+| `word/header1.xml` | the Intesa Sanpaolo logo, the green rule, the Trajan Pro division lines |
+| `word/footer1.xml` | `PAGINA {PAGE} DI {NUMPAGES}` as real Word **fields**, so **page numbers are automatic** and renumber themselves |
+| the trailing `<w:sectPr>` | A4 page size, margins, and the header/footer relationship ids |
+
+**What goes in.** Two sections, because completion happens at two levels:
+
+1. **Attività completate** — tasks that entered DONE inside the period, each with
+   *all* its subtasks (✓ done, ▫ still open).
+2. **Avanzamenti su attività ancora in corso** — subtasks ticked inside the
+   period on tasks that are *not* yet closed, so partial progress on
+   long-running work still shows up.
+
+That second section is what `Subtask.doneAt` is for. It is stamped when a
+subtask is ticked and cleared when it is unticked, and it lives inside the
+existing `subtasks` jsonb — **no migration needed**. It only exists from this
+release onwards, so the section is necessarily empty for older data. Subtasks
+ticked before it existed carry no timestamp; on a task that *was* completed in
+the window they are still counted, rather than silently dropped from the totals.
+
+**Layout rules** (the "fixed structure, nothing spilling between pages" part):
+
+- every `<w:tr>` carries `<w:cantSplit/>`, so a row moves to the next page whole
+  instead of being cut in half;
+- an activity's subtask row is `<w:keepNext>`-anchored to its title row, so a
+  task and its subtasks never land on two different pages;
+- tables use `<w:tblLayout w:type="fixed"/>` with explicit column widths, so the
+  structure is identical on every page and for any data set;
+- the column header row repeats at the top of each page (`<w:tblHeader/>`);
+- **subtasks are packed two-per-line** when they are short (≤46 chars) and get
+  the full page width when they are long — so a task with six short subtasks
+  uses three lines, not six.
+
+The generator is **lazy-loaded** (`await import("../lib/reportDocx")`), so
+`fflate` and the OOXML builder stay out of the main bundle and cost nothing to
+anyone who never opens the WEEKLY tab.
+
+---
+
+## 6. Run locally
 
 ```bash
 cd web
@@ -219,7 +290,7 @@ project where you've run `schema.sql`.
 
 ---
 
-## 6. Deploy — browser only, ~15 minutes
+## 7. Deploy — browser only, ~15 minutes
 
 ### Part 1 — Supabase backend
 
@@ -252,7 +323,7 @@ same build command, publish `web/dist`, same two env vars.
 
 ---
 
-## 7. Operations & gotchas
+## 8. Operations & gotchas
 
 - **Free Supabase pauses after ~7 days of inactivity.** The first visitor after
   a quiet week sees errors until someone clicks **Restore** in the Supabase
@@ -276,7 +347,7 @@ same build command, publish `web/dist`, same two env vars.
 
 ---
 
-## 8. Extending it
+## 9. Extending it
 
 Because everything flows through the `Op` union, most changes follow one path:
 
@@ -297,7 +368,11 @@ Because everything flows through the `Op` union, most changes follow one path:
 
 ### Possible next steps (not done)
 - Real authentication (Supabase Auth) + per-user RLS if the board needs to be
-  private for real.
+  private for real. Note that today **every client downloads every reflection
+  and every Reflection password** on each refetch, so the per-member Reflection
+  gate is a UI convenience, not privacy.
 - Merge `claude/hopeful-noether-u6oblf` into `main` and point Netlify at `main`.
 - Drag-to-reorder for weekly items / members (subtasks already have it).
+- Weekly items are still uncontrolled `defaultValue` textareas, so another
+  person's edit to an existing weekly item only shows after a reload.
 - A weekly "learning digest" and per-member reflection streaks.

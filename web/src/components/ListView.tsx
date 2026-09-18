@@ -8,11 +8,12 @@ interface Props {
   tasks: Task[]; // already filtered to visible columns + search
   members: string[];
   send: (op: Op) => void;
+  showNames?: boolean; // false hides owner names (screenshot mode)
 }
 
 // Flat list of every activity in the viewable columns. Click a row to expand
 // its full details inline (no popup).
-export function ListView({ tasks, members, send }: Props) {
+export function ListView({ tasks, members, send, showNames = true }: Props) {
   const { t, lang } = useT();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -60,7 +61,9 @@ export function ListView({ tasks, members, send }: Props) {
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-[12px] text-[#6B6B6B]">{ownerLabel(t, tk.owner)}</td>
+                    <td className="px-3 py-2.5 text-[12px] text-[#6B6B6B]">
+                      {showNames ? ownerLabel(t, tk.owner) : "—"}
+                    </td>
                     <td className="px-3 py-2.5 text-[12px] font-semibold text-[#0A1931]">{tk.priority}</td>
                     <td className="px-3 py-2.5">
                       <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-[#0A1931] text-[#C9A96E]">
@@ -80,6 +83,7 @@ export function ListView({ tasks, members, send }: Props) {
                             task={tk}
                             members={members}
                             send={send}
+                            showNames={showNames}
                             onDeleted={() => setOpenId(null)}
                           />
                         </div>

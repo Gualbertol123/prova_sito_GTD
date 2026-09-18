@@ -9,8 +9,8 @@ import { ProjectsView } from "./components/ProjectsView";
 import { WeeklyView } from "./components/WeeklyView";
 import { CalendarView } from "./components/CalendarView";
 import { TrackingView } from "./components/TrackingView";
-import { InstructionsView } from "./components/InstructionsView";
 import { SettingsView } from "./components/SettingsView";
+import { SuggestionsView } from "./components/SuggestionsView";
 import { DailyReflection } from "./components/DailyReflection";
 import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
@@ -134,7 +134,7 @@ export default function App() {
           </div>
         )}
         {tab === "tracking" && <TrackingView board={board} />}
-        {tab === "istruzioni" && <InstructionsView />}
+        {tab === "suggestions" && <SuggestionsView board={board} send={send} />}
         {tab === "settings" && <SettingsView board={board} send={send} />}
       </div>
 

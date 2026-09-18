@@ -9,12 +9,13 @@ interface Props {
   task: Task;
   members: string[];
   send: (op: Op) => void;
+  showNames?: boolean; // false hides owner names (screenshot mode)
   draggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: (e: React.DragEvent) => void;
 }
 
-export function TaskCard({ task, members, send, draggable, onDragStart, onDragEnd }: Props) {
+export function TaskCard({ task, members, send, showNames = true, draggable, onDragStart, onDragEnd }: Props) {
   const { t, lang } = useT();
   const [open, setOpen] = useState(false);
 
@@ -50,12 +51,14 @@ export function TaskCard({ task, members, send, draggable, onDragStart, onDragEn
 
       {!open && (
         <div className="px-3 pb-3 -mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 text-[11px] text-[#6B6B6B]">
-            <span className="w-4 h-4 rounded-full bg-[#0A1931] text-white text-[8px] font-bold flex items-center justify-center">
-              {initial}
+          {showNames && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-[#6B6B6B]">
+              <span className="w-4 h-4 rounded-full bg-[#0A1931] text-white text-[8px] font-bold flex items-center justify-center">
+                {initial}
+              </span>
+              {ownerLabel(t, task.owner)}
             </span>
-            {ownerLabel(t, task.owner)}
-          </span>
+          )}
           {task.dueDate && (
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full border ${
@@ -84,7 +87,7 @@ export function TaskCard({ task, members, send, draggable, onDragStart, onDragEn
 
       {open && (
         <div className="px-3 pb-3">
-          <TaskDetails task={task} members={members} send={send} />
+          <TaskDetails task={task} members={members} send={send} showNames={showNames} />
         </div>
       )}
     </div>

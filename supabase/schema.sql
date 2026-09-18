@@ -70,6 +70,14 @@ create table if not exists public.projects (
 );
 create index if not exists projects_created_idx on public.projects (created_at);
 
+-- One row per anonymous improvement suggestion (no author column, by design).
+create table if not exists public.suggestions (
+  id          text primary key,
+  body        text   not null default '',
+  created_at  bigint not null default 0
+);
+create index if not exists suggestions_created_idx on public.suggestions (created_at);
+
 -- One row per weekly-review item.
 create table if not exists public.weekly (
   id          text primary key,
@@ -90,6 +98,7 @@ alter table public.weekly      enable row level security;
 alter table public.reflections enable row level security;
 alter table public.projects    enable row level security;
 alter table public.reflection_access enable row level security;
+alter table public.suggestions enable row level security;
 
 drop policy if exists "anon all board_meta"  on public.board_meta;
 drop policy if exists "anon all tasks"        on public.tasks;
@@ -97,6 +106,7 @@ drop policy if exists "anon all weekly"       on public.weekly;
 drop policy if exists "anon all reflections"  on public.reflections;
 drop policy if exists "anon all projects"     on public.projects;
 drop policy if exists "anon all reflection_access" on public.reflection_access;
+drop policy if exists "anon all suggestions" on public.suggestions;
 
 create policy "anon all board_meta" on public.board_meta
   for all to anon, authenticated using (true) with check (true);
@@ -110,6 +120,8 @@ create policy "anon all projects" on public.projects
   for all to anon, authenticated using (true) with check (true);
 create policy "anon all reflection_access" on public.reflection_access
   for all to anon, authenticated using (true) with check (true);
+create policy "anon all suggestions" on public.suggestions
+  for all to anon, authenticated using (true) with check (true);
 
 -- ---- Realtime --------------------------------------------------------------
 -- Add the tables to the realtime publication so change events are broadcast.
@@ -121,3 +133,4 @@ alter publication supabase_realtime add table public.weekly;
 alter publication supabase_realtime add table public.reflections;
 alter publication supabase_realtime add table public.projects;
 alter publication supabase_realtime add table public.reflection_access;
+alter publication supabase_realtime add table public.suggestions;
