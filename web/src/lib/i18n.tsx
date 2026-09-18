@@ -93,6 +93,7 @@ const IT: Dict = {
   "archived.title": "Archiviate",
   "archived.hint": "Completate da più di una settimana.",
   "archived.none": "Niente in archivio.",
+  "archived.search": "Cerca in archivio…",
 
   "task.due": "Scadenza",
   "task.overdue": "in ritardo",
@@ -353,6 +354,7 @@ const EN: Dict = {
   "archived.title": "Archived",
   "archived.hint": "Completed more than a week ago.",
   "archived.none": "Nothing archived.",
+  "archived.search": "Search the archive…",
 
   "task.due": "Due",
   "task.overdue": "overdue",

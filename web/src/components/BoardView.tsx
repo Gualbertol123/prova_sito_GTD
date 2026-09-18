@@ -35,6 +35,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const [editorOpen, setEditorOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
   const [archOpen, setArchOpen] = useState(false);
+  const [archQuery, setArchQuery] = useState("");
   const [view, setView] = useState<ViewMode>(() => readViewMode());
   const [editLayout, setEditLayout] = useState(false);
   const [weights, setWeights] = useState<Record<string, number>>(() => readWeights());
@@ -83,7 +84,15 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
 
   const visibleCols = STATUS_ORDER.filter((s) => !hidden.has(s));
   const listTasks = tasks.filter((tk) => !hidden.has(tk.status));
-  const archived = tasks.filter((tk) => isArchived(tk));
+  // Archive is self-contained: the whole archive (ignoring the board filters
+  // above) with its own search box.
+  const archivedAll = board.tasks.filter((tk) => isArchived(tk));
+  const aq = archQuery.trim().toLowerCase();
+  const archivedShown = aq
+    ? archivedAll.filter(
+        (tk) => tk.title.toLowerCase().includes(aq) || tk.desc.toLowerCase().includes(aq)
+      )
+    : archivedAll;
 
   const drop = (status: Status) => {
     if (dragId) send({ type: "moveTask", id: dragId, status });
@@ -386,48 +395,61 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
             })}
           </div>
 
-          {/* Archived — DONE tasks completed more than a week ago */}
-          {archived.length > 0 && (
-            <div className="bg-[#EFECE6] rounded-[14px] border border-[#E3DFD7] p-3">
-              <button
-                onClick={() => setArchOpen((o) => !o)}
-                className="w-full flex items-center gap-2 text-left"
-              >
-                <span className={`text-[#8A8A8A] text-[11px] transition-transform ${archOpen ? "rotate-90" : ""}`}>▶</span>
-                <span className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
-                  {t("archived.title")}
-                </span>
-                <span className="text-[11px] font-semibold text-[#8A8A8A] bg-white rounded-full px-2 py-0.5 border border-[#E8E6E1]">
-                  {archived.length}
-                </span>
-                <span className="text-[10px] text-[#A8A29E] ml-1 hidden sm:inline">{t("archived.hint")}</span>
-              </button>
-              {archOpen && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                  {archived.map((tk) => (
-                    <TaskCard
-                      key={tk.id}
-                      task={tk}
-                      members={members}
-                      send={send}
-                      draggable={!editLayout}
-                      onDragStart={(e) => {
-                        setDragId(tk.id);
-                        e.dataTransfer.setData("text/plain", tk.id);
-                        e.dataTransfer.effectAllowed = "move";
-                        (e.currentTarget as HTMLElement).classList.add("dragging");
-                      }}
-                      onDragEnd={(e) => {
-                        (e.currentTarget as HTMLElement).classList.remove("dragging");
-                        setDragId(null);
-                        setOverCol(null);
-                      }}
-                    />
-                  ))}
+          {/* Archived — DONE tasks completed more than a week ago (always shown) */}
+          <div className="bg-[#EFECE6] rounded-[14px] border border-[#E3DFD7] p-3">
+            <button
+              onClick={() => setArchOpen((o) => !o)}
+              className="w-full flex items-center gap-2 text-left"
+            >
+              <span className={`text-[#8A8A8A] text-[11px] transition-transform ${archOpen ? "rotate-90" : ""}`}>▶</span>
+              <span className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+                {t("archived.title")}
+              </span>
+              <span className="text-[11px] font-semibold text-[#8A8A8A] bg-white rounded-full px-2 py-0.5 border border-[#E8E6E1]">
+                {archivedAll.length}
+              </span>
+              <span className="text-[10px] text-[#A8A29E] ml-1 hidden sm:inline">{t("archived.hint")}</span>
+            </button>
+            {archOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="relative max-w-[320px]">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A8A29E] text-[13px]">⌕</span>
+                  <input
+                    value={archQuery}
+                    onChange={(e) => setArchQuery(e.target.value)}
+                    placeholder={t("archived.search")}
+                    className="w-full h-9 rounded-full bg-white border border-[#E8E6E1] pl-8 pr-4 text-[13px] outline-none focus:border-[#C9A96E]"
+                  />
                 </div>
-              )}
-            </div>
-          )}
+                {archivedShown.length === 0 ? (
+                  <div className="text-[12px] text-[#A8A29E] py-2">{t("archived.none")}</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {archivedShown.map((tk) => (
+                      <TaskCard
+                        key={tk.id}
+                        task={tk}
+                        members={members}
+                        send={send}
+                        draggable={!editLayout}
+                        onDragStart={(e) => {
+                          setDragId(tk.id);
+                          e.dataTransfer.setData("text/plain", tk.id);
+                          e.dataTransfer.effectAllowed = "move";
+                          (e.currentTarget as HTMLElement).classList.add("dragging");
+                        }}
+                        onDragEnd={(e) => {
+                          (e.currentTarget as HTMLElement).classList.remove("dragging");
+                          setDragId(null);
+                          setOverCol(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
