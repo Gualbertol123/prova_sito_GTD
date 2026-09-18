@@ -1,4 +1,5 @@
-import type { Board, Subtask, Task } from "./types";
+import type { Board, Project, Status, Subtask, Task } from "./types";
+import { PRIORITY_ORDER } from "./constants";
 import { toISODate } from "./dates";
 
 // ---- Week maths -------------------------------------------------------------
@@ -42,103 +43,83 @@ export function taskCompletedAt(t: Task): number {
 }
 
 // ---- Gathering the report's content ----------------------------------------
+// The shape follows the Word template: "Done" and "Next" activity lists, a
+// "Current Projects" list, and a four-column "Planner" board. No owner is
+// collected anywhere — the report is deliberately name-free.
 
 export interface ReportTask {
   task: Task;
-  completedAt: number;
-  subtasks: Subtask[]; // every subtask of the task, done or not
+  completedAt: number | null; // Done section only
+  subtasks: Subtask[];
 }
 
-export interface ReportProgress {
-  task: Task; // NOT completed in this period
-  subtasks: Subtask[]; // only the subtasks ticked inside the period
-}
+// The planner page mirrors these four kanban columns, in this order.
+export const PLANNER_COLUMNS: Status[] = ["BACKLOG", "NEXT", "IN PROGRESS", "WAITING"];
 
-export interface ReportOwnerStat {
-  owner: string;
-  tasks: number;
-  subtasks: number;
+export interface PlannerColumn {
+  status: Status;
+  tasks: Task[];
 }
 
 export interface ReportData {
   period: Period;
-  boardName: string;
-  completed: ReportTask[];
-  progress: ReportProgress[];
-  byOwner: ReportOwnerStat[];
-  totalTasks: number;
-  totalSubtasks: number; // subtasks ticked inside the period, both sections
+  done: ReportTask[]; // completed inside the period
+  next: ReportTask[]; // current NEXT column
+  projects: Project[]; // current projects, with their checklists
+  planner: PlannerColumn[];
+  totalTasks: number; // completed in the period
+  totalSubtasks: number; // subtasks completed in the period
 }
 
-// Everything the team finished inside `period`:
-//  - tasks that entered DONE in the window (with all their subtasks), and
-//  - subtasks ticked in the window on tasks that are still open, so partial
-//    progress on long-running activities is not lost from the report.
+const byPriorityThenTitle = (a: Task, b: Task) =>
+  PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
+  a.title.localeCompare(b.title);
+
+// Builds everything the template asks for:
+//  • Done            — tasks that entered DONE inside the period
+//  • Next            — whatever is sitting in the NEXT column right now
+//  • Current Projects— the Projects tab, with each checklist
+//  • Planner         — Backlog / Next / In Progress / Waiting as they stand
 //
-// Subtask timestamps only exist from the release that added them, so the
-// "still open" half of the report necessarily starts empty for older data.
+// "Done" is the only period-filtered part; the rest is a snapshot of where the
+// board stands when the report is generated, which is what makes it a planner.
 export function collectReport(board: Board, period: Period): ReportData {
   const { start, end } = periodBounds(period);
   const inRange = (ms?: number) => typeof ms === "number" && ms >= start && ms < end;
 
-  const completed: ReportTask[] = [];
-  const progress: ReportProgress[] = [];
+  const done: ReportTask[] = [];
+  let totalSubtasks = 0;
 
   for (const task of board.tasks) {
-    const done = task.status === "DONE" && inRange(taskCompletedAt(task));
-    if (done) {
-      completed.push({
-        task,
-        completedAt: taskCompletedAt(task),
-        subtasks: task.subtasks ?? [],
-      });
-      continue;
-    }
-    const ticked = (task.subtasks ?? []).filter((s) => s.done && inRange(s.doneAt));
-    if (ticked.length > 0) progress.push({ task, subtasks: ticked });
-  }
-
-  completed.sort(
-    (a, b) => a.completedAt - b.completedAt || a.task.title.localeCompare(b.task.title)
-  );
-  progress.sort((a, b) => a.task.title.localeCompare(b.task.title));
-
-  // Per-owner totals. Subtasks count only the ones ticked inside the period, so
-  // the figure means "work done this week", not "subtasks attached to it".
-  const stats = new Map<string, ReportOwnerStat>();
-  const bump = (owner: string, tasks: number, subtasks: number) => {
-    const cur = stats.get(owner) ?? { owner, tasks: 0, subtasks: 0 };
-    cur.tasks += tasks;
-    cur.subtasks += subtasks;
-    stats.set(owner, cur);
-  };
-  let totalSubtasks = 0;
-  for (const c of completed) {
+    if (task.status !== "DONE" || !inRange(taskCompletedAt(task))) continue;
+    const subtasks = task.subtasks ?? [];
+    done.push({ task, completedAt: taskCompletedAt(task), subtasks });
     // Subtasks ticked before subtask timestamps existed carry no doneAt. On a
     // task that WAS completed in the window, count them as part of that
     // completion rather than dropping them from the figures.
-    const ticked = c.subtasks.filter(
+    totalSubtasks += subtasks.filter(
       (s) => s.done && (s.doneAt == null || inRange(s.doneAt))
     ).length;
-    totalSubtasks += ticked;
-    bump(c.task.owner, 1, ticked);
   }
-  for (const p of progress) {
-    totalSubtasks += p.subtasks.length;
-    bump(p.task.owner, 0, p.subtasks.length);
-  }
+  done.sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
 
-  const byOwner = [...stats.values()].sort(
-    (a, b) => b.tasks - a.tasks || b.subtasks - a.subtasks || a.owner.localeCompare(b.owner)
-  );
+  const next: ReportTask[] = board.tasks
+    .filter((t) => t.status === "NEXT")
+    .sort(byPriorityThenTitle)
+    .map((task) => ({ task, completedAt: null, subtasks: task.subtasks ?? [] }));
+
+  const planner: PlannerColumn[] = PLANNER_COLUMNS.map((status) => ({
+    status,
+    tasks: board.tasks.filter((t) => t.status === status).sort(byPriorityThenTitle),
+  }));
 
   return {
     period,
-    boardName: board.boardName,
-    completed,
-    progress,
-    byOwner,
-    totalTasks: completed.length,
+    done,
+    next,
+    projects: board.projects ?? [],
+    planner,
+    totalTasks: done.length,
     totalSubtasks,
   };
 }

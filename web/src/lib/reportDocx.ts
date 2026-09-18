@@ -1,7 +1,7 @@
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
-import type { Lang } from "./i18n";
-import type { Subtask, Task } from "./types";
-import type { ReportData } from "./reportData";
+import type { Project, Subtask, Task } from "./types";
+import { STATUS_LABEL } from "./constants";
+import type { PlannerColumn, ReportData, ReportTask } from "./reportData";
 
 // -----------------------------------------------------------------------------
 // Weekly report → .docx
@@ -11,24 +11,31 @@ import type { ReportData } from "./reportData";
 // word/document.xml, and zip it back. Everything else is carried over
 // untouched, which is what keeps the output identical to a hand-written report:
 //
-//   • styles.xml       → Garamond 11pt body text (the "same font" requirement)
-//   • header1.xml      → the logo, the division line, Trajan Pro headings
-//   • footer1.xml      → "PAGINA {PAGE} DI {NUMPAGES}" — the page numbers are
-//                        real Word fields, so they renumber themselves
-//   • the <w:sectPr>   → page size, margins and the header/footer references
+//   • styles.xml  → Garamond 11pt body text (the "same font" requirement)
+//   • header1.xml → the letterhead: logo + BENCHMARKING & COMMERCIAL PLANNING
+//   • footer1.xml → "PAGE {PAGE} OF {NUMPAGES}" — real Word fields, so the page
+//                   numbers are automatic and renumber themselves
 //
-// Layout rules that follow from "no data spilling between pages":
-//   • every table row carries <w:cantSplit/>, so a row moves to the next page
-//     whole rather than being cut in half
-//   • each activity's detail row is <w:keepNext>-anchored to its title row
-//   • tables use a FIXED layout with explicit column widths, so the structure
-//     is identical on every page and for every data set
-//   • the column header row repeats at the top of each page (<w:tblHeader/>)
+// The body reproduces the template's own layout, section for section:
+//
+//   page 1   Weekly Report / dd/mm/yyyy – dd/mm/yyyy
+//            Done             → tasks completed in the period
+//            Next             → the current NEXT column
+//            Current Projects → the Projects tab, with each checklist
+//   page 2   Planner / dd/mm/yyyy – dd/mm/yyyy   (landscape)
+//            Backlog · Next · In Progress · Waiting, side by side
+//
+// House rules for the content: no owner names anywhere, no images, no tick
+// marks — plain en-dash lists, restrained rules and greys only.
+//
+// Nothing spills across a page break: every row carries <w:cantSplit/>, an
+// activity's subtask row is <w:keepNext>-anchored to its title row, and tables
+// are fixed-layout so the structure is identical on every page.
 // -----------------------------------------------------------------------------
 
 const TEMPLATE_URL = `${import.meta.env.BASE_URL}report-template.docx`;
 
-// Colours lifted from the template itself.
+// Colours and metrics lifted from the template itself.
 const GREEN = "00693E";
 const ORANGE = "EE7203";
 const GRAY = "6B6B6B";
@@ -36,9 +43,12 @@ const RULE = "D9D9D9";
 const HEAD_FILL = "F2F2F2";
 const SUB_FILL = "FAF9F6";
 
-// Usable text width with the template's A4 page and 1440-twip side margins.
+// Usable text width: A4 portrait / landscape minus the template's 1440 margins.
 const CONTENT_W = 9026;
-const COLS = [4250, 1700, 1250, 1826]; // activity | owner | priority | completed on
+const CONTENT_W_LAND = 13958;
+
+// Activity tables: activity | priority | date. No owner column — by design.
+const COLS = [6350, 1100, 1576];
 
 const esc = (s: string): string =>
   String(s ?? "")
@@ -56,7 +66,7 @@ interface RunOpts {
   spacing?: number;
 }
 
-// A run. Newlines become real line breaks so multi-line notes stay inside the
+// A run. Newlines become real line breaks so multi-line text stays inside the
 // cell instead of creating new paragraphs.
 function run(text: string, o: RunOpts = {}): string {
   const rPr =
@@ -83,6 +93,7 @@ interface ParaOpts {
   bottomBorder?: { color: string; sz: number; space: number };
   jc?: "left" | "center" | "right";
   ind?: number;
+  sectPr?: string;
 }
 
 function para(runs: string, o: ParaOpts = {}): string {
@@ -100,6 +111,7 @@ function para(runs: string, o: ParaOpts = {}): string {
       : "") +
     (o.ind ? `<w:ind w:left="${o.ind}"/>` : "") +
     (o.jc ? `<w:jc w:val="${o.jc}"/>` : "") +
+    (o.sectPr ?? "") +
     "</w:pPr>";
   return `<w:p>${pPr}${runs}</w:p>`;
 }
@@ -126,9 +138,19 @@ function cell(content: string, o: CellOpts): string {
   return `<w:tc>${tcPr}${content}</w:tc>`;
 }
 
-// cantSplit is what stops a row being torn across a page break.
-function row(cells: string, opts: { header?: boolean } = {}): string {
-  const trPr = `<w:trPr><w:cantSplit/>${opts.header ? "<w:tblHeader/>" : ""}</w:trPr>`;
+// cantSplit is what stops a row being torn across a page break. The planner's
+// single body row opts out: it is a board snapshot, not an atomic activity, and
+// a tall unsplittable row would be bumped to a page of its own.
+function row(
+  cells: string,
+  opts: { header?: boolean; height?: number; split?: boolean } = {}
+): string {
+  const trPr =
+    "<w:trPr>" +
+    (opts.split ? "" : "<w:cantSplit/>") +
+    (opts.height ? `<w:trHeight w:val="${opts.height}" w:hRule="atLeast"/>` : "") +
+    (opts.header ? "<w:tblHeader/>" : "") +
+    "</w:trPr>";
   return `<w:tr>${trPr}${cells}</w:tr>`;
 }
 
@@ -154,348 +176,304 @@ function table(grid: number[], rows: string, opts: { borders?: boolean; ind?: nu
   );
 }
 
-// ---- Wording ----------------------------------------------------------------
+// ---- Template wording -------------------------------------------------------
+// The template is written in English, so the document is too, whatever the UI
+// language happens to be — it is a corporate deliverable, not a UI surface.
 
-const LABELS = {
-  it: {
-    title: "Report Settimanale di Attività",
-    subtitle: "Attività e sotto-attività completate nel periodo",
-    periodo: "PERIODO",
-    team: "TEAM",
-    generato: "GENERATO IL",
-    classificazione: "CLASSIFICAZIONE",
-    classValue: "Uso interno",
-    sintesi: "Sintesi",
-    statTasks: "Attività completate",
-    statSubtasks: "Sotto-attività completate",
-    statOwners: "Referenti coinvolti",
-    perReferente: "Ripartizione per referente",
-    referente: "Referente",
-    attivita: "Attività",
-    sottoAttivita: "Sotto-attività",
-    completate: "Attività completate",
-    avanzamenti: "Avanzamenti su attività ancora in corso",
-    avanzamentiHint:
-      "Sotto-attività completate nel periodo su attività non ancora chiuse.",
-    colAttivita: "Attività",
-    colReferente: "Referente",
-    colPriorita: "Priorità",
-    colCompletata: "Completata il",
-    colStato: "Stato",
-    nessuna: "Nessuna attività completata nel periodo selezionato.",
-    nessunAvanzamento: "Nessun avanzamento parziale registrato nel periodo.",
-    nonAssegnato: "Non assegnato",
-    file: "Report_Settimanale",
-  },
-  en: {
-    title: "Weekly Activity Report",
-    subtitle: "Tasks and subtasks completed in the period",
-    periodo: "PERIOD",
-    team: "TEAM",
-    generato: "GENERATED ON",
-    classificazione: "CLASSIFICATION",
-    classValue: "Internal use",
-    sintesi: "Summary",
-    statTasks: "Tasks completed",
-    statSubtasks: "Subtasks completed",
-    statOwners: "People involved",
-    perReferente: "Breakdown by owner",
-    referente: "Owner",
-    attivita: "Tasks",
-    sottoAttivita: "Subtasks",
-    completate: "Completed tasks",
-    avanzamenti: "Progress on tasks still open",
-    avanzamentiHint: "Subtasks completed in the period on tasks not yet closed.",
-    colAttivita: "Task",
-    colReferente: "Owner",
-    colPriorita: "Priority",
-    colCompletata: "Completed on",
-    colStato: "Status",
-    nessuna: "No task was completed in the selected period.",
-    nessunAvanzamento: "No partial progress recorded in the period.",
-    nonAssegnato: "Unassigned",
-    file: "Weekly_Report",
-  },
-} as const;
+const L = {
+  weeklyReport: "Weekly Report",
+  done: "Done",
+  next: "Next",
+  currentProjects: "Current Projects",
+  planner: "Planner",
+  colActivity: "Activity",
+  colPriority: "Priority",
+  colCompleted: "Completed",
+  colDue: "Due",
+  colProject: "Project",
+  colProgress: "Progress",
+  noneDone: "No activity was completed in this period.",
+  noneNext: "No activity is currently scheduled as Next.",
+  noneProjects: "No project is currently open.",
+  noneTasks: "—",
+};
 
-const locale = (lang: Lang) => (lang === "it" ? "it-IT" : "en-GB");
-
-function longDate(iso: string, lang: Lang): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(locale(lang), {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+// dd/mm/yyyy, as the template's own placeholder spells it.
+function ddmmyyyy(value: string | number): string {
+  const d =
+    typeof value === "number"
+      ? new Date(value)
+      : (() => {
+          const [y, m, dd] = value.split("-").map(Number);
+          return new Date(y, m - 1, dd);
+        })();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-function shortDate(ms: number, lang: Lang): string {
-  return new Date(ms).toLocaleDateString(locale(lang), {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+export function periodLabel(from: string, to: string): string {
+  return `${ddmmyyyy(from)} – ${ddmmyyyy(to)}`;
 }
 
-export function periodLabel(from: string, to: string, lang: Lang): string {
-  return `${longDate(from, lang)} – ${longDate(to, lang)}`;
+// ---- Building blocks --------------------------------------------------------
+
+// Page title + the period rule beneath it, matching the template exactly.
+function pageTitle(title: string, period: string, keepNext = false): string {
+  return (
+    para(run(title, { b: true, sz: 52 }), { before: 200, after: 120, keepNext }) +
+    para(run(period, { i: true, color: GRAY, sz: 20 }), {
+      after: 280,
+      keepNext,
+      bottomBorder: { color: ORANGE, sz: 8, space: 10 },
+    })
+  );
 }
 
-// ---- Document sections ------------------------------------------------------
-
-function sectionHeading(text: string, L: (typeof LABELS)["it"] | (typeof LABELS)["en"]): string {
-  void L;
+function sectionHeading(text: string): string {
   return para(run(text, { b: true, color: GREEN, sz: 28 }), {
     style: "Titolo1",
     keepNext: true,
-    before: 360,
+    before: 200,
     after: 160,
     bottomBorder: { color: GREEN, sz: 4, space: 4 },
   });
 }
 
-// Subtasks laid out inside the activity's full-width detail row. Short items go
-// into two columns so half the page is not left empty; long ones get the full
-// width rather than being squeezed into a narrow column.
-function subtaskBlock(items: Subtask[], showState: boolean): string {
+// Sub-items (subtasks, project checklist items) laid out inside a full-width
+// row. Short entries go two to a line so half the page is not left empty; long
+// ones get the full width. Plain en-dash lead — no tick marks.
+function itemBlock(items: Subtask[], width: number): string {
   if (items.length === 0) return "";
   const longest = items.reduce((n, s) => Math.max(n, (s.text ?? "").length), 0);
   const cols = items.length > 1 && longest <= 46 ? 2 : 1;
-  const colW = Math.floor((CONTENT_W - 300) / cols);
+  const colW = Math.floor((width - 300) / cols);
 
-  const lineFor = (s: Subtask): string => {
-    const mark = !showState || s.done ? "✓  " : "▫  ";
-    return para(
-      run(mark, { sz: 16, color: s.done || !showState ? GREEN : GRAY, b: true }) +
-        run(s.text || "—", { sz: 16 }),
-      { before: 10, after: 10 }
-    );
-  };
+  const line = (s: Subtask) =>
+    para(run("–  ", { sz: 17, color: GRAY }) + run(s.text || L.noneTasks, { sz: 17 }), {
+      before: 10,
+      after: 10,
+    });
 
   const rows: string[] = [];
   for (let i = 0; i < items.length; i += cols) {
     const cells: string[] = [];
     for (let c = 0; c < cols; c++) {
       const item = items[i + c];
-      cells.push(
-        cell(item ? lineFor(item) : para(""), { w: colW, noBorders: true, vAlign: "top" })
-      );
+      cells.push(cell(item ? line(item) : para(""), { w: colW, noBorders: true, vAlign: "top" }));
     }
     rows.push(row(cells.join("")));
   }
   return table(new Array(cols).fill(colW), rows.join(""), { ind: 150 });
 }
 
-// One activity = a title row plus (when it has subtasks) a full-width detail
-// row. Both rows are cantSplit and the title row keeps with the next, so an
-// activity and its subtasks never land on two different pages.
-function activityRows(
-  task: Task,
-  completedAt: number | null,
-  subtasks: Subtask[],
-  lang: Lang,
-  L: (typeof LABELS)["it"] | (typeof LABELS)["en"],
-  showState: boolean
-): string {
-  const owner = task.owner && task.owner !== "Unassigned" ? task.owner : L.nonAssegnato;
-  const titleCell = cell(
-    para(run(task.title || "—", { b: true, sz: 20 }), { keepNext: true, before: 20, after: 0 }) +
-      (task.desc?.trim()
-        ? para(run(task.desc.trim(), { i: true, sz: 16, color: GRAY }), {
+// One activity = a title row plus, when it has sub-items, a full-width detail
+// row. Both are cantSplit and the title keeps with the next, so an activity and
+// its subtasks never land on two different pages.
+function activityRows(task: Task, dateMs: number | null, dueIso: string | undefined, subtasks: Subtask[]): string {
+  const dateText = dateMs != null ? ddmmyyyy(dateMs) : dueIso ? ddmmyyyy(dueIso) : "—";
+  const head = row(
+    cell(
+      para(run(task.title || L.noneTasks, { b: true, sz: 20 }), {
+        keepNext: true,
+        before: 20,
+        after: 0,
+      }) +
+        (task.desc?.trim()
+          ? para(run(task.desc.trim(), { i: true, sz: 17, color: GRAY }), {
+              keepNext: true,
+              before: 20,
+              after: 20,
+            })
+          : ""),
+      { w: COLS[0], vAlign: "top" }
+    ) +
+      cell(para(run(task.priority, { sz: 18 }), { jc: "center" }), {
+        w: COLS[1],
+        vAlign: "center",
+      }) +
+      cell(para(run(dateText, { sz: 18, color: dateText === "—" ? GRAY : undefined }), { jc: "center" }), {
+        w: COLS[2],
+        vAlign: "center",
+      })
+  );
+  if (subtasks.length === 0) return head;
+  return (
+    head +
+    row(
+      cell(itemBlock(subtasks, CONTENT_W) + para("", { before: 0, after: 0 }), {
+        w: CONTENT_W,
+        span: 3,
+        fill: SUB_FILL,
+        vAlign: "top",
+      })
+    )
+  );
+}
+
+function headerCell(text: string, w: number, jc?: "center"): string {
+  return cell(para(run(text, { b: true, sz: 15, color: GRAY, caps: true, spacing: 10 }), { jc }), {
+    w,
+    fill: HEAD_FILL,
+    vAlign: "center",
+  });
+}
+
+function activityTable(items: ReportTask[], dateHeading: string, empty: string): string {
+  if (items.length === 0) return para(run(empty, { i: true, color: GRAY }), { after: 260 });
+  const header = row(
+    headerCell(L.colActivity, COLS[0]) +
+      headerCell(L.colPriority, COLS[1], "center") +
+      headerCell(dateHeading, COLS[2], "center"),
+    { header: true }
+  );
+  const body = items
+    .map((r) => activityRows(r.task, r.completedAt, r.task.dueDate, r.subtasks))
+    .join("");
+  return table(COLS, header + body, { borders: true }) + para("", { after: 260 });
+}
+
+function projectsTable(projects: Project[]): string {
+  if (projects.length === 0)
+    return para(run(L.noneProjects, { i: true, color: GRAY }), { after: 260 });
+  const w = [CONTENT_W - 1600, 1600];
+  const header = row(headerCell(L.colProject, w[0]) + headerCell(L.colProgress, w[1], "center"), {
+    header: true,
+  });
+  const body = projects
+    .map((p) => {
+      const items = p.items ?? [];
+      const done = items.filter((i) => i.done).length;
+      const head = row(
+        cell(
+          para(run(p.name || L.noneTasks, { b: true, sz: 20 }), {
             keepNext: true,
             before: 20,
             after: 20,
-          })
-        : ""),
-    { w: COLS[0], vAlign: "top" }
-  );
-  const head = row(
-    titleCell +
-      cell(para(run(owner, { sz: 18 })), { w: COLS[1], vAlign: "center" }) +
-      cell(para(run(task.priority, { sz: 18, b: true }), { jc: "center" }), {
-        w: COLS[2],
-        vAlign: "center",
-      }) +
-      cell(
-        para(
-          run(completedAt ? shortDate(completedAt, lang) : task.status, {
-            sz: 18,
-            color: completedAt ? undefined : GRAY,
           }),
-          { jc: "center" }
-        ),
-        { w: COLS[3], vAlign: "center" }
-      )
-  );
-
-  if (subtasks.length === 0) return head;
-  const detail = row(
-    cell(subtaskBlock(subtasks, showState) + para("", { before: 0, after: 0 }), {
-      w: CONTENT_W,
-      span: 4,
-      fill: SUB_FILL,
-      vAlign: "top",
-    })
-  );
-  return head + detail;
-}
-
-function activityTable(
-  rows: string,
-  L: (typeof LABELS)["it"] | (typeof LABELS)["en"],
-  lastCol: string
-): string {
-  const h = (text: string, w: number, jc?: "center") =>
-    cell(para(run(text, { b: true, sz: 15, color: GRAY, caps: true, spacing: 10 }), { jc }), {
-      w,
-      fill: HEAD_FILL,
-      vAlign: "center",
-    });
-  const header = row(
-    h(L.colAttivita, COLS[0]) +
-      h(L.colReferente, COLS[1]) +
-      h(L.colPriorita, COLS[2], "center") +
-      h(lastCol, COLS[3], "center"),
-    { header: true }
-  );
-  return table(COLS, header + rows, { borders: true });
-}
-
-function buildBody(data: ReportData, lang: Lang): string {
-  const L = LABELS[lang];
-  const period = periodLabel(data.period.from, data.period.to, lang);
-  const out: string[] = [];
-
-  // Title + subtitle, mirroring the template's own opening.
-  out.push(para("", { before: 400 }));
-  out.push(para(run(L.title, { b: true, sz: 44 }), { before: 200, after: 120 }));
-  out.push(
-    para(run(`${L.subtitle} — ${period}`, { i: true, color: GRAY, sz: 24 }), {
-      after: 300,
-      bottomBorder: { color: ORANGE, sz: 8, space: 10 },
-    })
-  );
-
-  // Metadata block — same two-column shape as the template's.
-  const META_LABEL_W = 2400;
-  const metaRow = (label: string, value: string) =>
-    row(
-      cell(para(run(label, { b: true, color: GRAY, sz: 18 })), { w: META_LABEL_W, vAlign: "center" }) +
-        cell(para(run(value, { sz: 18 })), { w: CONTENT_W - META_LABEL_W, vAlign: "center" })
-    );
-  out.push(
-    table(
-      [META_LABEL_W, CONTENT_W - META_LABEL_W],
-      metaRow(L.periodo, period) +
-        metaRow(L.team, data.boardName) +
-        metaRow(L.generato, longDate(new Date().toISOString().slice(0, 10), lang)) +
-        metaRow(L.classificazione, L.classValue)
-    )
-  );
-
-  // ---- Summary
-  out.push(sectionHeading(L.sintesi, L));
-  const statW = Math.floor(CONTENT_W / 3);
-  const stat = (n: number, label: string) =>
-    cell(
-      para(run(String(n), { b: true, sz: 40, color: GREEN }), { jc: "center", before: 60, after: 0 }) +
-        para(run(label, { sz: 15, color: GRAY, caps: true, spacing: 10 }), {
-          jc: "center",
-          before: 0,
-          after: 60,
-        }),
-      { w: statW, vAlign: "center" }
-    );
-  out.push(
-    table(
-      [statW, statW, statW],
-      row(
-        stat(data.totalTasks, L.statTasks) +
-          stat(data.totalSubtasks, L.statSubtasks) +
-          stat(data.byOwner.length, L.statOwners)
-      ),
-      { borders: true }
-    )
-  );
-
-  if (data.byOwner.length > 0) {
-    out.push(
-      para(run(L.perReferente, { b: true, sz: 18, color: GRAY, caps: true, spacing: 10 }), {
-        keepNext: true,
-        before: 240,
-        after: 80,
-      })
-    );
-    const w = [CONTENT_W - 3400, 1600, 1800];
-    const hdr = row(
-      cell(para(run(L.referente, { b: true, sz: 15, color: GRAY, caps: true, spacing: 10 })), {
-        w: w[0],
-        fill: HEAD_FILL,
-      }) +
-        cell(
-          para(run(L.attivita, { b: true, sz: 15, color: GRAY, caps: true, spacing: 10 }), {
-            jc: "center",
-          }),
-          { w: w[1], fill: HEAD_FILL }
+          { w: w[0], vAlign: "top" }
         ) +
-        cell(
-          para(run(L.sottoAttivita, { b: true, sz: 15, color: GRAY, caps: true, spacing: 10 }), {
-            jc: "center",
-          }),
-          { w: w[2], fill: HEAD_FILL }
-        ),
-      { header: true }
-    );
-    const body = data.byOwner
-      .map((o) =>
+          cell(
+            para(run(items.length ? `${done} / ${items.length}` : "—", { sz: 18 }), {
+              jc: "center",
+            }),
+            { w: w[1], vAlign: "center" }
+          )
+      );
+      if (items.length === 0) return head;
+      return (
+        head +
         row(
-          cell(para(run(o.owner === "Unassigned" ? L.nonAssegnato : o.owner, { sz: 18 })), {
-            w: w[0],
-          }) +
-            cell(para(run(String(o.tasks), { sz: 18 }), { jc: "center" }), { w: w[1] }) +
-            cell(para(run(String(o.subtasks), { sz: 18 }), { jc: "center" }), { w: w[2] })
+          cell(itemBlock(items, CONTENT_W) + para("", { before: 0, after: 0 }), {
+            w: CONTENT_W,
+            span: 2,
+            fill: SUB_FILL,
+            vAlign: "top",
+          })
+        )
+      );
+    })
+    .join("");
+  return table(w, header + body, { borders: true }) + para("", { after: 260 });
+}
+
+// The planner board: the four kanban columns side by side, filling the
+// landscape page. Rendered as a real Word table — no screenshot, no image.
+function plannerTable(columns: PlannerColumn[]): string {
+  const colW = Math.floor(CONTENT_W_LAND / columns.length);
+  const grid = new Array(columns.length).fill(colW);
+
+  const header = row(
+    columns
+      .map((c) =>
+        cell(
+          para(
+            run(STATUS_LABEL[c.status], { b: true, sz: 18, color: GREEN, caps: true, spacing: 12 }),
+            { jc: "center", before: 40, after: 40 }
+          ),
+          { w: colW, fill: HEAD_FILL, vAlign: "center" }
         )
       )
-      .join("");
-    out.push(table(w, hdr + body, { borders: true }));
-  }
-
-  // ---- Completed activities
-  out.push(sectionHeading(L.completate, L));
-  if (data.completed.length === 0) {
-    out.push(para(run(L.nessuna, { i: true, color: GRAY }), { after: 260 }));
-  } else {
-    const rows = data.completed
-      .map((c) => activityRows(c.task, c.completedAt, c.subtasks, lang, L, true))
-      .join("");
-    out.push(activityTable(rows, L, L.colCompletata));
-  }
-
-  // ---- Partial progress
-  out.push(sectionHeading(L.avanzamenti, L));
-  out.push(
-    para(run(L.avanzamentiHint, { i: true, sz: 18, color: GRAY }), { keepNext: true, after: 140 })
+      .join(""),
+    { header: true }
   );
-  if (data.progress.length === 0) {
-    out.push(para(run(L.nessunAvanzamento, { i: true, color: GRAY }), { after: 260 }));
-  } else {
-    const rows = data.progress
-      .map((p) => activityRows(p.task, null, p.subtasks, lang, L, false))
-      .join("");
-    out.push(activityTable(rows, L, L.colStato));
-  }
+
+  // One body row holding every column's cards, so the columns sit beside each
+  // other and stretch down the page. atLeast height makes it fill the sheet.
+  const bodyCells = columns
+    .map((c) => {
+      const content =
+        c.tasks.length === 0
+          ? para(run(L.noneTasks, { sz: 17, color: GRAY }), { jc: "center", before: 60 })
+          : c.tasks
+              .map((t) =>
+                para(
+                  run(t.priority + "   ", { sz: 15, color: GRAY }) + run(t.title, { sz: 17 }),
+                  { before: 40, after: 40, keepNext: false }
+                )
+              )
+              .join("");
+      return cell(content, { w: colW, vAlign: "top" });
+    })
+    .join("");
+
+  // Landscape A4 leaves ~8880 twips of text height; the title block and the
+  // header row take roughly 1900 of it, so this fills the rest of the sheet
+  // without bumping the table onto a page of its own.
+  return table(grid, header + row(bodyCells, { height: 6300, split: true }), { borders: true });
+}
+
+// ---- The body ---------------------------------------------------------------
+
+// A copy of the template's own section properties, optionally turned landscape.
+function sectPr(template: string, landscape: boolean): string {
+  if (!landscape) return template;
+  return template
+    .replace(
+      /<w:pgSz[^/]*\/>/,
+      '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>'
+    )
+    .replace(/<w:sectPr[^>]*>/, (m) => m); // keep the header/footer references
+}
+
+function buildBody(data: ReportData, templateSectPr: string): string {
+  const period = periodLabel(data.period.from, data.period.to);
+  const out: string[] = [];
+
+  // ---- Page 1
+  out.push(pageTitle(L.weeklyReport, period));
+
+  out.push(sectionHeading(L.done));
+  out.push(activityTable(data.done, L.colCompleted, L.noneDone));
+
+  out.push(sectionHeading(L.next));
+  out.push(activityTable(data.next, L.colDue, L.noneNext));
+
+  out.push(sectionHeading(L.currentProjects));
+  out.push(projectsTable(data.projects));
+
+  // Section break: page 1 keeps the template's portrait setup, the planner
+  // page turns landscape so four columns actually fill the sheet.
+  const portrait = sectPr(templateSectPr, false).replace(
+    "<w:pgSz",
+    '<w:type w:val="nextPage"/><w:pgSz'
+  );
+  out.push(para("", { sectPr: portrait }));
+
+  // ---- Page 2 (landscape)
+  out.push(pageTitle(L.planner, period, true));
+  out.push(plannerTable(data.planner));
 
   return out.join("");
 }
 
 // ---- Packaging --------------------------------------------------------------
 
-export function reportFileName(data: ReportData, lang: Lang): string {
-  return `${LABELS[lang].file}_${data.period.from}_${data.period.to}.docx`;
+export function reportFileName(data: ReportData): string {
+  return `Weekly_Report_${data.period.from}_${data.period.to}.docx`;
 }
 
 // Fetch the template, swap the body of word/document.xml, zip it back up.
-export async function buildReportDocx(data: ReportData, lang: Lang): Promise<Blob> {
+export async function buildReportDocx(data: ReportData): Promise<Blob> {
   const res = await fetch(TEMPLATE_URL);
   if (!res.ok) throw new Error(`template ${res.status}`);
   const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
@@ -503,15 +481,20 @@ export async function buildReportDocx(data: ReportData, lang: Lang): Promise<Blo
   const docPath = "word/document.xml";
   const original = strFromU8(zip[docPath]);
 
-  // Keep everything up to <w:body> and from <w:sectPr> on: the section
-  // properties carry the page setup and the header/footer relationship ids.
   const bodyOpen = original.indexOf("<w:body>");
   const sectStart = original.lastIndexOf("<w:sectPr");
   if (bodyOpen < 0 || sectStart < 0) throw new Error("unexpected template layout");
   const head = original.slice(0, bodyOpen + "<w:body>".length);
-  const tail = original.slice(sectStart);
+  const tail = original.slice(sectStart); // <w:sectPr>…</w:sectPr></w:body></w:document>
 
-  zip[docPath] = strToU8(head + buildBody(data, lang) + tail);
+  // The template's section properties, reused for the portrait section and
+  // flipped to landscape for the final (planner) one.
+  const templateSectPr = tail.slice(0, tail.indexOf("</w:sectPr>") + "</w:sectPr>".length);
+  const closing = tail.slice(templateSectPr.length);
+
+  zip[docPath] = strToU8(
+    head + buildBody(data, templateSectPr) + sectPr(templateSectPr, true) + closing
+  );
 
   const out = zipSync(zip, { level: 6 });
   // Copy into a fresh buffer: the zip may be a view onto a larger allocation.
@@ -520,12 +503,12 @@ export async function buildReportDocx(data: ReportData, lang: Lang): Promise<Blo
   });
 }
 
-export async function downloadReportDocx(data: ReportData, lang: Lang): Promise<void> {
-  const blob = await buildReportDocx(data, lang);
+export async function downloadReportDocx(data: ReportData): Promise<void> {
+  const blob = await buildReportDocx(data);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = reportFileName(data, lang);
+  a.download = reportFileName(data);
   document.body.appendChild(a);
   a.click();
   a.remove();

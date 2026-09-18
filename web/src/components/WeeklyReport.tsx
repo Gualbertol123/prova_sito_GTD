@@ -48,7 +48,7 @@ export function WeeklyReport({ board }: Props) {
     try {
       // Loaded on demand so the docx machinery stays out of the main bundle.
       const { downloadReportDocx } = await import("../lib/reportDocx");
-      await downloadReportDocx(data, lang);
+      await downloadReportDocx(data);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {

@@ -150,7 +150,7 @@ const IT: Dict = {
   "cal.allHaveDate": "Tutti i task hanno una data.",
 
   "report.title": "Report settimanale (Word)",
-  "report.hint": "Genera un .docx sul modello Intesa Sanpaolo con tutto il completato nel periodo.",
+  "report.hint": "Modello Intesa Sanpaolo: Done · Next · Current Projects, più il Planner della board.",
   "report.period": "Periodo",
   "report.thisWeek": "questa settimana",
   "report.lastWeek": "settimana scorsa",
@@ -160,7 +160,7 @@ const IT: Dict = {
   "report.download": "Scarica report",
   "report.generating": "Generazione…",
   "report.preview": "Attività completate: {t} · Sotto-attività completate: {s}",
-  "report.empty": "Nessuna attività completata nel periodo selezionato — il report verrà generato comunque, vuoto.",
+  "report.empty": "Nessuna attività completata nel periodo — il report includerà comunque Next, Progetti e Planner.",
   "report.error": "Generazione non riuscita",
 
   "weekly.help": "Weekly Review: la sezione FATTO si aggiorna da DONE. Usa le 5 colonne per il retro.",
@@ -436,7 +436,7 @@ const EN: Dict = {
   "cal.allHaveDate": "All tasks have a date.",
 
   "report.title": "Weekly report (Word)",
-  "report.hint": "Generate a .docx on the Intesa Sanpaolo template with everything completed in the period.",
+  "report.hint": "Intesa Sanpaolo template: Done · Next · Current Projects, plus the board Planner.",
   "report.period": "Period",
   "report.thisWeek": "this week",
   "report.lastWeek": "last week",
@@ -446,7 +446,7 @@ const EN: Dict = {
   "report.download": "Download report",
   "report.generating": "Generating…",
   "report.preview": "Tasks completed: {t} · Subtasks completed: {s}",
-  "report.empty": "Nothing was completed in the selected period — the report will still be generated, empty.",
+  "report.empty": "Nothing was completed in the period — the report still includes Next, Projects and the Planner.",
   "report.error": "Generation failed",
 
   "weekly.help": "Weekly Review: the DONE section fills from DONE tasks. Use the 5 columns for the retro.",

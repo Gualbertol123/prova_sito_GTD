@@ -24,7 +24,7 @@ full file map, how to run and deploy it, and how to extend it.
 | --- | --- |
 | **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
-| **WEEKLY** | **Weekly report generator** (see §5) — pick a period and download a `.docx` on the Intesa Sanpaolo template. Below it, the weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
+| **WEEKLY** | **Weekly report generator** (see §5) — pick a period and download a `.docx` on the Intesa Sanpaolo template: Done / Next / Current Projects on page 1, a landscape Planner board on page 2, no names and no images. Below it, the weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (default `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can view and change your own password. Passwords live in the `reflection_access` table — an admin can reset any of them in Supabase. |
 | **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §9. |
@@ -190,7 +190,7 @@ prova_sito_GTD/
         │   ├── prefs.ts          ← all localStorage read/write helpers
         │   ├── image.ts          ← logo/favicon validate + rasterise + downscale
         │   ├── dates.ts          ← date math/formatting helpers
-        │   ├── reportData.ts     ← week maths + what counts as "completed in the period"
+        │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
         │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
@@ -224,50 +224,64 @@ Rough size: ~6.5k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
 
 ## 5. Weekly report (.docx)
 
-The **WEEKLY** tab generates a Word report of everything the team completed in a
-period. Pick the period (this week by default, any of the last 12 weeks, or a
-custom from/to range) and press **Download report**.
+The **WEEKLY** tab generates the Word report. Pick the period (this week by
+default, any of the last 12 weeks, or a custom from/to range) and press
+**Download report**.
 
 **It is built on the real template**, `web/public/report-template.docx`. Rather
 than re-creating the layout, `reportDocx.ts` unzips that file, replaces only the
 body of `word/document.xml`, and zips it back. Everything else is carried over
-untouched, which is what keeps the output indistinguishable from a hand-written
-report:
+untouched:
 
 | Carried over from the template | Why it matters |
 | --- | --- |
 | `word/styles.xml` | **Garamond 11pt** body text — the report inherits it, and the generated runs set no font of their own |
-| `word/header1.xml` | the Intesa Sanpaolo logo, the green rule, the Trajan Pro division lines |
-| `word/footer1.xml` | `PAGINA {PAGE} DI {NUMPAGES}` as real Word **fields**, so **page numbers are automatic** and renumber themselves |
-| the trailing `<w:sectPr>` | A4 page size, margins, and the header/footer relationship ids |
+| `word/header1.xml` | the letterhead: logo + `BENCHMARKING & COMMERCIAL PLANNING` |
+| `word/footer1.xml` | `PAGE {PAGE} OF {NUMPAGES}` as real Word **fields**, so **page numbers are automatic** and renumber themselves |
+| `<w:sectPr>` | A4 page size, margins, and the header/footer relationship ids |
 
-**What goes in.** Two sections, because completion happens at two levels:
+**The document mirrors the template section for section:**
 
-1. **Attività completate** — tasks that entered DONE inside the period, each with
-   *all* its subtasks (✓ done, ▫ still open).
-2. **Avanzamenti su attività ancora in corso** — subtasks ticked inside the
-   period on tasks that are *not* yet closed, so partial progress on
-   long-running work still shows up.
+| Page | Section | Filled with |
+| --- | --- | --- |
+| 1 (portrait) | `Weekly Report` + `dd/mm/yyyy – dd/mm/yyyy` | the selected period |
+| | **Done** | tasks that entered DONE inside the period, with their subtasks |
+| | **Next** | whatever is in the NEXT column right now |
+| | **Current Projects** | the Projects tab, each with its checklist and `done / total` |
+| 2 (landscape) | `Planner` + the same period | **Backlog · Next · In Progress · Waiting** side by side |
 
-That second section is what `Subtask.doneAt` is for. It is stamped when a
-subtask is ticked and cleared when it is unticked, and it lives inside the
-existing `subtasks` jsonb — **no migration needed**. It only exists from this
-release onwards, so the section is necessarily empty for older data. Subtasks
-ticked before it existed carry no timestamp; on a task that *was* completed in
-the window they are still counted, rather than silently dropped from the totals.
+Only **Done** is period-filtered; Next, Projects and the Planner are a snapshot
+of where the board stands when the report is generated — which is what makes
+the second page a planner.
 
-**Layout rules** (the "fixed structure, nothing spilling between pages" part):
+**House rules** (from the template's own notes): **no owner names anywhere** —
+there is no owner column and no per-person breakdown; **no images** — the
+planner is a real Word table, not a pasted screenshot of the board; **no tick
+marks** — sub-items are plain en-dash lists; and restrained corporate styling
+throughout (the template's green and orange rules, grey labels, nothing else).
+
+**Layout rules** (fixed structure, nothing spilling between pages):
 
 - every `<w:tr>` carries `<w:cantSplit/>`, so a row moves to the next page whole
-  instead of being cut in half;
+  instead of being cut in half — the one exception is the planner's single body
+  row, which is a board snapshot rather than an atomic activity and would
+  otherwise be bumped onto a page of its own;
 - an activity's subtask row is `<w:keepNext>`-anchored to its title row, so a
   task and its subtasks never land on two different pages;
-- tables use `<w:tblLayout w:type="fixed"/>` with explicit column widths, so the
+- tables are `<w:tblLayout w:type="fixed"/>` with explicit column widths, so the
   structure is identical on every page and for any data set;
-- the column header row repeats at the top of each page (`<w:tblHeader/>`);
-- **subtasks are packed two-per-line** when they are short (≤46 chars) and get
-  the full page width when they are long — so a task with six short subtasks
-  uses three lines, not six.
+- column header rows repeat at the top of each page (`<w:tblHeader/>`);
+- **sub-items are packed two per line** when they are short (≤46 chars) and get
+  the full width when they are long.
+
+**The planner page is landscape.** The template asks for the four columns
+"horizontal … filling the sheet properly in length and width", and four columns
+across a portrait A4 would be ~4 cm each. A second section (the template's own
+`sectPr`, flipped) gives them ~6 cm and keeps the same header and footer. If
+portrait is wanted instead, drop the landscape flip in `buildReportDocx`.
+
+**The document is English**, matching the template, whatever the UI language is
+set to — it is a corporate deliverable rather than a UI surface.
 
 The generator is **lazy-loaded** (`await import("../lib/reportDocx")`), so
 `fflate` and the OOXML builder stay out of the main bundle and cost nothing to
