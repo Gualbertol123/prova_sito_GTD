@@ -29,6 +29,7 @@ export interface Task {
   dueDate?: string; // ISO yyyy-mm-dd
   waitingSince?: string; // ISO yyyy-mm-dd
   fileDir?: string; // shared network file path
+  doneAt?: number; // set when it enters DONE; drives auto-archiving
   updatedAt: number;
   createdAt?: number; // ordering within a column (oldest first)
 }

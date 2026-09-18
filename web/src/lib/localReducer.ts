@@ -26,7 +26,14 @@ export function applyOpLocal(board: Board, op: Op): Board {
 
   switch (op.type) {
     case "addTask":
-      b.tasks = [...b.tasks, { ...op.task, createdAt: op.task.createdAt ?? now }];
+      b.tasks = [
+        ...b.tasks,
+        {
+          ...op.task,
+          createdAt: op.task.createdAt ?? now,
+          doneAt: op.task.status === "DONE" ? op.task.doneAt ?? now : op.task.doneAt,
+        },
+      ];
       break;
     case "updateTask": {
       const t = find(op.id);
@@ -45,6 +52,11 @@ export function applyOpLocal(board: Board, op: Op): Board {
           t.waitingSince = new Date().toISOString().slice(0, 10);
         } else if (op.status !== "WAITING") {
           delete t.waitingSince;
+        }
+        if (op.status === "DONE") {
+          if (!t.doneAt) t.doneAt = now;
+        } else {
+          delete t.doneAt;
         }
       }
       break;

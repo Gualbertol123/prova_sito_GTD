@@ -24,7 +24,7 @@ full file map, how to run and deploy it, and how to extend it.
 | --- | --- |
 | **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
-| **WEEKLY** | Weekly review. A "Recap — everything completed" block auto-fills from DONE tasks (with owner + subtask progress), plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
+| **WEEKLY** | Weekly review. A "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (default `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can view and change your own password. Passwords live in the `reflection_access` table — an admin can reset any of them in Supabase. |
 | **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §8. |
@@ -99,8 +99,8 @@ URLs).
 
 **`tasks`** — one row per task: `id`, `title`, `description` (app `desc`),
 `owner`, `priority`, `status`, `notes`, `subtasks jsonb`, `due_date`,
-`waiting_since`, `file_dir`, `updated_at`, `created_at` (ordering within a
-column).
+`waiting_since`, `file_dir`, `done_at` (completion time → auto-archive after a
+week), `updated_at`, `created_at` (ordering within a column).
 
 **`weekly`** — one row per weekly-review item: `id`, `bucket`
 (well/learnings/improve/blockers/focus), `body`, `created_at`.
@@ -125,6 +125,8 @@ SQL files in `supabase/`:
 - `migration-006-reflection-access.sql` — adds `reflection_access` (per-member
   Reflection password; edit the `password` column in the Supabase Table Editor
   to reset someone's password).
+- `migration-007-done-at.sql` — adds `tasks.done_at` (completion time) for
+  auto-archiving DONE tasks after a week.
 
 The migrations are additive and safe on live data; run any you haven't yet. The
 app degrades gracefully before they're applied (settings can't save, reflections

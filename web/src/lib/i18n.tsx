@@ -90,6 +90,9 @@ const IT: Dict = {
   "col.emptyDone": "Nessuna attività completata",
   "col.collapse": "Comprimi colonna",
   "col.expand": "Espandi colonna",
+  "archived.title": "Archiviate",
+  "archived.hint": "Completate da più di una settimana.",
+  "archived.none": "Niente in archivio.",
 
   "task.due": "Scadenza",
   "task.overdue": "in ritardo",
@@ -347,6 +350,9 @@ const EN: Dict = {
   "col.emptyDone": "No completed tasks",
   "col.collapse": "Collapse column",
   "col.expand": "Expand column",
+  "archived.title": "Archived",
+  "archived.hint": "Completed more than a week ago.",
+  "archived.none": "Nothing archived.",
 
   "task.due": "Due",
   "task.overdue": "overdue",

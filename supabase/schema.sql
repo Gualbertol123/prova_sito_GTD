@@ -34,6 +34,7 @@ create table if not exists public.tasks (
   due_date       text,                          -- ISO yyyy-mm-dd
   waiting_since  text,                          -- ISO yyyy-mm-dd
   file_dir       text,                          -- shared network file path
+  done_at        bigint,                         -- when it entered DONE (archive timer)
   updated_at     bigint not null default 0,
   created_at     bigint not null default 0      -- ordering within a column
 );

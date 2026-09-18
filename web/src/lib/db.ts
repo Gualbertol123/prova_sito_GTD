@@ -31,6 +31,7 @@ interface TaskRow {
   due_date: string | null;
   waiting_since: string | null;
   file_dir: string | null;
+  done_at: number | null;
   updated_at: number;
   created_at: number;
 }
@@ -48,6 +49,7 @@ function rowToTask(r: TaskRow): Task {
     dueDate: r.due_date ?? undefined,
     waitingSince: r.waiting_since ?? undefined,
     fileDir: r.file_dir ?? undefined,
+    doneAt: r.done_at ?? undefined,
     updatedAt: r.updated_at,
     createdAt: r.created_at,
   };
@@ -66,6 +68,7 @@ function taskToRow(t: Task): TaskRow {
     due_date: t.dueDate ?? null,
     waiting_since: t.waitingSince ?? null,
     file_dir: t.fileDir ?? null,
+    done_at: t.doneAt ?? null,
     updated_at: t.updatedAt ?? Date.now(),
     created_at: t.createdAt ?? Date.now(),
   };
@@ -84,6 +87,7 @@ function patchToRow(patch: Partial<Task>): Record<string, unknown> {
   if ("dueDate" in patch) out.due_date = patch.dueDate ?? null;
   if ("waitingSince" in patch) out.waiting_since = patch.waitingSince ?? null;
   if ("fileDir" in patch) out.file_dir = patch.fileDir ?? null;
+  if ("doneAt" in patch) out.done_at = patch.doneAt ?? null;
   out.updated_at = Date.now();
   return out;
 }
@@ -307,11 +311,16 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
 
   switch (op.type) {
     case "addTask": {
-      const t = { ...op.task, createdAt: op.task.createdAt ?? Date.now() };
+      const t = {
+        ...op.task,
+        createdAt: op.task.createdAt ?? Date.now(),
+        doneAt: op.task.status === "DONE" ? op.task.doneAt ?? Date.now() : op.task.doneAt,
+      };
       const row = taskToRow(t) as unknown as Record<string, unknown>;
-      // Don't send file_dir on new tasks unless it has a value — keeps inserts
-      // working even before migration-003 adds the column.
+      // Don't send optional columns on new tasks unless they have a value —
+      // keeps inserts working even before migrations 003/007 add the columns.
       if (row.file_dir == null) delete row.file_dir;
+      if (row.done_at == null) delete row.done_at;
       await must(supabase.from("tasks").insert(row));
       break;
     }
@@ -331,6 +340,12 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
         update.waiting_since = cur?.waitingSince ?? today;
       } else {
         update.waiting_since = null;
+      }
+      // Stamp the completion time on entering DONE; clear it on leaving.
+      if (op.status === "DONE") {
+        update.done_at = cur?.doneAt ?? Date.now();
+      } else {
+        update.done_at = null;
       }
       await must(supabase.from("tasks").update(update).eq("id", op.id));
       break;

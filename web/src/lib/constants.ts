@@ -1,4 +1,12 @@
-import type { Priority, Status } from "./types";
+import type { Priority, Status, Task } from "./types";
+
+// A DONE task becomes "archived" once it has been done for this long.
+export const ARCHIVE_DAYS = 7;
+export function isArchived(t: Task, now = Date.now()): boolean {
+  if (t.status !== "DONE") return false;
+  const at = t.doneAt ?? t.updatedAt ?? 0;
+  return at > 0 && now - at >= ARCHIVE_DAYS * 86400000;
+}
 
 // Column order and display labels — recovered from the original artifact.
 export const STATUS_ORDER: Status[] = [

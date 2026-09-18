@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Board, Op, Weekly } from "../lib/types";
-import { WEEKLY_COLUMNS, genId } from "../lib/constants";
+import type { Board, Op, Task, Weekly } from "../lib/types";
+import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
 import { useT } from "../lib/i18n";
 
 interface Props {
@@ -10,8 +10,11 @@ interface Props {
 
 export function WeeklyView({ board, send }: Props) {
   const { t } = useT();
-  const doneThisWeek = board.tasks.filter((tk) => tk.status === "DONE");
+  const allDone = board.tasks.filter((tk) => tk.status === "DONE");
+  const doneThisWeek = allDone.filter((tk) => !isArchived(tk));
+  const archivedDone = allDone.filter((tk) => isArchived(tk));
   const [confirmClear, setConfirmClear] = useState(false);
+  const [archOpen, setArchOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -86,6 +89,40 @@ export function WeeklyView({ board, send }: Props) {
           </div>
         )}
       </div>
+
+      {/* Archived — completed more than a week ago */}
+      {archivedDone.length > 0 && (
+        <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
+          <button onClick={() => setArchOpen((o) => !o)} className="w-full flex items-center gap-2 text-left">
+            <span className={`text-[#8A8A8A] text-[11px] transition-transform ${archOpen ? "rotate-90" : ""}`}>▶</span>
+            <span className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+              {t("archived.title")}
+            </span>
+            <span className="text-[11px] font-semibold text-[#8A8A8A] bg-[#F5F3EF] rounded-full px-2 py-0.5 border border-[#E8E6E1]">
+              {archivedDone.length}
+            </span>
+            <span className="text-[10px] text-[#A8A29E] ml-1 hidden sm:inline">{t("archived.hint")}</span>
+          </button>
+          {archOpen && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {archivedDone.map((tk: Task) => (
+                <div
+                  key={tk.id}
+                  className="text-[13px] text-[#6B6B6B] bg-[#FAF9F6] rounded-lg border border-[#E8E6E1] px-3 py-1.5 flex items-center justify-between gap-2"
+                >
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium text-[#0A1931]">{tk.title}</span>
+                    <span className="text-[#8A8A8A] text-[11px]"> · {tk.owner}</span>
+                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white border border-[#E8E6E1]">
+                    {tk.priority}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {WEEKLY_COLUMNS.map((col) => (

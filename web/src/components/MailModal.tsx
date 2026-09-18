@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Board } from "../lib/types";
+import { isArchived } from "../lib/constants";
 import { useT } from "../lib/i18n";
 
 export function MailModal({ board, onClose }: { board: Board; onClose: () => void }) {
@@ -7,7 +8,7 @@ export function MailModal({ board, onClose }: { board: Board; onClose: () => voi
   const [copied, setCopied] = useState(false);
 
   const text = useMemo(() => {
-    const done = board.tasks.filter((tk) => tk.status === "DONE");
+    const done = board.tasks.filter((tk) => tk.status === "DONE" && !isArchived(tk));
     const focus = board.weekly.focus;
     const next = board.tasks.filter((tk) => tk.status === "NEXT");
 
