@@ -17,6 +17,7 @@ import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
 import { LangToggle } from "./components/LangToggle";
 import { IdentityPicker } from "./components/IdentityPicker";
+import { GlassToggle } from "./components/GlassToggle";
 
 export default function App() {
   const { board, conn, error, send } = useBoard();
@@ -80,6 +81,7 @@ export default function App() {
             <IdentityPicker members={members} />
             <ConnBadge conn={conn} />
             <LangToggle />
+            <GlassToggle />
           </>
         }
       />

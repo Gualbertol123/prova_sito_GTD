@@ -33,8 +33,8 @@ full file map, how to run and deploy it, and how to extend it.
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); shared access password; login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
 
 Header extras: editable board title + subtitle (double-click), a **"You"**
-identity picker, a live-connection badge, an **IT/EN** toggle, and a **Mail
-update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
+identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
+switch (§10), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
 mail client). The whole app sits behind a shared-password gate and is
 `noindex`.
 
@@ -92,6 +92,7 @@ live in `localStorage` (`prefs.ts`):
 | `gtd-auth` | access-gate token `{exp}` (login cache) |
 | `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
 | `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
+| `gtd-skin` | `glass` (default) or `classic` — the visual skin |
 
 ---
 
@@ -183,7 +184,8 @@ prova_sito_GTD/
     └── src/
         ├── main.tsx              ← mounts <LangProvider><IdentityProvider><AuthGate><App/>
         ├── App.tsx               ← tabs, top bar, filters state, favicon effect, routing
-        ├── index.css             ← Tailwind + small globals (drop-target, fonts)
+        ├── index.css             ← Tailwind + small globals (drop-target, fonts, print)
+        ├── styles/glass.css      ← the Liquid Glass skin, scoped to [data-skin="glass"]
         ├── lib/                  ← non-UI logic
         │   ├── types.ts          ← Task/Subtask/Weekly/Reflection/Board + the Op union
         │   ├── constants.ts      ← statuses, priorities, tabs, weekly columns, passwords
@@ -201,10 +203,13 @@ prova_sito_GTD/
         │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
         │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
         │   ├── reportEditor.ts   ← SuperDoc loader, fonts, export, print-to-PDF
+        │   ├── skin.ts           ← which visual skin is on (glass / classic)
+        │   ├── skin.ts           ← which visual skin is on (glass / classic)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
             ├── TopBar.tsx        ← logo, editable title + subtitle, mail button, right slot
             ├── ConnBadge.tsx · LangToggle.tsx · IdentityPicker.tsx   ← header controls
+            ├── GlassToggle.tsx    ← the Liquid Glass on/off switch
             ├── AuthGate.tsx      ← shared-password gate (cached login)
             ├── BoardView.tsx     ← toolbar, quick-add, columns, list toggle, edit-layout, DnD
             ├── QuickAdd.tsx      ← full new-task bar
@@ -225,7 +230,7 @@ prova_sito_GTD/
             └── MailModal.tsx     ← mail-update text generator
 ```
 
-Rough size: ~6.9k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
+Rough size: ~7.1k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
 `BoardView.tsx`, `db.ts`, `reportDocx.ts`, `TaskDetails.tsx`,
 `DailyReflection.tsx`, `SortableSubtasks.tsx`.
 
@@ -434,3 +439,79 @@ Because everything flows through the `Op` union, most changes follow one path:
 - Weekly items are still uncontrolled `defaultValue` textareas, so another
   person's edit to an existing weekly item only shows after a reload.
 - A weekly "learning digest" and per-member reflection streaks.
+
+---
+
+## 10. The Liquid Glass skin
+
+The **Glass** switch in the header turns the Liquid Glass look on and off. It is
+**on by default** and remembered per device in `gtd-skin`.
+
+### It is only paint
+
+Everything lives in `web/src/styles/glass.css`, scoped to
+`html[data-skin="glass"]`, and the rules target the utility classes the
+components already carry (`bg-white`, `bg-[#EFECE6]`, `border-[#E8E6E1]`…).
+No component renders differently, no data path changes, nothing in logic is
+conditional on the skin. Flip the switch to `classic` and the original
+stylesheet is back, byte for byte.
+
+`skin.ts` does three small things: read the preference, write it, and set
+`data-skin` on `<html>`. `main.tsx` calls `initSkin()` before React mounts so
+the first frame is already the right skin instead of flashing the other one.
+
+### What the material is made of
+
+Apple's Liquid Glass (WWDC 2025) is a digital meta-material that bends and
+concentrates light rather than a photo of real glass. Six properties matter,
+and each maps to something here:
+
+| Property | How it is approximated |
+| --- | --- |
+| **Three layers** — content behind, glass floating above it, content on the glass | An ambient backdrop on `body`, glass on the chrome and panels, text left at full opacity |
+| **Translucency + blur + saturation** — glass samples what is behind it and pushes colour rather than going grey | `backdrop-filter: blur() saturate(180%) brightness(108%)` |
+| **Lensing** — light bends at the rim, so the edge reads brighter than the middle | An inset rim highlight, strongest along the top edge where the implied light is |
+| **Specular highlight** — a sheen from an implied light source | A soft diagonal gradient on a `::before`, under the content, never over it |
+| **Concentric radii** — a child's radius is the parent's minus the padding | The app already uses capsules for controls; radii left alone so corners stay parallel |
+| **Depth from shadow, not borders** | Hairlines dropped to very low alpha; separation comes from a soft navy-tinted shadow |
+
+Colours stay the app's own — navy `#0A1931`, gold `#C9A96E` — over a fixed
+ambient field of gold, navy and slate blue. That field is the point: glass over
+a flat fill is invisible, so there has to be something worth refracting behind
+it. It is painted directly onto `body` with `background-attachment: fixed`; a
+negative-z-index `::before` does **not** work, because `body` creates no
+stacking context so the pseudo-element lands in the root one and renders behind
+`body`'s own background.
+
+### Deliberate limits
+
+- **No glass on glass.** Apple's own guidance, and it is also cheaper: nested
+  glass turns to mud and costs a compositor layer each time. The heavy material
+  goes on the chrome and the large panels; cards and inline controls get a
+  lighter translucent treatment with no blur of their own.
+- **No SVG refraction.** The displacement-map technique that reproduces true
+  edge refraction only works as a `backdrop-filter` in Chrome, and rebuilds the
+  map on every resize. On a board with dozens of cards that is not worth it, so
+  the rim highlight stands in for the lensing.
+- **`prefers-reduced-transparency`** falls back to opaque surfaces and
+  `prefers-reduced-motion` drops the hover lift — Liquid Glass has the same
+  escape hatch in Apple's own settings.
+
+### What it deliberately does not touch
+
+- **The report editor.** SuperDoc renders the actual Word document, so it has
+  to look like the document: all glass is turned off inside `.superdoc*` and
+  `.report-print-root`, and the page keeps its white fill.
+- **Printing.** All translucency, blur and shadow are stripped in `@media
+  print`. The page shadow that makes the editor look nice on screen is inside
+  `@media screen` for exactly this reason — left on, it printed as a grey frame
+  around every sheet.
+
+### One real change behind the glass
+
+`backdrop-filter` makes an element the containing block for any
+`position: fixed` descendant. The subtask drag preview is `position: fixed` at
+viewport coordinates from `getBoundingClientRect`, so under glass it would have
+been offset by its card. It is now portalled to `<body>` in
+`SortableSubtasks.tsx` — the one behavioural line this skin required, and
+verified to land in the identical position in both skins.

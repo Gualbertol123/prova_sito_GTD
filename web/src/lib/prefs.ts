@@ -13,6 +13,7 @@ const KEYS = {
   prio: "gtd-prio-collapsed",
   reflauth: "gtd-refl-auth",
   mysugg: "gtd-my-suggestions",
+  skin: "gtd-skin",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {

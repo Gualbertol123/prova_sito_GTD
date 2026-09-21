@@ -20,6 +20,10 @@ const IT: Dict = {
   "conn.offline": "Offline",
   "conn.title": "Stato sincronizzazione in tempo reale",
 
+  "skin.label": "Vetro",
+  "skin.onHint": "Liquid Glass attivo \u2014 clicca per tornare al tema classico",
+  "skin.offHint": "Tema classico \u2014 clicca per attivare Liquid Glass",
+
   "tabs.board": "BOARD",
   "tabs.weekly": "WEEKLY",
   "tabs.report": "REPORT",
@@ -313,6 +317,10 @@ const EN: Dict = {
   "conn.reconnecting": "Reconnecting…",
   "conn.offline": "Offline",
   "conn.title": "Real-time sync status",
+
+  "skin.label": "Glass",
+  "skin.onHint": "Liquid Glass on \u2014 click for the classic theme",
+  "skin.offHint": "Classic theme \u2014 click for Liquid Glass",
 
   "tabs.board": "BOARD",
   "tabs.weekly": "WEEKLY",

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Subtask } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
@@ -170,8 +171,12 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
         />
       ))}
 
-      {/* Floating card that follows the cursor */}
-      {dragItem && d && (
+      {/* Floating card that follows the cursor.
+          Portalled to <body>: its coordinates come from getBoundingClientRect,
+          so it must stay relative to the viewport. Any ancestor with a filter,
+          backdrop-filter or transform (the glass skin adds some) would become
+          its containing block and throw the position off. */}
+      {dragItem && d && createPortal(
         <div className="fixed z-50 pointer-events-none" style={{ left: d.left, top: pointerY - d.grabOffset, width: d.width }}>
           <div className="flex items-start gap-1.5 rounded-[10px] bg-white border border-[#C9A96E] shadow-xl p-2 rotate-[-1deg]">
             <span className="h-5 flex items-center shrink-0 px-0.5"><Grip /></span>
@@ -183,7 +188,8 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
               {dragItem.text}
             </span>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
