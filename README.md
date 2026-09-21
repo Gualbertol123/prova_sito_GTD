@@ -24,7 +24,8 @@ full file map, how to run and deploy it, and how to extend it.
 | --- | --- |
 | **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: owner, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose owner/priority/status/due up front); search + owner/priority/Focus-P1 filters. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
-| **WEEKLY** | **Weekly report generator** (see §5) — pick a period and download a `.docx` on the Intesa Sanpaolo template: Done / Next / Current Projects on page 1, a landscape Planner board on page 2, no names and no images. Below it, the weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
+| **WEEKLY** | Weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
+| **REPORT** | Generates the Word report on the Intesa Sanpaolo template and opens it in **SuperDoc**, a real DOCX editor running in the browser (see §5). Nothing is downloaded until asked: correct anything in the editor — text, tables, fonts — then **Download Word** or **Download PDF**. There is also a **Download without editing** button that skips the editor entirely. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (default `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can view and change your own password. Passwords live in the `reflection_access` table — an admin can reset any of them in Supabase. |
 | **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §9. |
@@ -67,6 +68,12 @@ Supabase project (free tier)
 by a 12s safety-net poll while the tab is visible, plus a refetch on tab-focus
 and on network `online`, and a full re-pull on every (re)subscribe. So clients
 converge even if a realtime packet is missed.
+
+**The report editor runs entirely in the browser.** SuperDoc opens the
+generated `.docx`, edits it, and writes it back — no document is ever uploaded
+anywhere, and its "document open" telemetry is switched off explicitly
+(`telemetry: { enabled: false }`), so report contents and filenames are not
+reported to a third party.
 
 **What is cached in the browser.** Board **data is never cached** — the Supabase
 client runs memory-only with `persistSession:false` (`supabaseClient.ts`), so
@@ -167,11 +174,12 @@ prova_sito_GTD/
 │   └── migration-007-done-at.sql
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
-    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js
+    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, superdoc
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
     ├── public/robots.txt         ← Disallow: / (noindex)
     ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
+    ├── vite.config.ts            ← incl. manualChunks: SuperDoc/Supabase cached separately
     └── src/
         ├── main.tsx              ← mounts <LangProvider><IdentityProvider><AuthGate><App/>
         ├── App.tsx               ← tabs, top bar, filters state, favicon effect, routing
@@ -192,6 +200,7 @@ prova_sito_GTD/
         │   ├── dates.ts          ← date math/formatting helpers
         │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
         │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
+        │   ├── reportEditor.ts   ← SuperDoc loader, fonts, export, print-to-PDF
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
             ├── TopBar.tsx        ← logo, editable title + subtitle, mail button, right slot
@@ -216,31 +225,34 @@ prova_sito_GTD/
             └── MailModal.tsx     ← mail-update text generator
 ```
 
-Rough size: ~6.5k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
+Rough size: ~6.9k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
 `BoardView.tsx`, `db.ts`, `reportDocx.ts`, `TaskDetails.tsx`,
 `DailyReflection.tsx`, `SortableSubtasks.tsx`.
 
 ---
 
-## 5. Weekly report (.docx)
+## 5. Weekly report — generate, edit, export
 
-The **WEEKLY** tab generates the Word report. Pick the period (this week by
-default, any of the last 12 weeks, or a custom from/to range) and press
-**Download report**.
+The **REPORT** tab turns the board into the Word report and lets you fix it up
+before it goes out, without leaving the site.
 
-**It is built on the real template**, `web/public/report-template.docx`. Rather
-than re-creating the layout, `reportDocx.ts` unzips that file, replaces only the
-body of `word/document.xml`, and zips it back. Everything else is carried over
-untouched:
+```
+period ─▶ buildReportDocx()  ─┐
+                              ├─▶ .docx in memory ─▶ SuperDoc editor ─┬─▶ Download Word
+         preloadSuperDoc()  ──┘   (never written                      └─▶ Download PDF
+         (starts on tab open)      to disk here)                          (browser print)
+```
 
-| Carried over from the template | Why it matters |
-| --- | --- |
-| `word/styles.xml` | **Garamond 11pt** body text — the report inherits it, and the generated runs set no font of their own |
-| `word/header1.xml` | the letterhead: logo + `BENCHMARKING & COMMERCIAL PLANNING` |
-| `word/footer1.xml` | `PAGE {PAGE} OF {NUMPAGES}` as real Word **fields**, so **page numbers are automatic** and renumber themselves |
-| `<w:sectPr>` | A4 page size, margins, and the header/footer relationship ids |
+Nothing is downloaded unless asked. **Download without editing** skips the
+editor and saves the generated file directly.
 
-**The document mirrors the template section for section:**
+### The document
+
+Built on the real template at `web/public/report-template.docx`:
+`reportDocx.ts` unzips it, replaces only the body of `word/document.xml`, and
+zips it back, so `styles.xml` (Garamond 11pt), `header1.xml` (the logo
+letterhead) and `footer1.xml` (`PAGE {PAGE} OF {NUMPAGES}` as real Word fields,
+which is what makes page numbers automatic) all survive untouched.
 
 | Page | Section | Filled with |
 | --- | --- | --- |
@@ -250,42 +262,69 @@ untouched:
 | | **Current Projects** | the Projects tab, each with its checklist and `done / total` |
 | 2 (landscape) | `Planner` + the same period | **Backlog · Next · In Progress · Waiting** side by side |
 
-Only **Done** is period-filtered; Next, Projects and the Planner are a snapshot
-of where the board stands when the report is generated — which is what makes
-the second page a planner.
+Only **Done** is period-filtered. No owner names anywhere, no images, no tick
+marks — see the layout rules in `reportDocx.ts`.
 
-**House rules** (from the template's own notes): **no owner names anywhere** —
-there is no owner column and no per-person breakdown; **no images** — the
-planner is a real Word table, not a pasted screenshot of the board; **no tick
-marks** — sub-items are plain en-dash lists; and restrained corporate styling
-throughout (the template's green and orange rules, grey labels, nothing else).
+### The editor (SuperDoc)
 
-**Layout rules** (fixed structure, nothing spilling between pages):
+[SuperDoc](https://github.com/superdoc-dev/superdoc) edits DOCX natively in the
+browser — it writes back to the OOXML rather than round-tripping through HTML,
+so the letterhead, the footer's page-number fields and the portrait/landscape
+section split all survive a round trip (there are assertions for exactly this
+in the commit that added it).
 
-- every `<w:tr>` carries `<w:cantSplit/>`, so a row moves to the next page whole
-  instead of being cut in half — the one exception is the planner's single body
-  row, which is a board snapshot rather than an atomic activity and would
-  otherwise be bumped onto a page of its own;
-- an activity's subtask row is `<w:keepNext>`-anchored to its title row, so a
-  task and its subtasks never land on two different pages;
-- tables are `<w:tblLayout w:type="fixed"/>` with explicit column widths, so the
-  structure is identical on every page and for any data set;
-- column header rows repeat at the top of each page (`<w:tblHeader/>`);
-- **sub-items are packed two per line** when they are short (≤46 chars) and get
-  the full width when they are long.
+- **Licence: AGPL-3.0.** Fine for internal, non-commercial use. Redistributing
+  this app commercially would need SuperDoc's commercial licence instead.
+- **Telemetry is off.** SuperDoc posts a document-open event to
+  `ingest.superdoc.dev` by default; `telemetry: { enabled: false }` in
+  `reportEditor.ts` disables it, and the test that verified this asserted zero
+  requests to that host. No document ever leaves the browser.
+- **Fonts.** Nine Google Fonts are registered and added to the toolbar's font
+  dropdown alongside the document's own (Garamond, Trajan Pro, Arial…).
+  EB Garamond leads the list because it is the open counterpart of the
+  template's Garamond. The stylesheet is fetched from the same Google CDN the
+  app already uses for Cinzel and Inter, and failing to load it is non-fatal —
+  the editor still opens, just without the extra families. If the corporate
+  network blocks Google, self-host the woff2 files and point
+  `fonts.families[].faces[].url` at them instead.
 
-**The planner page is landscape.** The template asks for the four columns
-"horizontal … filling the sheet properly in length and width", and four columns
-across a portrait A4 would be ~4 cm each. A second section (the template's own
-`sectPr`, flipped) gives them ~6 cm and keeps the same header and footer. If
-portrait is wanted instead, drop the landscape flip in `buildReportDocx`.
+### Weight and caching
 
-**The document is English**, matching the template, whatever the UI language is
-set to — it is a corporate deliverable rather than a UI surface.
+SuperDoc is ~12 MB installed, so it is kept out of the main bundle entirely:
 
-The generator is **lazy-loaded** (`await import("../lib/reportDocx")`), so
-`fflate` and the OOXML builder stay out of the main bundle and cost nothing to
-anyone who never opens the WEEKLY tab.
+- `preloadSuperDoc()` starts the dynamic import **when the REPORT tab opens**,
+  so it downloads in parallel with building the document rather than after it.
+  The promise is module-level, so it loads once per page load however many
+  times the editor is opened.
+- `manualChunks` in `vite.config.ts` pins SuperDoc (and Supabase) to their own
+  content-hashed chunks. An ordinary app deploy leaves the browser's cached
+  SuperDoc valid; a SuperDoc upgrade invalidates only SuperDoc's chunk.
+- `/assets/*` is served `Cache-Control: public, max-age=31536000, immutable`
+  (`netlify.toml`). Safe because the filenames are content-hashed.
+
+Net effect on everyone who never opens the tab: the main bundle went **down**,
+from ~507 kB to ~285 kB, because Supabase moved into its own chunk too.
+
+### PDF
+
+**Download PDF** opens the browser's print dialog — pick "Save as PDF". The
+rendered pages are already exact A4 boxes with the letterhead and footer drawn
+in, so printing them *is* the conversion; `printForPdf()` plus the `@media
+print` block in `index.css` hide the rest of the app and flatten the editor's
+wrappers so the pages sit flush on the sheet.
+
+Two things worth knowing:
+
+- **Untick "Headers and footers" and set Margins to "None"** in the print
+  dialog, or Chrome overlays its own URL and date on the letterhead. The button
+  says so in the UI; it cannot be set from code.
+- **The planner prints on a portrait sheet at ~71%, not on a landscape one.**
+  Mixing page orientations in a single print run makes Chrome lay the document
+  out at the widest page and shrink every portrait sheet to fit — measured, it
+  put page 1 at 54%. Zooming the planner down to portrait width keeps the whole
+  run portrait and every other page at 100%. **The .docx is unaffected**: open
+  it in Word and the planner is still a true landscape section, so Word's own
+  "Save as PDF" gives a full landscape page.
 
 ---
 
@@ -354,6 +393,11 @@ same build command, publish `web/dist`, same two env vars.
   refetches on its sync cycle. Uploads accept up to 5 MB but are **rasterised and
   downscaled** to a small icon before storage (`image.ts`) precisely so the
   shared row — and everyone's bandwidth — stays light. Don't bypass that.
+- **SuperDoc is AGPL-3.0.** The report editor is fine for internal,
+  non-commercial use, which is what this board is. Redistributing the app
+  commercially, or as a hosted product, would need SuperDoc's commercial
+  licence. Its telemetry is disabled in code — if you ever upgrade the package,
+  re-check that `telemetry: { enabled: false }` is still honoured.
 - **Free-tier limits** (≈500 MB DB, ≈200 concurrent realtime connections) are far
   above a small team's needs.
 - **Two identities in the header** — the "You" picker (per-device default author

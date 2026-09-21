@@ -45,3 +45,132 @@ body {
   outline-offset: -3px;
   box-shadow: inset 0 0 0 9999px rgba(201, 169, 110, 0.06);
 }
+
+/* ---------------------------------------------------------------------------
+   Printing the report editor to PDF.
+   SuperDoc renders each page as a .superdoc-page box at exact A4 pixel size
+   with the letterhead and footer already drawn in, so "print to PDF" only has
+   to show those boxes and get out of the way.
+
+   Everything is hidden by visibility (not display) and the page boxes are
+   revealed again: the page elements sit deep inside the app's layout, so
+   hiding their ancestors structurally would hide them too. Only the controls,
+   which must not reserve space, are display:none.
+   --------------------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  @page sd-landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  /* The canvas colour comes from the ROOT element when it has a background,
+     so html has to be whitened too — body alone leaves the app's cream showing
+     on any part of a sheet the document does not cover. */
+  html.printing-report,
+  body.printing-report {
+    background: #fff !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  body.printing-report * {
+    visibility: hidden !important;
+  }
+  body.printing-report .superdoc-page,
+  body.printing-report .superdoc-page * {
+    visibility: visible !important;
+  }
+
+  /* Controls and SuperDoc's own chrome must not reserve space. */
+  body.printing-report .report-no-print,
+  body.printing-report .sd-toolbar,
+  body.printing-report [class*="superdoc-ruler"],
+  body.printing-report .superdoc__selection-layer {
+    display: none !important;
+  }
+
+  /* Let the page boxes out of the editor's scroll/clip containers. These
+     selectors name the editor's own wrappers only: a blanket reset on every
+     descendant would also strip the document's table borders and header
+     fills, which are content, not chrome. */
+  body.printing-report .report-print-root,
+  body.printing-report .report-editor-host,
+  body.printing-report .superdoc,
+  body.printing-report .superdoc__layers,
+  body.printing-report .superdoc__document,
+  body.printing-report .superdoc__sub-document,
+  body.printing-report .v2-super-editor,
+  body.printing-report .v2-super-editor__visuals,
+  body.printing-report .v2-super-editor__stage,
+  body.printing-report .presentation-editor {
+    overflow: visible !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    background: #fff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    zoom: normal !important;
+    /* The editor offsets its stage a little from the top; on paper that gap
+       pushes the last page over onto an extra sheet. The page boxes are the
+       containing block for their own content, so flattening these wrappers to
+       static is safe. */
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    /* The editor centres pages in its viewport; printing wants them flush at
+       the page origin, or page 1 inherits the centring gap as a margin. */
+    display: block !important;
+    text-align: left !important;
+    width: auto !important;
+  }
+  /* The pages must stay in normal flow: Chrome only gives a box its own named
+     @page (and therefore the landscape planner sheet its own orientation) when
+     it is flowed, not when an ancestor is positioned out of the flow. So
+     instead of hoisting the root, printForPdf() tags every ancestor between
+     it and <body> and they are flattened to nothing here. */
+  body.printing-report .report-print-root,
+  body.printing-report .report-print-passthrough {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    max-width: none !important;
+    width: auto !important;
+    display: block !important;
+  }
+
+  body.printing-report .superdoc-page {
+    /* SuperDoc pins an inline min-width on every page. The landscape planner's
+       1123px minimum becomes the whole document's min-content width, and Chrome
+       then shrinks the portrait sheets to fit it. Releasing the minimum lets
+       each page sit on its own sheet at full size. */
+    min-width: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    break-inside: avoid;
+    break-after: page;
+  }
+  body.printing-report .superdoc-page:last-of-type {
+    break-after: auto;
+  }
+  /* The landscape planner sheet.
+     Mixing page orientations in one print run makes Chrome lay the whole
+     document out at the widest page and shrink every portrait sheet to fit
+     (measured: page 1 came out at 54%). `zoom` — unlike `transform` — changes
+     the used layout size, so zooming the planner down to portrait width keeps
+     the whole run portrait and every other page at 100%. The .docx itself is
+     untouched: opened in Word it still has a true landscape section. */
+  body.printing-report .superdoc-page.sd-print-landscape {
+    zoom: 0.7071;
+  }
+}

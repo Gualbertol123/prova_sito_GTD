@@ -15,6 +15,16 @@
   to = "/index.html"
   status = 200
 
+# Hashed build assets (including the big, lazily-loaded SuperDoc editor chunk)
+# never change content under the same filename, so they can be cached for good.
+# This is what makes the editor a one-time download per version: an ordinary
+# app deploy leaves these entries valid, and a SuperDoc upgrade only
+# invalidates SuperDoc's own chunk.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 # Never let the browser cache the HTML shell — everything is remote/live.
 [[headers]]
   for = "/index.html"

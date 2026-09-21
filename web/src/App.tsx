@@ -7,6 +7,7 @@ import { Filters, type FilterState } from "./components/Filters";
 import { BoardView } from "./components/BoardView";
 import { ProjectsView } from "./components/ProjectsView";
 import { WeeklyView } from "./components/WeeklyView";
+import { ReportView } from "./components/ReportView";
 import { CalendarView } from "./components/CalendarView";
 import { TrackingView } from "./components/TrackingView";
 import { SettingsView } from "./components/SettingsView";
@@ -117,6 +118,7 @@ export default function App() {
         )}
         {tab === "projects" && <ProjectsView board={board} send={send} />}
         {tab === "weekly" && <WeeklyView board={board} send={send} />}
+        {tab === "report" && <ReportView board={board} />}
         {tab === "calendario" && (
           <div className="space-y-4">
             <Filters filters={filters} setFilters={setFilters} members={members} />

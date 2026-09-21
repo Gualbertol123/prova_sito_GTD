@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { Board, Op, Task, Weekly } from "../lib/types";
 import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
 import { useT } from "../lib/i18n";
-import { WeeklyReport } from "./WeeklyReport";
 
 interface Props {
   board: Board;
@@ -19,8 +18,6 @@ export function WeeklyView({ board, send }: Props) {
 
   return (
     <div className="space-y-4">
-      <WeeklyReport board={board} />
-
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="text-[12px] text-[#6B6B6B]">{t("weekly.help")}</div>
         {confirmClear ? (
