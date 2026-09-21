@@ -93,6 +93,7 @@ live in `localStorage` (`prefs.ts`):
 | `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
 | `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
 | `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
+| `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
 
 ---
 
@@ -444,10 +445,12 @@ Because everything flows through the `Op` union, most changes follow one path:
 
 ## 10. The Liquid Glass skin
 
-The **Glass** switch in the header turns the redesign on and off. It is **on by
-default** and remembered in a **cookie** (`gtd-skin`, one year, `SameSite=Lax`,
-`Secure` on https), mirrored into `localStorage` so the preference survives if
-cookies are cleared or blocked.
+The **Glass** switch in the header turns the redesign on and off, and when it
+is on a **☀ / ☾ control** next to it picks the light or dark appearance. Glass
+is **on by default**, dark is the default appearance, and both choices are
+remembered in **cookies** (`gtd-skin` and `gtd-appearance`, one year,
+`SameSite=Lax`, `Secure` on https), mirrored into `localStorage` so they
+survive cookies being cleared or blocked.
 
 ### The design
 
@@ -466,6 +469,15 @@ bright rim where the light catches its edge.
 | **Depth** — panels float rather than sit in a frame | Big soft shadows, no hard borders |
 | **Radii** — Control Center tiles are large continuous curves | Panel radii lifted to 22px; controls stay capsules |
 
+**Light and dark.** Liquid Glass has both on Apple's platforms and the system
+palette ships a light and a dark variant of every colour, so the skin is
+written entirely against tokens and `[data-appearance]` swaps the set — same
+structure, same rules, different material and palette. Dark is a light film at
+low alpha over a deep indigo wallpaper; light is a white film at higher alpha
+over a bright one. Three colours are darkened from Apple's light values
+(yellow, green, cyan) because the published ones are unreadable as text on
+white glass.
+
 Colour is Apple's system palette in its dark-mode (vibrant) variants, which is
 what the platform uses on top of glass — red `#FF453A`, orange `#FF9F0A`,
 yellow `#FFD60A`, green `#30D158`, cyan `#64D2FF`, blue `#0A84FF`, indigo
@@ -478,10 +490,11 @@ Two judgement calls worth knowing:
 
 - **Tinted, not clear.** iOS 26.1 added that choice because clear glass was
   hard to read; this app is dense small text, so it takes the tinted reading.
-- **Labels are lifted above Apple's own values.** Measured against this
-  wallpaper, Apple's `tertiaryLabel` came out at **2.7:1**. The lower two steps
-  were raised until all three clear WCAG AA: primary **19.4:1**, secondary
-  **8.6:1**, tertiary **5.5:1**.
+- **Labels are lifted above Apple's own values.** Measured against these
+  wallpapers, Apple's `tertiaryLabel` came out at **2.7:1**. The lower two
+  steps were raised, in both appearances, until every step clears WCAG AA on
+  both card and panel surfaces — measured 16.2 / 6.4 / 6.0 in light and
+  12.0 / 6.0 / 5.8 in dark.
 
 ### It is only paint
 
@@ -498,8 +511,8 @@ React mounts so the first frame is already the right skin.
   `.report-print-root`, and the page keeps its white fill and `color-scheme:
   light`.
 - **Printing.** Background, colour, translucency, blur and shadow are all
-  stripped. Print output measures identical to the pre-skin baseline (74% ink
-  on page 1) with white paper.
+  stripped. Print output measures identical in both appearances and to the
+  pre-skin baseline (73% ink on page 1) with white paper.
 
 ### Two things the skin required
 
@@ -510,3 +523,7 @@ React mounts so the first frame is already the right skin.
 - Form controls opt out of the panel material. A control sitting on a panel is
   an inset well, not another sheet of glass; left as glass-on-glass inside a
   tinted panel it rendered as mud.
+- The header's own pills — identity picker, connection badge, language toggle —
+  take neutral fill rather than the systemBlue the primary-action rule gives
+  everything else. They are containers, not actions, and in light mode blue
+  pills on a white header were unreadable.

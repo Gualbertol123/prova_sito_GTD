@@ -14,6 +14,7 @@ const KEYS = {
   reflauth: "gtd-refl-auth",
   mysugg: "gtd-my-suggestions",
   skin: "gtd-skin",
+  appearance: "gtd-appearance",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {

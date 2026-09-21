@@ -20,6 +20,9 @@ const IT: Dict = {
   "conn.offline": "Offline",
   "conn.title": "Stato sincronizzazione in tempo reale",
 
+  "skin.appearance": "Aspetto",
+  "skin.light": "Chiaro",
+  "skin.dark": "Scuro",
   "skin.label": "Vetro",
   "skin.onHint": "Liquid Glass attivo \u2014 clicca per tornare al tema classico",
   "skin.offHint": "Tema classico \u2014 clicca per attivare Liquid Glass",
@@ -318,6 +321,9 @@ const EN: Dict = {
   "conn.offline": "Offline",
   "conn.title": "Real-time sync status",
 
+  "skin.appearance": "Appearance",
+  "skin.light": "Light",
+  "skin.dark": "Dark",
   "skin.label": "Glass",
   "skin.onHint": "Liquid Glass on \u2014 click for the classic theme",
   "skin.offHint": "Classic theme \u2014 click for Liquid Glass",
