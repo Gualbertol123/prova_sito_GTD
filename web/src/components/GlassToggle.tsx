@@ -29,7 +29,8 @@ export function GlassToggle() {
       {/* The little switch track */}
       <span
         className={`relative w-8 h-[18px] rounded-full transition-colors ${
-          on ? "bg-[#C9A96E]/80" : "bg-[#1E335E]"
+          /* systemGreen when on, like an iOS switch */
+          on ? "bg-[#30D158]" : "bg-[#1E335E]"
         }`}
       >
         <span

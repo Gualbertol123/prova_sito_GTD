@@ -1,147 +1,213 @@
 /* =============================================================================
-   Liquid Glass skin
+   Liquid Glass — a Control Center redesign
    -----------------------------------------------------------------------------
-   A restyle of the existing UI in the spirit of Apple's Liquid Glass (WWDC 2025).
-   Every rule is scoped to html[data-skin="glass"], and every rule is cosmetic:
-   this file changes how surfaces are painted, never how anything behaves.
+   Modelled on iOS 26's Control Center, its notification stack, and the way
+   visionOS floats glass in space. Reference: the iOS 26 / 27 home screens —
+   a deep saturated wallpaper with translucent chrome floating over it, every
+   panel carrying a bright rim where the light catches the edge.
 
-   What the real material does, and how each part is approximated here:
+   Everything is scoped to html[data-skin="glass"] and every rule is cosmetic.
+   No component renders differently and nothing in logic reads the skin, so
+   flipping the switch to "classic" restores the original stylesheet exactly.
 
-     1. THREE LAYERS. Content sits at the back; a glass layer floats above it
-        carrying the chrome; content on the glass stays fully opaque for
-        legibility. Here: an ambient backdrop behind everything, glass on the
-        chrome and panels, text left at full strength.
+   The material, and what each part reproduces:
 
-     2. TRANSLUCENCY + BLUR + SATURATION. Glass samples what is behind it,
-        blurs it and pushes saturation and brightness up so colour bleeds
-        through rather than going grey. `backdrop-filter: blur() saturate()
-        brightness()`.
+     WALLPAPER      Control Center is glass over a dimmed wallpaper, not over a
+                    flat fill. Without something saturated behind it there is
+                    nothing to refract and glass just looks like a grey box.
 
-     3. LENSING. Real glass bends light at its rim, so the edge reads brighter
-        and slightly denser than the middle. Approximated with an inset rim
-        highlight, strongest along the top edge where the implied light is.
+     DARK GLASS     Panels are a light film at low alpha over that dark
+                    wallpaper — rgba(255,255,255,.08….17) — not a white card.
+                    This is iOS 26.1's "tinted" reading rather than "clear":
+                    Apple added that option because clear glass was hard to
+                    read, and this app is dense text.
 
-     4. SPECULAR HIGHLIGHT. A soft diagonal sheen from an implied top-left
-        light source, on a ::before so it never touches content.
+     LENSING        Light bends at the rim, so the edge reads brighter than the
+                    middle. An inset hairline, brightest along the top edge.
 
-     5. CONCENTRIC RADII. A child's radius is the parent's minus the padding,
-        so nested corners stay parallel instead of pinching. Controls are
-        capsules (radius = half the height), which the app already uses.
+     SPECULAR       A soft diagonal sheen from an implied light above-left, on
+                    a ::before so it never sits over content.
 
-     6. DEPTH FROM SHADOW, NOT BORDERS. Hairlines get very low alpha and the
-        separation comes from a soft, colour-matched shadow.
+     DEPTH          Big soft shadows and no hard borders: panels float rather
+                    than sit in a frame, which is what sells the AR feel.
 
-   Apple's own guidance is not to stack glass on glass — nested glass turns to
-   mud and costs a compositor layer each time. So the heavy material goes on
-   the chrome (header, tabs, toolbars, modals) and the large panels; task cards
-   and inline controls get a lighter translucent treatment with no blur of
-   their own. That is both closer to the guidance and much cheaper to paint.
+     RADII          Control Center tiles are large continuous curves, so panel
+                    radii are pushed up to that scale. Controls stay capsules.
 
-   Colours stay the app's own: navy #0A1931, gold #C9A96E, cream #F5F3EF.
+   Colour is Apple's system palette in its dark-mode (vibrant) variants, which
+   is what the platform uses on top of glass:
+
+     red #FF453A · orange #FF9F0A · yellow #FFD60A · green #30D158
+     mint #63E6E2 · teal #40CBE0 · cyan #64D2FF · blue #0A84FF
+     indigo #5E5CE6 · purple #BF5AF2 · pink #FF375F · gray #8E8E93
+
+   with the label hierarchy (white, then #EBEBF5 at 62% and 34%) and the fill
+   hierarchy (#787880 at descending alpha) that Apple pairs with them.
    ========================================================================== */
 
 html[data-skin="glass"] {
-  /* Material */
-  --lg-tint: rgba(255, 255, 255, 0.5);
-  --lg-tint-strong: rgba(255, 255, 255, 0.66);
-  --lg-tint-soft: rgba(255, 255, 255, 0.4);
-  --lg-blur-chrome: 30px;
-  --lg-blur-panel: 20px;
-  --lg-sat: 180%;
-  --lg-bright: 108%;
+  /* ---- Apple system colours (dark / vibrant) ---- */
+  --ios-red: #ff453a;
+  --ios-orange: #ff9f0a;
+  --ios-yellow: #ffd60a;
+  --ios-green: #30d158;
+  --ios-teal: #40cbe0;
+  --ios-cyan: #64d2ff;
+  --ios-blue: #0a84ff;
+  --ios-indigo: #5e5ce6;
+  --ios-purple: #bf5af2;
+  --ios-gray: #8e8e93;
 
-  /* Rim / lensing */
-  --lg-rim-top: rgba(255, 255, 255, 0.9);
-  --lg-rim: rgba(255, 255, 255, 0.45);
-  --lg-hairline: rgba(10, 25, 49, 0.09);
+  /* ---- Label hierarchy ---- */
+  --label: #ffffff;
+  /* Apple's own tertiaryLabel is .30; measured against this wallpaper it came
+     out at 2.7:1, which is too low for an app this dense in small text, so the
+     lower two steps are lifted until secondary clears AA and tertiary clears
+     AA-large. */
+  --label-2: rgba(235, 235, 245, 0.72);
+  --label-3: rgba(235, 235, 245, 0.56);
 
-  /* Depth */
-  --lg-shadow: 0 10px 34px rgba(10, 25, 49, 0.1), 0 2px 6px rgba(10, 25, 49, 0.05);
-  --lg-shadow-chrome: 0 12px 40px rgba(10, 25, 49, 0.18);
+  /* ---- Materials: a light film over the dark wallpaper ---- */
+  --mat-thick: rgba(255, 255, 255, 0.17);
+  --mat-regular: rgba(255, 255, 255, 0.12);
+  --mat-thin: rgba(255, 255, 255, 0.08);
+  --mat-recessed: rgba(10, 14, 30, 0.26);
 
-  /* Brand */
-  --lg-navy: 10, 25, 49;
-  --lg-gold: 201, 169, 110;
+  /* Apple's fill hierarchy, for inset controls */
+  --fill-2: rgba(120, 120, 128, 0.36);
+  --fill-3: rgba(118, 118, 128, 0.26);
+
+  /* ---- Rim / separators ---- */
+  --rim-top: rgba(255, 255, 255, 0.55);
+  --rim: rgba(255, 255, 255, 0.18);
+  --separator: rgba(255, 255, 255, 0.14);
+
+  /* ---- Blur ---- */
+  --blur-chrome: 44px;
+  --blur-panel: 32px;
+  --blur-tile: 20px;
+  --sat: 190%;
+
+  /* ---- Depth ---- */
+  --lift: 0 18px 44px rgba(0, 0, 0, 0.34), 0 2px 8px rgba(0, 0, 0, 0.22);
+  --lift-sm: 0 8px 22px rgba(0, 0, 0, 0.26);
+
+  color-scheme: dark;
+  background: #0b1020;
 }
 
 /* ---------------------------------------------------------------------------
-   1. The ambient backdrop.
-   Glass is invisible over a flat fill — it needs something behind it worth
-   refracting. A few soft colour fields in the app's own palette, fixed so they
-   do not move while the page scrolls.
+   1. The wallpaper.
+   Deep indigo/blue with warm and cool blooms, the way an iOS wallpaper reads
+   once Control Center dims it. Painted on <body> with a fixed attachment: a
+   negative-z-index ::before would land in the root stacking context (body
+   creates none) and render behind body's own background.
    --------------------------------------------------------------------------- */
-/* Painted straight onto <body> rather than a ::before. A negative-z-index
-   pseudo-element lands in the ROOT stacking context (body creates none), so it
-   renders behind body's own background and never shows. background-attachment:
-   fixed keeps the fields still while the page scrolls, like a desktop. */
 html[data-skin="glass"] body {
-  background-color: #e9edf5;
+  background-color: #0b1020;
   background-image:
-    radial-gradient(52vmax 52vmax at 6% -6%, rgba(var(--lg-gold), 0.55), transparent 58%),
-    radial-gradient(58vmax 58vmax at 96% -4%, rgba(var(--lg-navy), 0.45), transparent 60%),
-    radial-gradient(48vmax 48vmax at 88% 96%, rgba(var(--lg-gold), 0.4), transparent 58%),
-    radial-gradient(56vmax 56vmax at 2% 88%, rgba(64, 108, 178, 0.42), transparent 60%),
-    radial-gradient(44vmax 44vmax at 52% 42%, rgba(140, 172, 214, 0.28), transparent 62%),
-    linear-gradient(160deg, #eef1f8 0%, #e2e8f4 48%, #f2eadd 100%);
+    radial-gradient(60vmax 60vmax at 14% -8%, rgba(94, 92, 230, 0.75), transparent 58%),
+    radial-gradient(58vmax 58vmax at 92% 2%, rgba(10, 132, 255, 0.6), transparent 58%),
+    radial-gradient(52vmax 52vmax at 86% 92%, rgba(191, 90, 242, 0.42), transparent 58%),
+    radial-gradient(56vmax 56vmax at 4% 88%, rgba(64, 203, 224, 0.34), transparent 60%),
+    linear-gradient(155deg, #131a33 0%, #0b1020 45%, #171226 100%);
   background-attachment: fixed;
   background-repeat: no-repeat;
+  color: var(--label);
 }
 
-/* html carries the canvas colour; leave it neutral so nothing flashes cream. */
-html[data-skin="glass"] {
-  background: #e9edf5;
-}
-
-/* The app's own page wrapper must not repaint over the backdrop. */
+/* The app's page wrapper must not repaint over the wallpaper. */
 html[data-skin="glass"] .min-h-screen.bg-\[\#F5F3EF\] {
   background: transparent;
 }
 
 /* ---------------------------------------------------------------------------
-   2. The material itself.
-   `.lg-surface` is the shared recipe; the app's existing utility classes are
-   mapped onto it below so no component markup has to change.
+   2. Typography — Apple's label hierarchy.
    --------------------------------------------------------------------------- */
-html[data-skin="glass"] .lg-surface,
+html[data-skin="glass"] .text-\[\#0A1931\] {
+  color: var(--label);
+}
+html[data-skin="glass"] .text-\[\#8A8A8A\],
+html[data-skin="glass"] .text-\[\#6B6B6B\] {
+  color: var(--label-2);
+}
+html[data-skin="glass"] .text-\[\#A8A29E\],
+html[data-skin="glass"] .text-\[\#C9C5BE\] {
+  color: var(--label-3);
+}
+html[data-skin="glass"] .text-\[\#C9A96E\],
+html[data-skin="glass"] .text-\[\#8B6F3E\] {
+  color: var(--ios-orange);
+}
+html[data-skin="glass"] .text-\[\#DC2626\],
+html[data-skin="glass"] .text-\[\#F87171\] {
+  color: var(--ios-red);
+}
+html[data-skin="glass"] .text-\[\#065F46\],
+html[data-skin="glass"] .text-\[\#4ADE80\] {
+  color: var(--ios-green);
+}
+html[data-skin="glass"] .text-\[\#92400E\] {
+  color: var(--ios-yellow);
+}
+html[data-skin="glass"] .text-\[\#8BA1C2\],
+html[data-skin="glass"] .text-\[\#3A5A8A\],
+html[data-skin="glass"] .text-\[\#E6EDF8\] {
+  color: var(--ios-cyan);
+}
+html[data-skin="glass"] ::placeholder {
+  color: var(--label-3) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   3. The material.
+   Panels are a light film over the wallpaper, lifted on a big soft shadow,
+   with the rim brightest along the top edge.
+   --------------------------------------------------------------------------- */
 html[data-skin="glass"] .bg-white,
 html[data-skin="glass"] .bg-\[\#FAF9F6\],
-html[data-skin="glass"] .bg-\[\#EFECE6\],
 html[data-skin="glass"] .bg-\[\#FBF6EC\],
 html[data-skin="glass"] .bg-\[\#FFFBF2\],
 html[data-skin="glass"] .bg-\[\#F0EDE8\] {
   position: relative;
-  background-color: var(--lg-tint);
-  border-color: var(--lg-hairline);
+  background-color: var(--mat-regular);
+  border-color: var(--rim);
   box-shadow:
-    var(--lg-shadow),
-    /* lensing: bright at the top rim, fading around the sides */
-    inset 0 1px 0 0 var(--lg-rim-top),
-    inset 0 0 0 1px var(--lg-rim);
-  backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-sat)) brightness(var(--lg-bright));
-  -webkit-backdrop-filter: blur(var(--lg-blur-panel)) saturate(var(--lg-sat))
-    brightness(var(--lg-bright));
+    var(--lift),
+    inset 0 1px 0 0 var(--rim-top),
+    inset 0 0 0 1px var(--rim);
+  backdrop-filter: blur(var(--blur-panel)) saturate(var(--sat));
+  -webkit-backdrop-filter: blur(var(--blur-panel)) saturate(var(--sat));
 }
 
-/* Tinted variants keep their own hue, just translucent. */
+/* Warm-tinted panels keep their warmth, as a systemOrange wash. */
 html[data-skin="glass"] .bg-\[\#FBF6EC\],
 html[data-skin="glass"] .bg-\[\#FFFBF2\] {
-  background-color: rgba(var(--lg-gold), 0.16);
-}
-html[data-skin="glass"] .bg-\[\#EFECE6\] {
-  /* Kanban columns and the Done/Archived bars read as a recessed tray: the
-     light rim goes on the BOTTOM edge (the opposite of a raised panel) and a
-     soft inner shadow sits under the top edge. */
-  background-color: rgba(255, 255, 255, 0.3);
+  /* A hint of warmth only: at higher alpha the orange muddies to brown once
+     the wallpaper is blurred through it. */
+  background-color: rgba(255, 159, 10, 0.07);
   box-shadow:
-    inset 0 -1px 0 0 rgba(255, 255, 255, 0.6),
-    inset 0 0 0 1px rgba(var(--lg-navy), 0.06),
-    inset 0 12px 24px -10px rgba(var(--lg-navy), 0.16);
-  backdrop-filter: blur(12px) saturate(150%);
-  -webkit-backdrop-filter: blur(12px) saturate(150%);
+    var(--lift),
+    inset 0 1px 0 0 rgba(255, 214, 160, 0.38),
+    inset 0 0 0 1px rgba(255, 159, 10, 0.2);
 }
 
-/* The specular sheen. On ::before so it sits under the content, never over it. */
-html[data-skin="glass"] .lg-surface::before,
+/* Trays (kanban columns, the Done/Archived bars) are recessed, not raised:
+   the wallpaper darkens instead of a film brightening, and the bright rim
+   moves to the bottom edge. */
+html[data-skin="glass"] .bg-\[\#EFECE6\] {
+  position: relative;
+  background-color: var(--mat-recessed);
+  border-color: transparent;
+  box-shadow:
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    inset 0 16px 30px -14px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(var(--blur-tile)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--blur-tile)) saturate(150%);
+}
+
+/* The specular sheen: a light source above-left, clipped to the panel. */
 html[data-skin="glass"] .bg-white::before,
 html[data-skin="glass"] .bg-\[\#FAF9F6\]::before,
 html[data-skin="glass"] .bg-\[\#FBF6EC\]::before {
@@ -151,16 +217,13 @@ html[data-skin="glass"] .bg-\[\#FBF6EC\]::before {
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(
-    138deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 0.14) 14%,
-    transparent 34%
+    140deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.07) 16%,
+    transparent 38%
   );
-  opacity: 0.75;
   z-index: 0;
 }
-
-/* Anything the app positions itself must stay above the sheen. */
 html[data-skin="glass"] .bg-white > *,
 html[data-skin="glass"] .bg-\[\#FAF9F6\] > *,
 html[data-skin="glass"] .bg-\[\#FBF6EC\] > * {
@@ -168,8 +231,22 @@ html[data-skin="glass"] .bg-\[\#FBF6EC\] > * {
   z-index: 1;
 }
 
+/* Control Center tile scale: larger continuous curves on the panels. */
+html[data-skin="glass"] .rounded-\[14px\],
+html[data-skin="glass"] .rounded-\[16px\],
+html[data-skin="glass"] .rounded-\[18px\] {
+  border-radius: 22px;
+}
+html[data-skin="glass"] .rounded-\[12px\] {
+  border-radius: 18px;
+}
+html[data-skin="glass"] .rounded-lg {
+  border-radius: 12px;
+}
+
 /* ---------------------------------------------------------------------------
-   3. Chrome — the layer that floats above content.
+   4. Chrome — the layer that floats above everything.
+   Thicker material and more blur, like the Control Center backdrop.
    --------------------------------------------------------------------------- */
 html[data-skin="glass"] header.bg-\[\#0A1931\] {
   position: sticky;
@@ -177,122 +254,226 @@ html[data-skin="glass"] header.bg-\[\#0A1931\] {
   z-index: 30;
   background: linear-gradient(
     180deg,
-    rgba(var(--lg-navy), 0.82) 0%,
-    rgba(var(--lg-navy), 0.7) 100%
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.07) 100%
   );
-  backdrop-filter: blur(var(--lg-blur-chrome)) saturate(var(--lg-sat));
-  -webkit-backdrop-filter: blur(var(--lg-blur-chrome)) saturate(var(--lg-sat));
+  backdrop-filter: blur(var(--blur-chrome)) saturate(var(--sat));
+  -webkit-backdrop-filter: blur(var(--blur-chrome)) saturate(var(--sat));
   box-shadow:
-    var(--lg-shadow-chrome),
-    inset 0 -1px 0 0 rgba(255, 255, 255, 0.14),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.22);
+    0 14px 44px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.1);
   border-bottom: 0;
 }
 
-/* Tab pills: capsules, unselected ones glassy, selected one solid navy glass. */
+/* Tab pills: unselected are thin glass capsules, selected is systemBlue. */
 html[data-skin="glass"] .rounded-full.bg-white {
-  background-color: var(--lg-tint-strong);
-}
-html[data-skin="glass"] .bg-\[\#0A1931\]:not(header):not(.min-h-screen) {
-  background-color: rgba(var(--lg-navy), 0.86);
-  backdrop-filter: blur(10px) saturate(150%);
-  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  background-color: var(--mat-thin);
+  border-color: var(--rim);
   box-shadow:
-    0 4px 14px rgba(var(--lg-navy), 0.22),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.18);
+    var(--lift-sm),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
 }
-html[data-skin="glass"] .bg-\[\#C9A96E\] {
-  background-color: rgba(var(--lg-gold), 0.9);
+html[data-skin="glass"] .rounded-full.bg-white::before {
+  content: none;
+}
+
+/* Primary actions take systemBlue; the app used navy for these. */
+html[data-skin="glass"] .bg-\[\#0A1931\]:not(header):not(.min-h-screen),
+html[data-skin="glass"] .bg-\[\#112040\] {
+  background-color: rgba(10, 132, 255, 0.9);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
   box-shadow:
-    0 4px 14px rgba(var(--lg-gold), 0.3),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.5);
+    0 6px 18px rgba(10, 132, 255, 0.4),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+}
+/* Gold text on those buttons would vanish against blue. */
+html[data-skin="glass"] .bg-\[\#0A1931\]:not(header):not(.min-h-screen) .text-\[\#C9A96E\],
+html[data-skin="glass"] .bg-\[\#0A1931\]:not(header):not(.min-h-screen).text-\[\#C9A96E\] {
+  color: #fff;
+}
+
+/* The gold accent becomes systemOrange. */
+html[data-skin="glass"] .bg-\[\#C9A96E\],
+html[data-skin="glass"] .bg-\[\#D8BC8A\] {
+  background-color: rgba(255, 159, 10, 0.92);
+  color: #1b1200;
+  box-shadow:
+    0 6px 18px rgba(255, 159, 10, 0.35),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.45);
+}
+html[data-skin="glass"] .bg-\[\#C9A96E\].text-\[\#0A1931\],
+html[data-skin="glass"] .bg-\[\#C9A96E\] .text-\[\#0A1931\] {
+  color: #1b1200;
+}
+
+/* Priority dots and small solids, mapped to the system palette. */
+html[data-skin="glass"] .bg-\[\#DC2626\] {
+  background-color: var(--ios-red);
+}
+html[data-skin="glass"] .bg-\[\#C9C5BE\] {
+  background-color: var(--ios-gray);
+}
+html[data-skin="glass"] .bg-\[\#8BA1C2\] {
+  background-color: var(--ios-cyan);
+}
+html[data-skin="glass"] .bg-\[\#4ADE80\],
+html[data-skin="glass"] .bg-\[\#065F46\] {
+  background-color: var(--ios-green);
 }
 
 /* ---------------------------------------------------------------------------
-   4. Inset controls (inputs, selects, small wells).
-   Deliberately NO backdrop-filter here: #F5F3EF is also the app's root
-   wrapper, and a filtered ancestor would become the containing block for the
-   position:fixed modal and drag layers. A translucent fill with an inner
-   shadow gives the same recessed look with none of that risk — and saves
-   dozens of compositor layers.
+   5. Semantic tints.
+   The app's pale status chips become the dark-mode equivalent: the system
+   colour at low alpha with a matching rim, as notifications do.
    --------------------------------------------------------------------------- */
-html[data-skin="glass"] .bg-\[\#F5F3EF\]:not(.min-h-screen) {
-  background-color: rgba(255, 255, 255, 0.45);
-  box-shadow:
-    inset 0 1px 2px rgba(var(--lg-navy), 0.06),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+html[data-skin="glass"] .bg-\[\#ECFDF5\] {
+  background-color: rgba(48, 209, 88, 0.16);
+  border-color: rgba(48, 209, 88, 0.36);
+}
+html[data-skin="glass"] .bg-\[\#FEF2F2\] {
+  background-color: rgba(255, 69, 58, 0.16);
+  border-color: rgba(255, 69, 58, 0.36);
+}
+html[data-skin="glass"] .bg-\[\#FEF3C7\] {
+  background-color: rgba(255, 214, 10, 0.16);
+  border-color: rgba(255, 214, 10, 0.34);
+}
+html[data-skin="glass"] .border-\[\#A7F3D0\] {
+  border-color: rgba(48, 209, 88, 0.36);
+}
+html[data-skin="glass"] .border-\[\#FECACA\] {
+  border-color: rgba(255, 69, 58, 0.36);
+}
+html[data-skin="glass"] .border-\[\#FDE68A\] {
+  border-color: rgba(255, 214, 10, 0.34);
+}
+html[data-skin="glass"] .border-\[\#DC2626\] {
+  border-color: var(--ios-red);
+}
+
+/* ---------------------------------------------------------------------------
+   6. Inset controls.
+   Apple's fill hierarchy. Deliberately NO backdrop-filter: #F5F3EF is also
+   the app's root wrapper, and a filtered ancestor becomes the containing block
+   for the position:fixed modal and drag layers — and it would cost a
+   compositor layer on every input.
+   --------------------------------------------------------------------------- */
+html[data-skin="glass"] .bg-\[\#F5F3EF\]:not(.min-h-screen),
+html[data-skin="glass"] .bg-\[\#E8E6E1\],
+html[data-skin="glass"] .bg-\[\#DED9D0\] {
+  background-color: var(--fill-3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+html[data-skin="glass"] input.bg-white,
+html[data-skin="glass"] select.bg-white,
+html[data-skin="glass"] textarea.bg-white {
+  /* Overrides the panel material above: a control sitting on a panel is an
+     inset well, not another sheet of glass. */
+  background-color: var(--fill-3) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+}
+html[data-skin="glass"] input.bg-white::before,
+html[data-skin="glass"] select.bg-white::before,
+html[data-skin="glass"] textarea.bg-white::before {
+  content: none !important;
 }
 
 html[data-skin="glass"] input,
 html[data-skin="glass"] select,
 html[data-skin="glass"] textarea {
-  background-color: rgba(255, 255, 255, 0.55);
+  background-color: var(--fill-3);
+  color: var(--label);
+  border-color: var(--separator);
 }
 html[data-skin="glass"] input:focus,
 html[data-skin="glass"] select:focus,
 html[data-skin="glass"] textarea:focus {
-  background-color: rgba(255, 255, 255, 0.78);
+  background-color: var(--fill-2);
+  border-color: var(--ios-blue);
 }
 html[data-skin="glass"] input.bg-transparent,
 html[data-skin="glass"] textarea.bg-transparent,
 html[data-skin="glass"] select.bg-transparent {
   background-color: transparent;
 }
-
-/* Hairlines: the app's warm grey border everywhere becomes a glass rim. */
-html[data-skin="glass"] .border-\[\#E8E6E1\] {
-  border-color: rgba(255, 255, 255, 0.55);
+/* Native dropdown lists are drawn by the OS — keep their text readable. */
+html[data-skin="glass"] option {
+  background-color: #1c2033;
+  color: #fff;
 }
-html[data-skin="glass"] .border-\[\#E3DFD7\] {
-  border-color: rgba(255, 255, 255, 0.4);
+html[data-skin="glass"] input[type="checkbox"] {
+  accent-color: var(--ios-blue);
+}
+html[data-skin="glass"] input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Hairlines everywhere become the system separator. */
+html[data-skin="glass"] .border-\[\#E8E6E1\],
+html[data-skin="glass"] .border-\[\#E3DFD7\],
+html[data-skin="glass"] .border-\[\#F0EDE8\] {
+  border-color: var(--separator);
+}
+html[data-skin="glass"] .border-\[\#C9A96E\] {
+  border-color: rgba(255, 159, 10, 0.55);
+}
+html[data-skin="glass"] .border-\[\#0A1931\],
+html[data-skin="glass"] .border-\[\#1E335E\] {
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* ---------------------------------------------------------------------------
-   5. Depth and motion.
-   Liquid Glass responds to touch; the nearest honest web equivalent is a small
-   lift on hover and a settle on press.
+   7. Motion.
+   Liquid Glass reacts to touch; on the web the honest equivalent is a lift on
+   hover and a settle on press.
    --------------------------------------------------------------------------- */
 html[data-skin="glass"] button,
 html[data-skin="glass"] .rounded-\[12px\],
 html[data-skin="glass"] .rounded-\[14px\] {
   transition:
-    transform 180ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    box-shadow 180ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    background-color 180ms ease;
+    transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    background-color 200ms ease;
 }
 html[data-skin="glass"] button:not(:disabled):hover {
   transform: translateY(-1px);
 }
 html[data-skin="glass"] button:not(:disabled):active {
-  transform: translateY(0) scale(0.985);
+  transform: translateY(0) scale(0.97);
 }
 
-/* The modal scrim becomes frosted rather than flat black. */
+/* The modal scrim: Control Center's dim-and-blur over everything behind it. */
 html[data-skin="glass"] .bg-black\/40 {
-  background-color: rgba(var(--lg-navy), 0.34);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  background-color: rgba(4, 8, 20, 0.5);
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
 }
 
-/* The drag-over target on the board, restated in glass terms. */
+/* Drag target on the board. */
 html[data-skin="glass"] .drop-target {
-  background: rgba(var(--lg-gold), 0.2);
-  outline: 2px dashed rgba(var(--lg-gold), 0.85);
-  box-shadow: inset 0 0 40px rgba(var(--lg-gold), 0.18);
+  background: rgba(10, 132, 255, 0.22);
+  outline: 2px dashed rgba(10, 132, 255, 0.85);
+  box-shadow: inset 0 0 44px rgba(10, 132, 255, 0.22);
 }
 
-/* The switch's own knob gets a real glass bead. */
 html[data-skin="glass"] .glass-switch__knob {
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 /* ---------------------------------------------------------------------------
-   6. Hands off.
-   The report editor renders the actual Word document — it must look exactly
-   like the document, so no glass touches it or anything inside it. Same for
-   printing, where translucency would wash the page out.
+   8. Hands off.
+   The report editor renders the actual Word document, so it must look exactly
+   like the document — no glass, no dark, no filters inside it. Printing is
+   likewise untouched.
    --------------------------------------------------------------------------- */
 html[data-skin="glass"] .report-print-root,
 html[data-skin="glass"] .report-print-root *,
@@ -303,6 +484,10 @@ html[data-skin="glass"] [class*="sd-"] {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+html[data-skin="glass"] .report-print-root,
+html[data-skin="glass"] .report-print-root * {
+  color-scheme: light;
+}
 html[data-skin="glass"] .report-print-root::before,
 html[data-skin="glass"] .superdoc::before,
 html[data-skin="glass"] [class*="superdoc-"]::before {
@@ -312,20 +497,16 @@ html[data-skin="glass"] [class*="superdoc-"]::before {
 @media screen {
   html[data-skin="glass"] .superdoc-page {
     background: #fff !important;
-    box-shadow: 0 10px 34px rgba(10, 25, 49, 0.14) !important;
-  }
-}
-@media print {
-  html[data-skin="glass"] .superdoc-page,
-  html[data-skin="glass"] .superdoc-page * {
-    box-shadow: none !important;
-    background-image: none !important;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45) !important;
   }
 }
 
 @media print {
-  html[data-skin="glass"] body::before {
-    display: none !important;
+  html[data-skin="glass"],
+  html[data-skin="glass"] body {
+    background: #fff !important;
+    background-image: none !important;
+    color: #000 !important;
   }
   html[data-skin="glass"] *,
   html[data-skin="glass"] *::before,
@@ -335,26 +516,31 @@ html[data-skin="glass"] [class*="superdoc-"]::before {
     box-shadow: none !important;
     text-shadow: none !important;
   }
+  html[data-skin="glass"] .superdoc-page,
+  html[data-skin="glass"] .superdoc-page * {
+    background-image: none !important;
+  }
 }
 
 /* ---------------------------------------------------------------------------
-   7. Accessibility.
-   Apple exposes a Reduce Transparency setting; browsers expose the same intent.
-   Honour it by falling back to opaque surfaces, and drop the hover motion for
-   people who asked for less of it.
+   9. Accessibility.
+   Apple ships Reduce Transparency and Reduce Motion for exactly this material;
+   browsers expose the same intent.
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-transparency: reduce) {
   html[data-skin="glass"] * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+  html[data-skin="glass"] body {
+    background-image: linear-gradient(155deg, #1a2140 0%, #11162a 100%);
+  }
   html[data-skin="glass"] .bg-white,
   html[data-skin="glass"] .bg-\[\#FAF9F6\] {
-    background-color: #fff !important;
+    background-color: #232842 !important;
   }
-  html[data-skin="glass"] body::before {
-    filter: saturate(60%);
-    opacity: 0.5;
+  html[data-skin="glass"] .bg-\[\#EFECE6\] {
+    background-color: #161b30 !important;
   }
 }
 

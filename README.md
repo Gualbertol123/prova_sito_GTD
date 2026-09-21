@@ -34,7 +34,7 @@ full file map, how to run and deploy it, and how to extend it.
 
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
-switch (§10), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
+switch (§10, on by default), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
 mail client). The whole app sits behind a shared-password gate and is
 `noindex`.
 
@@ -92,7 +92,7 @@ live in `localStorage` (`prefs.ts`):
 | `gtd-auth` | access-gate token `{exp}` (login cache) |
 | `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
 | `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
-| `gtd-skin` | `glass` (default) or `classic` — the visual skin |
+| `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
 
 ---
 
@@ -444,74 +444,69 @@ Because everything flows through the `Op` union, most changes follow one path:
 
 ## 10. The Liquid Glass skin
 
-The **Glass** switch in the header turns the Liquid Glass look on and off. It is
-**on by default** and remembered per device in `gtd-skin`.
+The **Glass** switch in the header turns the redesign on and off. It is **on by
+default** and remembered in a **cookie** (`gtd-skin`, one year, `SameSite=Lax`,
+`Secure` on https), mirrored into `localStorage` so the preference survives if
+cookies are cleared or blocked.
+
+### The design
+
+A Control Center redesign, not a tint pass. Reference points: iOS 26's Control
+Center, its notification stack, and the way visionOS floats glass in space —
+checked against the iOS 26 and 27 home screens, which are a deep saturated
+wallpaper with translucent chrome floating over it, each panel carrying a
+bright rim where the light catches its edge.
+
+| Property of the material | How it is built |
+| --- | --- |
+| **Wallpaper** — Control Center is glass over a dimmed wallpaper, not over a flat fill | Deep indigo/blue/purple fields on `body`, `background-attachment: fixed` |
+| **Dark glass** — panels are a light film over that wallpaper, not white cards | `rgba(255,255,255,.08…​.17)` plus `backdrop-filter: blur(32px) saturate(190%)` |
+| **Lensing** — light bends at the rim, so edges read brighter than the middle | Inset hairline, brightest along the top edge |
+| **Specular** — a sheen from an implied light above-left | Soft diagonal gradient on a `::before`, under the content |
+| **Depth** — panels float rather than sit in a frame | Big soft shadows, no hard borders |
+| **Radii** — Control Center tiles are large continuous curves | Panel radii lifted to 22px; controls stay capsules |
+
+Colour is Apple's system palette in its dark-mode (vibrant) variants, which is
+what the platform uses on top of glass — red `#FF453A`, orange `#FF9F0A`,
+yellow `#FFD60A`, green `#30D158`, cyan `#64D2FF`, blue `#0A84FF`, indigo
+`#5E5CE6`, purple `#BF5AF2`, gray `#8E8E93` — with Apple's label hierarchy and
+fill hierarchy. Primary actions become systemBlue, the gold accent becomes
+systemOrange, priority dots and status chips map onto the system colours, and
+the skin toggle itself is a systemGreen iOS switch.
+
+Two judgement calls worth knowing:
+
+- **Tinted, not clear.** iOS 26.1 added that choice because clear glass was
+  hard to read; this app is dense small text, so it takes the tinted reading.
+- **Labels are lifted above Apple's own values.** Measured against this
+  wallpaper, Apple's `tertiaryLabel` came out at **2.7:1**. The lower two steps
+  were raised until all three clear WCAG AA: primary **19.4:1**, secondary
+  **8.6:1**, tertiary **5.5:1**.
 
 ### It is only paint
 
 Everything lives in `web/src/styles/glass.css`, scoped to
-`html[data-skin="glass"]`, and the rules target the utility classes the
-components already carry (`bg-white`, `bg-[#EFECE6]`, `border-[#E8E6E1]`…).
-No component renders differently, no data path changes, nothing in logic is
-conditional on the skin. Flip the switch to `classic` and the original
-stylesheet is back, byte for byte.
-
-`skin.ts` does three small things: read the preference, write it, and set
-`data-skin` on `<html>`. `main.tsx` calls `initSkin()` before React mounts so
-the first frame is already the right skin instead of flashing the other one.
-
-### What the material is made of
-
-Apple's Liquid Glass (WWDC 2025) is a digital meta-material that bends and
-concentrates light rather than a photo of real glass. Six properties matter,
-and each maps to something here:
-
-| Property | How it is approximated |
-| --- | --- |
-| **Three layers** — content behind, glass floating above it, content on the glass | An ambient backdrop on `body`, glass on the chrome and panels, text left at full opacity |
-| **Translucency + blur + saturation** — glass samples what is behind it and pushes colour rather than going grey | `backdrop-filter: blur() saturate(180%) brightness(108%)` |
-| **Lensing** — light bends at the rim, so the edge reads brighter than the middle | An inset rim highlight, strongest along the top edge where the implied light is |
-| **Specular highlight** — a sheen from an implied light source | A soft diagonal gradient on a `::before`, under the content, never over it |
-| **Concentric radii** — a child's radius is the parent's minus the padding | The app already uses capsules for controls; radii left alone so corners stay parallel |
-| **Depth from shadow, not borders** | Hairlines dropped to very low alpha; separation comes from a soft navy-tinted shadow |
-
-Colours stay the app's own — navy `#0A1931`, gold `#C9A96E` — over a fixed
-ambient field of gold, navy and slate blue. That field is the point: glass over
-a flat fill is invisible, so there has to be something worth refracting behind
-it. It is painted directly onto `body` with `background-attachment: fixed`; a
-negative-z-index `::before` does **not** work, because `body` creates no
-stacking context so the pseudo-element lands in the root one and renders behind
-`body`'s own background.
-
-### Deliberate limits
-
-- **No glass on glass.** Apple's own guidance, and it is also cheaper: nested
-  glass turns to mud and costs a compositor layer each time. The heavy material
-  goes on the chrome and the large panels; cards and inline controls get a
-  lighter translucent treatment with no blur of their own.
-- **No SVG refraction.** The displacement-map technique that reproduces true
-  edge refraction only works as a `backdrop-filter` in Chrome, and rebuilds the
-  map on every resize. On a board with dozens of cards that is not worth it, so
-  the rim highlight stands in for the lensing.
-- **`prefers-reduced-transparency`** falls back to opaque surfaces and
-  `prefers-reduced-motion` drops the hover lift — Liquid Glass has the same
-  escape hatch in Apple's own settings.
+`html[data-skin="glass"]`, targeting the utility classes the components already
+carry. No component renders differently and nothing in logic reads the skin, so
+`classic` restores the original stylesheet exactly. `initSkin()` runs before
+React mounts so the first frame is already the right skin.
 
 ### What it deliberately does not touch
 
-- **The report editor.** SuperDoc renders the actual Word document, so it has
-  to look like the document: all glass is turned off inside `.superdoc*` and
-  `.report-print-root`, and the page keeps its white fill.
-- **Printing.** All translucency, blur and shadow are stripped in `@media
-  print`. The page shadow that makes the editor look nice on screen is inside
-  `@media screen` for exactly this reason — left on, it printed as a grey frame
-  around every sheet.
+- **The report editor.** SuperDoc renders the actual Word document, so it must
+  look like the document: no glass, no dark, no filters inside `.superdoc*` or
+  `.report-print-root`, and the page keeps its white fill and `color-scheme:
+  light`.
+- **Printing.** Background, colour, translucency, blur and shadow are all
+  stripped. Print output measures identical to the pre-skin baseline (74% ink
+  on page 1) with white paper.
 
-### One real change behind the glass
+### Two things the skin required
 
-`backdrop-filter` makes an element the containing block for any
-`position: fixed` descendant. The subtask drag preview is `position: fixed` at
-viewport coordinates from `getBoundingClientRect`, so under glass it would have
-been offset by its card. It is now portalled to `<body>` in
-`SortableSubtasks.tsx` — the one behavioural line this skin required, and
-verified to land in the identical position in both skins.
+- `backdrop-filter` makes an element the containing block for
+  `position: fixed` descendants. The subtask drag preview is fixed at viewport
+  coordinates, so it is portalled to `<body>` — verified to land in the
+  identical position in both skins, and the mail modal checked the same way.
+- Form controls opt out of the panel material. A control sitting on a panel is
+  an inset well, not another sheet of glass; left as glass-on-glass inside a
+  tinted panel it rendered as mud.
