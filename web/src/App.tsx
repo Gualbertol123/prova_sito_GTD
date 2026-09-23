@@ -11,6 +11,7 @@ import { ReportView } from "./components/ReportView";
 import { CalendarView } from "./components/CalendarView";
 import { TrackingView } from "./components/TrackingView";
 import { SettingsView } from "./components/SettingsView";
+import { ProductTreeView } from "./components/ProductTreeView";
 import { SuggestionsView } from "./components/SuggestionsView";
 import { DailyReflection } from "./components/DailyReflection";
 import { MailModal } from "./components/MailModal";
@@ -121,6 +122,7 @@ export default function App() {
         {tab === "projects" && <ProjectsView board={board} send={send} />}
         {tab === "weekly" && <WeeklyView board={board} send={send} />}
         {tab === "report" && <ReportView board={board} />}
+        {tab === "products" && <ProductTreeView />}
         {tab === "calendario" && (
           <div className="space-y-4">
             <Filters filters={filters} setFilters={setFilters} members={members} />
