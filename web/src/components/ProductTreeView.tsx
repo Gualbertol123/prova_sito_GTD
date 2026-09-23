@@ -2,21 +2,45 @@ import { useMemo, useState } from "react";
 import { useT } from "../lib/i18n";
 import {
   allIds,
+  changeNotesKeys,
   countLeaves,
+  countTagged,
+  filterIndex,
   glossary,
   marginSteps,
-  readingNotesKeys,
-  searchIndex,
+  PRODUCTS_SECTION,
   sections,
+  TAGS,
+  type Tag,
   type TreeNode,
   type TreeSection,
 } from "../lib/productTree";
 
-// The ISP product taxonomy (dicui2.xlsx) as a browsable tree.
+// The consolidated ISP product taxonomy (dicui2.xlsx) as a browsable tree,
+// with an overview graphic explaining how the pieces fit together.
 //
 // Read-only reference data: nothing here touches the board, Supabase or any Op.
 // It uses only the utility classes the rest of the app already uses, so the
 // Liquid Glass skin picks it up with no CSS of its own.
+
+/** Chip colours per tag — all classes the skin already maps. */
+const TAG_STYLE: Record<Tag, string> = {
+  V: "bg-[#FBF6EC] text-[#8B6F3E] border-[#C9A96E]/40",
+  NPL: "bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]",
+  C: "bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]",
+};
+
+const TAG_LABEL: Record<Tag, string> = { V: "V", NPL: "NPL", C: "C" };
+
+function TagChip({ tag }: { tag: Tag }) {
+  return (
+    <span
+      className={`shrink-0 text-[9px] font-semibold tracking-wide px-1.5 py-px rounded-full border ${TAG_STYLE[tag]}`}
+    >
+      {TAG_LABEL[tag]}
+    </span>
+  );
+}
 
 /** Rows open on first paint: the roots and their direct children. */
 function defaultOpen(section: TreeSection): Set<string> {
@@ -45,34 +69,174 @@ function Highlight({ text, query }: { text: string; query: string }) {
   );
 }
 
+// -----------------------------------------------------------------------------
+// The overview graphic: who is reported, on what products, into which template.
+// Built from the data itself, so it cannot drift from the tree below it.
+// -----------------------------------------------------------------------------
+
+function MapCard({
+  step,
+  title,
+  sub,
+  chips,
+  foot,
+}: {
+  step: string;
+  title: string;
+  sub: string;
+  chips: React.ReactNode;
+  foot: string;
+}) {
+  return (
+    <div className="flex-1 flex flex-col rounded-[12px] border border-[#E8E6E1] bg-[#F5F3EF] p-3">
+      <div className="flex items-center gap-2">
+        <span className="w-5 h-5 rounded-full bg-[#0A1931] text-[#C9A96E] text-[10px] font-semibold flex items-center justify-center">
+          {step}
+        </span>
+        <span className="font-trajan text-[11px] uppercase tracking-widest text-[#0A1931]">
+          {title}
+        </span>
+      </div>
+      <p className="text-[11px] text-[#6B6B6B] mt-2">{sub}</p>
+      <div className="flex flex-wrap gap-1 mt-2">{chips}</div>
+      <p className="text-[10px] text-[#A8A29E] mt-auto pt-2">{foot}</p>
+    </div>
+  );
+}
+
+function MapArrow({ label }: { label: string }) {
+  return (
+    <div className="flex md:flex-col items-center justify-center gap-1.5 md:w-[86px] shrink-0">
+      <span className="text-[16px] leading-none text-[#C9A96E]">
+        <span className="md:hidden">↓</span>
+        <span className="hidden md:inline">→</span>
+      </span>
+      <span className="text-[10px] text-[#8A8A8A] md:text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
+function OverviewMap() {
+  const { t } = useT();
+  const productSection = sections.find((s) => s.id === PRODUCTS_SECTION)!;
+  const productCount = productSection.roots.reduce((n, r) => n + countLeaves(r), 0);
+
+  const chip = "text-[10px] px-2 py-0.5 rounded-full bg-[#EFECE6] text-[#6B6B6B]";
+
+  return (
+    <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
+      <h3 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+        {t("tree.mapTitle")}
+      </h3>
+
+      <div className="mt-3 flex flex-col md:flex-row items-stretch gap-2">
+        <MapCard
+          step="1"
+          title={t("tree.mapWho")}
+          sub={t("tree.mapWhoSub")}
+          foot={t("tree.mapWhoFoot")}
+          chips={["CORP", "SME", "FI", "SB", "PRAGUE"].map((s) => (
+            <span key={s} className={chip}>
+              {s}
+            </span>
+          ))}
+        />
+        <MapArrow label={t("tree.mapArrow1")} />
+        <MapCard
+          step="2"
+          title={t("tree.mapWhat")}
+          sub={t("tree.mapWhatSub", { n: productCount })}
+          foot={t("tree.mapWhatFoot")}
+          chips={productSection.roots.map((r) => (
+            <span key={r.id} className={chip}>
+              {r.label}
+            </span>
+          ))}
+        />
+        <MapArrow label={t("tree.mapArrow2")} />
+        <MapCard
+          step="3"
+          title={t("tree.mapWhere")}
+          sub={t("tree.mapWhereSub")}
+          foot={t("tree.mapWhereFoot")}
+          chips={
+            <>
+              <span className={chip}>
+                A_L <TagChipInline tags={["V", "NPL"]} />
+              </span>
+              <span className={chip}>
+                COMM <TagChipInline tags={["C"]} />
+              </span>
+            </>
+          }
+        />
+      </div>
+
+      {/* What each template feeds */}
+      <div className="mt-3 rounded-[12px] border border-[#C9A96E]/40 bg-[#FBF6EC] px-3 py-2">
+        <p className="text-[11px] text-[#6B6B6B]">
+          <span className="font-semibold text-[#0A1931]">A_L</span> → {t("tree.mapFeedAL")}
+          {"  ·  "}
+          <span className="font-semibold text-[#0A1931]">COMM</span> → {t("tree.mapFeedComm")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TagChipInline({ tags }: { tags: Tag[] }) {
+  return (
+    <span className="inline-flex gap-1 ml-1 align-middle">
+      {tags.map((tg) => (
+        <TagChip key={tg} tag={tg} />
+      ))}
+    </span>
+  );
+}
+
+// -----------------------------------------------------------------------------
+
 export function ProductTreeView() {
   const { t } = useT();
-  const [sectionId, setSectionId] = useState(sections[0].id);
+  const [sectionId, setSectionId] = useState(PRODUCTS_SECTION);
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState<Set<string>>(() => defaultOpen(sections[0]));
-
-  const section = sections.find((s) => s.id === sectionId) ?? sections[0];
-  const searching = query.trim().length > 0;
-
-  const { keep, hits } = useMemo(
-    () => searchIndex(section.roots, query),
-    [section, query]
+  const [tag, setTag] = useState<Tag | null>(null);
+  const [open, setOpen] = useState<Set<string>>(() =>
+    defaultOpen(sections.find((s) => s.id === PRODUCTS_SECTION)!)
   );
 
-  // Hits per section too: the tree on screen is only one of three, and a search
+  const section = sections.find((s) => s.id === sectionId) ?? sections[0];
+  const taggable = section.id === PRODUCTS_SECTION;
+  const activeTag = taggable ? tag : null;
+
+  const { keep, hits, active } = useMemo(
+    () => filterIndex(section.roots, query, activeTag),
+    [section, query, activeTag]
+  );
+
+  // Matches per section too: the tree on screen is one of three, and a search
   // that finds nothing here may well have found something next door.
   const hitsBySection = useMemo(() => {
     const out: Record<string, number> = {};
     sections.forEach((s) => {
-      out[s.id] = searchIndex(s.roots, query).hits.size;
+      out[s.id] = filterIndex(s.roots, query, null).hits.size;
     });
     return out;
   }, [query]);
+
+  const tagCounts = useMemo(() => {
+    const productRoots = sections.find((s) => s.id === PRODUCTS_SECTION)!.roots;
+    return Object.fromEntries(TAGS.map((tg) => [tg, countTagged(productRoots, tg)])) as Record<
+      Tag,
+      number
+    >;
+  }, []);
 
   const pickSection = (id: string) => {
     const next = sections.find((s) => s.id === id);
     if (!next) return;
     setSectionId(id);
+    setTag(null);
     setOpen(defaultOpen(next));
   };
 
@@ -87,19 +251,17 @@ export function ProductTreeView() {
   const expandAll = () => setOpen(new Set(allIds(section.roots)));
   const collapseAll = () => setOpen(new Set());
 
-  // While searching, every branch on the way to a hit is forced open so no
+  // While filtering, every branch on the way to a match is forced open so no
   // match can hide behind a closed parent.
-  const isOpen = (id: string) => (searching ? keep.has(id) : open.has(id));
+  const isOpen = (id: string) => (active ? keep.has(id) : open.has(id));
 
   const renderNodes = (nodes: TreeNode[], depth: number) => {
-    const visible = searching ? nodes.filter((nd) => keep.has(nd.id)) : nodes;
+    const visible = active ? nodes.filter((nd) => keep.has(nd.id)) : nodes;
     if (!visible.length) return null;
     return (
       <ul
         className={
-          depth === 0
-            ? "space-y-px"
-            : "space-y-px ml-[9px] pl-3 border-l border-[#E8E6E1]"
+          depth === 0 ? "space-y-px" : "space-y-px ml-[9px] pl-3 border-l border-[#E8E6E1]"
         }
       >
         {visible.map((node) => {
@@ -110,7 +272,7 @@ export function ProductTreeView() {
           return (
             <li key={node.id}>
               <div
-                className={`group flex items-start gap-2 rounded-lg px-2 py-[5px] ${
+                className={`flex items-start gap-2 rounded-lg px-2 py-[5px] ${
                   hit ? "bg-[#FBF6EC]" : ""
                 }`}
               >
@@ -132,9 +294,7 @@ export function ProductTreeView() {
                 <div className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span
                     className={`text-[13px] ${
-                      branch
-                        ? "font-semibold text-[#0A1931] cursor-pointer"
-                        : "text-[#0A1931]"
+                      branch ? "font-semibold text-[#0A1931] cursor-pointer" : "text-[#0A1931]"
                     }`}
                     onClick={branch ? () => toggle(node.id) : undefined}
                   >
@@ -143,6 +303,13 @@ export function ProductTreeView() {
                   {node.note && (
                     <span className="text-[11px] text-[#8A8A8A]">
                       <Highlight text={node.note} query={query} />
+                    </span>
+                  )}
+                  {node.tags && (
+                    <span className="inline-flex gap-1">
+                      {node.tags.map((tg) => (
+                        <TagChip key={tg} tag={tg} />
+                      ))}
                     </span>
                   )}
                 </div>
@@ -161,13 +328,11 @@ export function ProductTreeView() {
     );
   };
 
+  const searching = query.trim().length > 0;
   const elsewhere = searching
     ? sections.filter((s) => s.id !== section.id && (hitsBySection[s.id] ?? 0) > 0)
     : [];
-
-  const visibleRoots = searching
-    ? section.roots.filter((r) => keep.has(r.id))
-    : section.roots;
+  const visibleRoots = active ? section.roots.filter((r) => keep.has(r.id)) : section.roots;
 
   return (
     <div className="max-w-[900px] mx-auto space-y-4">
@@ -179,11 +344,36 @@ export function ProductTreeView() {
         <p className="text-[11px] text-[#A8A29E] mt-1">{t("tree.source")}</p>
       </div>
 
-      {/* Section picker + search */}
+      <OverviewMap />
+
+      {/* Tag legend — what the chips on every product mean */}
+      <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
+        <h3 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
+          {t("tree.tagLegend")}
+        </h3>
+        <dl className="mt-3 space-y-1.5">
+          {TAGS.map((tg) => (
+            <div key={tg} className="flex items-baseline gap-2 text-[12px]">
+              <dt className="shrink-0 w-10">
+                <TagChip tag={tg} />
+              </dt>
+              <dd className="text-[#6B6B6B]">
+                {t(`tree.tag${tg}Desc`)}
+                <span className="text-[#A8A29E]">
+                  {" · "}
+                  {t("tree.tagCount", { n: tagCounts[tg] })}
+                </span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      {/* Section picker, search and tag filter */}
       <div className="rounded-[14px] border border-[#E3DFD7] bg-[#EFECE6] p-3 space-y-3">
         <div className="flex flex-wrap gap-2">
           {sections.map((s) => {
-            const active = s.id === section.id;
+            const isActive = s.id === section.id;
             const total = s.roots.reduce((n, r) => n + countLeaves(r), 0);
             const found = hitsBySection[s.id] ?? 0;
             const empty = searching && found === 0;
@@ -191,7 +381,7 @@ export function ProductTreeView() {
               <button
                 key={s.id}
                 onClick={() => pickSection(s.id)}
-                aria-pressed={active}
+                aria-pressed={isActive}
                 title={
                   searching
                     ? found === 1
@@ -200,7 +390,7 @@ export function ProductTreeView() {
                     : undefined
                 }
                 className={`h-9 px-4 rounded-full text-[11px] font-semibold uppercase tracking-wide border ${
-                  active
+                  isActive
                     ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]"
                     : "bg-white text-[#0A1931] border-[#E8E6E1]"
                 } ${empty ? "opacity-40" : ""}`}
@@ -235,19 +425,51 @@ export function ProductTreeView() {
           </div>
           <button
             onClick={expandAll}
-            disabled={searching}
+            disabled={active}
             className="h-9 px-3 rounded-full bg-white border border-[#E8E6E1] text-[11px] text-[#0A1931] disabled:opacity-40"
           >
             {t("tree.expand")}
           </button>
           <button
             onClick={collapseAll}
-            disabled={searching}
+            disabled={active}
             className="h-9 px-3 rounded-full bg-white border border-[#E8E6E1] text-[11px] text-[#0A1931] disabled:opacity-40"
           >
             {t("tree.collapse")}
           </button>
         </div>
+
+        {taggable && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-[#8A8A8A]">{t("tree.tagFilter")}</span>
+            <button
+              onClick={() => setTag(null)}
+              aria-pressed={tag === null}
+              className={`h-7 px-3 rounded-full text-[11px] border ${
+                tag === null
+                  ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]"
+                  : "bg-white text-[#0A1931] border-[#E8E6E1]"
+              }`}
+            >
+              {t("tree.tagAll")}
+            </button>
+            {TAGS.map((tg) => (
+              <button
+                key={tg}
+                onClick={() => setTag(tag === tg ? null : tg)}
+                aria-pressed={tag === tg}
+                className={`h-7 px-3 rounded-full text-[11px] border ${
+                  tag === tg
+                    ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]"
+                    : "bg-white text-[#0A1931] border-[#E8E6E1]"
+                }`}
+              >
+                {TAG_LABEL[tg]}
+                <span className="ml-1.5 opacity-60 tabular-nums">{tagCounts[tg]}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {searching && (
           <p className="text-[11px] text-[#8A8A8A]">
@@ -277,7 +499,7 @@ export function ProductTreeView() {
         )}
       </div>
 
-      {/* The trees — one panel per root, so ASSETS and LIABILITIES read apart */}
+      {/* The trees — one panel per root */}
       {visibleRoots.length === 0 ? (
         <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-8 text-center text-[13px] text-[#A8A29E]">
           {t("tree.noMatch")}
@@ -295,14 +517,19 @@ export function ProductTreeView() {
                 aria-expanded={expanded}
                 className="w-full flex items-center gap-2 px-4 py-3 text-left"
               >
-                <span className="text-[10px] text-[#8A8A8A] w-3">
-                  {expanded ? "▾" : "▸"}
-                </span>
+                <span className="text-[10px] text-[#8A8A8A] w-3">{expanded ? "▾" : "▸"}</span>
                 <span className="font-trajan text-[11px] uppercase tracking-widest text-[#0A1931]">
                   <Highlight text={root.label} query={query} />
                 </span>
                 {root.note && (
                   <span className="text-[11px] text-[#8A8A8A]">{root.note}</span>
+                )}
+                {root.tags && (
+                  <span className="inline-flex gap-1">
+                    {root.tags.map((tg) => (
+                      <TagChip key={tg} tag={tg} />
+                    ))}
+                  </span>
                 )}
                 <span className="ml-auto text-[10px] font-semibold tabular-nums px-2 py-0.5 rounded-full bg-[#EFECE6] text-[#6B6B6B]">
                   {countLeaves(root) === 1
@@ -320,8 +547,8 @@ export function ProductTreeView() {
         })
       )}
 
-      {/* The COMM sheets end in a margin build-up, which is a sequence, not a tree */}
-      {section.id === "comm" && !searching && (
+      {/* The margin cascade is a sequence, not a tree */}
+      {section.id === "frame" && !active && (
         <div className="rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-4">
           <h3 className="font-trajan text-[11px] uppercase tracking-widest text-[#0A1931]">
             {t("tree.margin")}
@@ -331,17 +558,15 @@ export function ProductTreeView() {
             {marginSteps.map((step, i) => (
               <li key={i} className="flex items-baseline gap-2">
                 <span
-                  className={`shrink-0 w-4 text-[12px] ${
-                    step.kind === "total" ? "text-[#065F46]" : "text-[#DC2626]"
+                  className={`shrink-0 w-4 text-[12px] font-semibold ${
+                    step.op === "=" ? "text-[#065F46]" : "text-[#DC2626]"
                   }`}
                 >
-                  {step.kind === "total" ? "→" : "−"}
+                  {step.op}
                 </span>
                 <span
                   className={`text-[12px] ${
-                    step.kind === "total"
-                      ? "font-semibold text-[#0A1931]"
-                      : "text-[#6B6B6B]"
+                    step.op === "=" ? "font-semibold text-[#0A1931]" : "text-[#6B6B6B]"
                   }`}
                 >
                   {step.label}
@@ -355,7 +580,7 @@ export function ProductTreeView() {
         </div>
       )}
 
-      {/* Abbreviations + the caveats that change how the tree should be read */}
+      {/* Abbreviations + what was changed versus the raw sheets */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
           <h3 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
@@ -372,10 +597,10 @@ export function ProductTreeView() {
         </div>
         <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4">
           <h3 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
-            {t("tree.notes")}
+            {t("tree.changes")}
           </h3>
           <ul className="mt-3 space-y-2">
-            {readingNotesKeys.map((key) => (
+            {changeNotesKeys.map((key) => (
               <li key={key} className="flex gap-2 text-[12px] text-[#6B6B6B]">
                 <span className="text-[#C9A96E]">•</span>
                 <span>{t(key)}</span>

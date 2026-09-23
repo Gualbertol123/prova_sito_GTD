@@ -1,19 +1,31 @@
 // -----------------------------------------------------------------------------
-// Product taxonomy of the Corporate / SME / Small Business reporting pack
-// (source workbook: dicui2.xlsx — Actual 2026 August vs Budget 2026 August,
-// cumulated, mln € at Actual August 2026 FX).
+// Consolidated product taxonomy of the Corporate / SME / Small Business
+// reporting pack (source workbook: dicui2.xlsx — Actual 2026 August vs Budget
+// 2026 August, cumulated, mln € at Actual August 2026 FX).
 //
-// 26 sheets = 13 client segments × 2 templates. Every A_L sheet carries the
-// same product list, and so does every COMM sheet; only the segment changes.
-// The source cells are empty, so this is structure only — no figures exist to
-// show. It is static reference data: nothing here is fetched, stored or synced.
+// 26 sheets = 13 client segments × 2 templates (A_L = balance-sheet volumes,
+// COMM = commissions and margins). Every segment carries the same products.
+//
+// Each product appears ONCE here, grouped into families, with tags saying which
+// template reports it. The source cells hold no figures, so this is structure
+// only. It is static reference data: nothing is fetched, stored or synced.
 // -----------------------------------------------------------------------------
+
+/** Where a product is reported. */
+export type Tag = "V" | "NPL" | "C";
+
+export const TAGS: Tag[] = ["V", "NPL", "C"];
 
 export interface TreeNode {
   id: string;
   label: string;
-  /** Short qualifier shown beside the label (a split, a sign convention…). */
+  /** Short qualifier shown beside the label. */
   note?: string;
+  /**
+   * Declared where the source file declares it. A family tag covers every line
+   * beneath it that does not declare tags of its own.
+   */
+  tags?: Tag[];
   children?: TreeNode[];
 }
 
@@ -23,261 +35,328 @@ export interface TreeSection {
   labelKey: string;
   /** i18n key for the one-line description under it. */
   blurbKey: string;
-  /** Which system colour keys this section off. */
-  accent: "blue" | "indigo" | "green";
   roots: TreeNode[];
 }
 
-const n = (id: string, label: string, children?: TreeNode[], note?: string): TreeNode => ({
+interface NodeOpts {
+  note?: string;
+  tags?: Tag[];
+  children?: TreeNode[];
+}
+
+const n = (id: string, label: string, o: NodeOpts = {}): TreeNode => ({
   id,
   label,
-  ...(note ? { note } : {}),
-  ...(children ? { children } : {}),
+  ...(o.note ? { note: o.note } : {}),
+  ...(o.tags ? { tags: o.tags } : {}),
+  ...(o.children ? { children: o.children } : {}),
 });
 
-// The nine loan products that repeat in every performing / NPL block.
-const loanProducts = (prefix: string, structuredFinanceSplit = false): TreeNode[] => [
-  n(`${prefix}.overdraft`, "Overdraft Facilities"),
-  n(`${prefix}.revolving`, "Revolving Credit Cards"),
-  n(`${prefix}.charge`, "Charge Credit Cards"),
-  n(`${prefix}.st`, "ST lending"),
-  n(`${prefix}.mlt`, "MLT lending"),
-  n(`${prefix}.leasing`, "Leasing"),
-  n(`${prefix}.factoring`, "Factoring"),
-  structuredFinanceSplit
-    ? n(`${prefix}.structured`, "Structured Finance", [
-        n(`${prefix}.structured.pf`, "Project Finance/Specialised Lending"),
-        n(`${prefix}.structured.re`, "Real Estate"),
-      ])
-    : n(`${prefix}.structured`, "Structured Finance"),
-  n(`${prefix}.other`, "Other"),
-];
+const VNC: Tag[] = ["V", "NPL", "C"];
+const VN: Tag[] = ["V", "NPL"];
+const VC: Tag[] = ["V", "C"];
+const C: Tag[] = ["C"];
 
-// ---- 1. Segments ------------------------------------------------------------
-// Labels come from the sheet names. The rollups (SB = Micro + Business, and
-// where FI sits) are inferred from those labels, not stated in the workbook.
+// ---- 1. Client segments -----------------------------------------------------
+// Labels come from the sheet names; the rollups are inferred from those labels.
 
 const segments: TreeNode[] = [
-  n(
-    "cosme",
-    "COSME",
-    [
-      n(
-        "corp",
-        "CORP",
-        [
-          n("dci", "DCI", undefined, "Domestic Corp. and Inst. · Prague Domestic"),
-          n("multinat", "MULTINAT", undefined, "Multinational · Prague Multinational"),
+  n("cosme", "COSME", {
+    note: "Corporate, SME, SB · Prague",
+    children: [
+      n("corp", "CORP", {
+        note: "Corporate · Prague Corporate",
+        children: [
+          n("dci", "DCI", { note: "Domestic Corp. and Inst. · Prague Domestic" }),
+          n("multinat", "MULTINAT", { note: "Multinational · Prague Multinational" }),
         ],
-        "Corporate · Prague Corporate"
-      ),
-      n("sme", "SME", undefined, "SME · Prague SME"),
-      n("fi", "FI", undefined, "Financial Institutions"),
-      n(
-        "sb",
-        "SB",
-        [n("micro", "MICRO"), n("business", "BUSINESS")],
-        "Small Business"
-      ),
-      n("prague", "PRAGUE", [
-        n("pg_dci", "PG_DCI", undefined, "Prague Domestic"),
-        n("pg_multinat", "PG_MULTINAT", undefined, "Prague Multinational"),
-        n("pg_sme", "PG_SME", undefined, "Prague SME"),
-      ]),
+      }),
+      n("sme", "SME", { note: "SME · Prague SME" }),
+      n("fi", "FI", { note: "Financial Institutions" }),
+      n("sb", "SB", {
+        note: "Small Business",
+        children: [n("micro", "MICRO"), n("business", "BUSINESS")],
+      }),
+      n("prague", "PRAGUE", {
+        children: [
+          n("pg_dci", "PG_DCI", { note: "Prague Domestic" }),
+          n("pg_multinat", "PG_MULTINAT", { note: "Prague Multinational" }),
+          n("pg_sme", "PG_SME", { note: "Prague SME" }),
+        ],
+      }),
     ],
-    "Corporate, SME, SB · Prague"
-  ),
+  }),
 ];
 
-// ---- 2. Assets & Liabilities (A_L sheets) -----------------------------------
+// ---- 2. Product tree --------------------------------------------------------
+// One entry per product, grouped by family. A family-level tag covers the lines
+// beneath it that carry no tags of their own, which is how the file writes them.
 
-const assetsLiabilities: TreeNode[] = [
-  n("assets", "ASSETS", [
-    n("assets.loans", "Customer Loans", [
-      n(
-        "assets.loans.perf",
-        "Performing Loans",
-        loanProducts("assets.loans.perf"),
-        "LC / FC — same products in each"
-      ),
-      n("assets.loans.npl", "Non Performing Loans", [
-        n("assets.loans.npl.pastdue", "Past due", loanProducts("assets.loans.npl.pastdue", true)),
-        n("assets.loans.npl.utp", "Unlikely to pay"),
-        n("assets.loans.npl.doubtful", "Doubtful"),
-      ]),
-    ]),
-    n("assets.interest", "Interest without volumes"),
-    n("assets.banks", "Due from banks"),
-    n("assets.securities", "Securities and equity investments"),
-    n("assets.otherib", "Other interest-bearing assets"),
-    n("assets.nonib", "Non interest-bearing assets"),
-    n("assets.ftp", "FTP Waivers Assets"),
-  ]),
-  n("liab", "LIABILITIES", [
-    n(
-      "liab.deposits",
-      "Customer Deposits",
-      [
-        n("liab.deposits.ca", "Current Accounts"),
-        n("liab.deposits.sight", "Sight Dep."),
-        n("liab.deposits.saving", "Saving Accounts"),
-        n("liab.deposits.tdst", "Time/Term Deposits ST"),
-        n("liab.deposits.tdmlt", "Time/Term Deposits MLT"),
-        n("liab.deposits.structured", "Structured Deposits"),
-        n("liab.deposits.securities", "Bank issued securities"),
-        n("liab.deposits.other", "Other"),
-      ],
-      "LC / FC — same products in each"
-    ),
-    n("liab.banks", "Due to Banks"),
-    n("liab.otherib", "Other interest-bearing liabilities"),
-    n("liab.provisions", "Accumulated Provisions"),
-    n("liab.nonib", "Non interest-bearing liabilities"),
-    n("liab.equity", "Shareholders' Equity"),
-    n("liab.ftp", "FTP Waivers Liabilities"),
-  ]),
+const products: TreeNode[] = [
+  n("lending", "LENDING", {
+    children: [
+      n("lending.overdraft", "Overdraft Facilities", { tags: VNC }),
+      n("lending.st", "ST lending", { tags: VNC }),
+      n("lending.mlt", "MLT lending", { tags: VNC }),
+      n("lending.leasing", "Leasing", { tags: VNC }),
+      n("lending.factoring", "Factoring", { tags: VNC }),
+      n("lending.structured", "Structured Finance", {
+        tags: VNC,
+        children: [
+          n("lending.structured.pf", "Project Finance/Specialised Lending"),
+          n("lending.structured.re", "Real Estate"),
+        ],
+      }),
+      n("lending.other", "Other lending", { tags: VNC }),
+    ],
+  }),
+
+  n("cards", "CARDS & ACQUIRING", {
+    children: [
+      n("cards.issuing", "Card issuing", {
+        tags: C,
+        note: "income / expense",
+        children: [
+          n("cards.issuing.revolving", "Revolving Credit Cards", { tags: VN }),
+          n("cards.issuing.charge", "Charge Credit Cards", { tags: VN }),
+        ],
+      }),
+      n("cards.acquiring", "Acquiring", {
+        children: [
+          n("cards.acquiring.atm", "ATM acquiring", { tags: C, note: "income / expense" }),
+          n("cards.acquiring.pos", "POS acquiring", { tags: C, note: "income / expense" }),
+        ],
+      }),
+    ],
+  }),
+
+  n("direct", "DIRECT DEPOSITS", {
+    children: [
+      n("direct.ca", "Current Accounts", { tags: VC }),
+      n("direct.sightsaving", "Sight & Saving", {
+        children: [
+          n("direct.sightsaving.sight", "Sight Deposits", { tags: VC }),
+          n("direct.sightsaving.saving", "Saving Accounts", { tags: VC }),
+        ],
+      }),
+      n("direct.term", "Time/Term Deposits", {
+        children: [
+          n("direct.term.st", "ST", { tags: VC }),
+          n("direct.term.mlt", "MLT", { tags: VC }),
+        ],
+      }),
+      n("direct.structured", "Structured Deposits", { tags: VC }),
+      n("direct.securities", "Bank issued securities", { tags: VC }),
+      n("direct.other", "Other deposits", { tags: VC }),
+    ],
+  }),
+
+  n("indirect", "INDIRECT DEPOSITS", {
+    note: "investment products",
+    tags: C,
+    children: [
+      n("indirect.aum", "Assets Under Management", {
+        children: [
+          n("indirect.aum.mfclass", "Mutual Funds – Asset Class", {
+            children: [
+              n("indirect.aum.mfclass.isp", "ISP Group funds"),
+              n("indirect.aum.mfclass.third", "Third-party funds"),
+            ],
+          }),
+          n("indirect.aum.mfsaving", "Mutual Funds – Saving Scheme", {
+            children: [
+              n("indirect.aum.mfsaving.scheme", "Saving Scheme"),
+              n("indirect.aum.mfsaving.combi", "Combi"),
+              n("indirect.aum.mfsaving.simple", "Simple Investment"),
+            ],
+          }),
+          n("indirect.aum.dpm", "Discretionary Portfolio Management"),
+          n("indirect.aum.pension", "Pension Products", {
+            children: [
+              n("indirect.aum.pension.funds", "Pension Funds"),
+              n("indirect.aum.pension.other", "Other Pension Products"),
+            ],
+          }),
+          n("indirect.aum.life", "Life Insurance", { note: "investment" }),
+        ],
+      }),
+      n("indirect.auc", "Assets Under Custody"),
+    ],
+  }),
+
+  n("insurance", "INSURANCE", {
+    note: "protection",
+    tags: C,
+    children: [
+      n("insurance.nonlife", "Non-life", {
+        children: [
+          n("insurance.nonlife.health", "Health"),
+          n("insurance.nonlife.house", "House and household"),
+          n("insurance.nonlife.property", "Property (non household)"),
+          n("insurance.nonlife.motor", "Motor"),
+          n("insurance.nonlife.accident", "Accident"),
+          n("insurance.nonlife.card", "Card"),
+          n("insurance.nonlife.liability", "Liability"),
+          n("insurance.nonlife.travel", "Travel"),
+          n("insurance.nonlife.other", "Other non-life"),
+        ],
+      }),
+      n("insurance.cpi", "CPI", {
+        children: [
+          n("insurance.cpi.mortgages", "CPI Mortgages"),
+          n("insurance.cpi.personal", "CPI Personal Loans"),
+          n("insurance.cpi.card", "CPI Credit Card"),
+          n("insurance.cpi.overdraft", "CPI Overdraft"),
+          n("insurance.cpi.other", "Other CPI"),
+        ],
+      }),
+      n("insurance.life", "Life Protection", {
+        children: [
+          n("insurance.life.risk", "Risk Life Insurance"),
+          n("insurance.life.modular", "Modular Protection Products"),
+        ],
+      }),
+    ],
+  }),
+
+  n("transaction", "TRANSACTION BANKING", {
+    tags: C,
+    children: [
+      n("transaction.cash", "Cash Management", {
+        children: [
+          n("transaction.cash.payments", "Payments and collections", {
+            children: [
+              n("transaction.cash.payments.domestic", "Domestic"),
+              n("transaction.cash.payments.foreign", "Foreign"),
+            ],
+          }),
+          n("transaction.cash.services", "Cash management services"),
+          n("transaction.cash.other", "Other"),
+        ],
+      }),
+      n("transaction.trade", "Trade Finance", {
+        children: [
+          n("transaction.trade.guarantees", "Trade Guarantees"),
+          n("transaction.trade.financial", "Financial Guarantees/SBLC"),
+          n("transaction.trade.lc", "Letter of Credit"),
+          n("transaction.trade.other", "Other"),
+        ],
+      }),
+    ],
+  }),
+
+  n("digital", "DIGITAL & OTHER SERVICES", {
+    note: "ex channels",
+    tags: C,
+    children: [
+      n("digital.channels", "Digital Channels Contracts"),
+      n("digital.einvoice", "e-invoices Contracts"),
+      n("digital.aggregation", "Account Aggregation & Payment Contracts"),
+      n("digital.other", "Other"),
+    ],
+  }),
+
+  n("ib", "INVESTMENT BANKING", { tags: C }),
+  n("othercomm", "OTHER COMMISSION", { tags: C }),
 ];
 
-// ---- 3. Commissions (COMM sheets) -------------------------------------------
+// ---- 3. Reporting frame (non-product lines) ---------------------------------
 
-const commissions: TreeNode[] = [
-  n("comm", "COMMISSION income/expense", [
-    n("comm.cards", "Card Business", [
-      n("comm.cards.issuing", "Cards Issuing", undefined, "income (+) / expenses (−)"),
-      n("comm.cards.atm", "ATM acquiring", undefined, "income (+) / expenses (−)"),
-      n("comm.cards.pos", "POS acquiring", undefined, "income (+) / expenses (−)"),
-    ]),
-    n("comm.loans", "Loans", [
-      n("comm.loans.overdraft", "Overdraft Facilities"),
-      n("comm.loans.st", "ST lending"),
-      n("comm.loans.mlt", "MLT lending"),
-      n("comm.loans.leasing", "Leasing"),
-      n("comm.loans.factoring", "Factoring"),
-      n("comm.loans.structured", "Structured Finance"),
-      n("comm.loans.other", "Other"),
-    ]),
-    n("comm.deposits", "Deposits", [
-      n("comm.deposits.ca", "Current Accounts", [
-        n("comm.deposits.ca.savsight", "Saving Accounts/Sight Dep.", [
-          n("comm.deposits.ca.savsight.sight", "Sight Dep."),
-          n("comm.deposits.ca.savsight.saving", "Saving Accounts"),
-        ]),
-        n("comm.deposits.ca.tdst", "Time/Term Deposits ST"),
-        n("comm.deposits.ca.tdmlt", "Time/Term Deposits MLT"),
-        n("comm.deposits.ca.structured", "Structured Deposits"),
-      ]),
-      n("comm.deposits.securities", "Bank issued securities"),
-      n("comm.deposits.other", "Other"),
-    ]),
-    n("comm.indirect", "Indirect Deposits", [
-      n("comm.indirect.aum", "Asset Under Management", [
-        n("comm.indirect.aum.mfclass", "Mutual Funds – Asset Class", [
-          n("comm.indirect.aum.mfclass.isp", "ISP Group"),
-          n("comm.indirect.aum.mfclass.third", "Third Parties"),
-        ]),
-        n("comm.indirect.aum.mfsaving", "Mutual Funds – Saving Scheme", [
-          n("comm.indirect.aum.mfsaving.scheme", "Saving Scheme"),
-          n("comm.indirect.aum.mfsaving.combi", "Combi"),
-          n("comm.indirect.aum.mfsaving.simple", "Simple Investment"),
-        ]),
-        n("comm.indirect.aum.dpm", "Discretionary Portfolio Management"),
-        n("comm.indirect.aum.pension", "Pension Products", [
-          n("comm.indirect.aum.pension.funds", "Pension Funds"),
-          n("comm.indirect.aum.pension.other", "Other Pension Products"),
-          n("comm.indirect.aum.pension.life", "Life Insurance"),
-        ]),
-      ]),
-      n("comm.indirect.auc", "Asset Under Custody"),
-    ]),
-    n("comm.pc", "Property and Casualty Insurance", [
-      n("comm.pc.nonlife", "Other Non Life Products", [
-        n("comm.pc.nonlife.health", "Health Insurance"),
-        n("comm.pc.nonlife.house", "House and household Insurance"),
-        n("comm.pc.nonlife.property", "Property Insurance (non household)"),
-        n("comm.pc.nonlife.motor", "Motor Insurance"),
-        n("comm.pc.nonlife.accident", "Accident Insurance"),
-        n("comm.pc.nonlife.card", "Card Insurance"),
-        n("comm.pc.nonlife.liability", "Liability Insurance"),
-        n("comm.pc.nonlife.travel", "Travel Insurance"),
-      ]),
-      n("comm.pc.othernonlife", "Other non life insurances"),
-      n("comm.pc.cpi", "CPI", [
-        n("comm.pc.cpi.mortgages", "CPI Mortgages"),
-        n("comm.pc.cpi.personal", "CPI Personal Loans"),
-        n("comm.pc.cpi.card", "CPI Credit Card"),
-        n("comm.pc.cpi.overdraft", "CPI Overdraft"),
-        n("comm.pc.cpi.other", "Other CPI"),
-      ]),
-      n("comm.pc.lifeprot", "Life Protection", [
-        n("comm.pc.lifeprot.risk", "Risk Life Insurance"),
-        n("comm.pc.lifeprot.modular", "Modular Protection Products"),
-      ]),
-    ]),
-    n("comm.cash", "Cash Management", [
-      n("comm.cash.payments", "Payments and collections", [
-        n("comm.cash.payments.domestic", "Domestic"),
-        n("comm.cash.payments.foreign", "Foreign"),
-      ]),
-      n("comm.cash.services", "Cash management services"),
-      n("comm.cash.other", "Other"),
-    ]),
-    n("comm.trade", "Trade Finance", [
-      n("comm.trade.guarantees", "Trade Guarantees"),
-      n("comm.trade.financial", "Financial Guarantees/SBLC"),
-      n("comm.trade.lc", "Letter of Credit"),
-      n("comm.trade.other", "Other"),
-    ]),
-    n("comm.services", "Other Services (ex Channels)", [
-      n("comm.services.digital", "Digital Channels Contracts"),
-      n("comm.services.einvoice", "e-invoices Contracts"),
-      n("comm.services.aggregation", "Account Aggregation & Payment Contracts"),
-      n("comm.services.other", "Other"),
-    ]),
-    n("comm.ib", "Investment banking"),
-    n("comm.other", "Other Commission"),
-  ]),
-  n("trading", "TRADING income/expense"),
-  n("otheropinc", "Other operating income/expense", [
-    n("otheropinc.cards", "Cards"),
-    n("otheropinc.other", "Other"),
-  ]),
+const frame: TreeNode[] = [
+  n("bs", "BALANCE SHEET (A_L)", {
+    children: [
+      n("bs.assets", "Assets", {
+        children: [
+          n("bs.assets.loans", "Customer Loans", {
+            children: [
+              n("bs.assets.loans.perf", "Performing (LC / FC)", {
+                note: "by lending + card product",
+              }),
+              n("bs.assets.loans.npl", "Non Performing", {
+                children: [
+                  n("bs.assets.loans.npl.pastdue", "Past due", {
+                    note: "by lending + card product",
+                  }),
+                  n("bs.assets.loans.npl.utp", "Unlikely to pay", { note: "total only" }),
+                  n("bs.assets.loans.npl.doubtful", "Doubtful", { note: "total only" }),
+                ],
+              }),
+            ],
+          }),
+          n("bs.assets.interest", "Interest without volumes"),
+          n("bs.assets.banks", "Due from banks"),
+          n("bs.assets.securities", "Securities and equity investments"),
+          n("bs.assets.otherib", "Other interest-bearing assets"),
+          n("bs.assets.nonib", "Non interest-bearing assets"),
+          n("bs.assets.ftp", "FTP Waivers Assets"),
+        ],
+      }),
+      n("bs.liab", "Liabilities", {
+        children: [
+          n("bs.liab.deposits", "Customer Deposits (LC / FC)", {
+            note: "by direct deposit product",
+          }),
+          n("bs.liab.banks", "Due to Banks"),
+          n("bs.liab.otherib", "Other interest-bearing liabilities"),
+          n("bs.liab.provisions", "Accumulated Provisions"),
+          n("bs.liab.nonib", "Non interest-bearing liabilities"),
+          n("bs.liab.equity", "Shareholders' Equity"),
+          n("bs.liab.ftp", "FTP Waivers Liabilities"),
+        ],
+      }),
+    ],
+  }),
 ];
 
-/** The margin build-up at the foot of every COMM sheet. Not a tree — a sequence. */
+/** The margin cascade at the foot of the COMM template. Not a tree — a sequence. */
 export interface MarginStep {
-  kind: "total" | "deduction";
+  /** The operator the source file prints in front of the line. */
+  op: "" | "+" | "=" | "−";
   label: string;
   note?: string;
 }
 
 export const marginSteps: MarginStep[] = [
-  { kind: "total", label: "NON INTEREST MARGIN" },
-  { kind: "total", label: "NET OPERATING MARGIN", note: "and excl. Waivers" },
-  { kind: "deduction", label: "Provisions" },
-  { kind: "total", label: "NET OPERATING MARGIN AFTER PROVISIONS", note: "and excl. Waivers" },
-  { kind: "deduction", label: "Levies" },
+  { op: "", label: "Commission income/expense", note: "by product" },
+  { op: "+", label: "Trading income/expense" },
+  { op: "+", label: "Other operating income/expense", note: "Cards, Other" },
+  { op: "=", label: "NON INTEREST MARGIN" },
+  { op: "=", label: "NET OPERATING MARGIN", note: "and excl. Waivers" },
+  { op: "−", label: "Provisions" },
+  { op: "=", label: "NET OPERATING MARGIN AFTER PROVISIONS", note: "and excl. Waivers" },
+  { op: "−", label: "Levies" },
 ];
 
 export const sections: TreeSection[] = [
-  { id: "segments", labelKey: "tree.segments", blurbKey: "tree.segmentsBlurb", accent: "indigo", roots: segments },
-  { id: "al", labelKey: "tree.al", blurbKey: "tree.alBlurb", accent: "blue", roots: assetsLiabilities },
-  { id: "comm", labelKey: "tree.comm", blurbKey: "tree.commBlurb", accent: "green", roots: commissions },
+  { id: "segments", labelKey: "tree.segments", blurbKey: "tree.segmentsBlurb", roots: segments },
+  { id: "products", labelKey: "tree.products", blurbKey: "tree.productsBlurb", roots: products },
+  { id: "frame", labelKey: "tree.frame", blurbKey: "tree.frameBlurb", roots: frame },
 ];
 
-/** Abbreviations used across the workbook. */
+/** The section holding the product families, for the overview graphic. */
+export const PRODUCTS_SECTION = "products";
+
+/** Abbreviations, as the source file lists them. */
 export const glossary: [string, string][] = [
-  ["LC", "local currency"],
-  ["FC", "foreign currency"],
   ["ST", "short term"],
   ["MLT", "medium/long term"],
-  ["NPL", "non-performing loans"],
-  ["FTP", "funds transfer pricing"],
+  ["AuM", "assets under management"],
+  ["AuC", "assets under custody"],
   ["CPI", "credit protection insurance"],
   ["SBLC", "standby letter of credit"],
+  ["FTP", "funds transfer pricing"],
 ];
 
-/** Caveats from the source file that change how the tree should be read. */
-export const readingNotesKeys = ["tree.note1", "tree.note2", "tree.note3"];
+/** Section 4 of the source: what was changed versus the raw sheets. */
+export const changeNotesKeys = [
+  "tree.change1",
+  "tree.change2",
+  "tree.change3",
+  "tree.change4",
+  "tree.change5",
+  "tree.change6",
+  "tree.change7",
+];
 
 // ---- Helpers ----------------------------------------------------------------
 
@@ -287,30 +366,40 @@ export function countLeaves(node: TreeNode): number {
   return node.children.reduce((sum, c) => sum + countLeaves(c), 0);
 }
 
-export function maxDepth(node: TreeNode, depth = 1): number {
-  if (!node.children?.length) return depth;
-  return Math.max(...node.children.map((c) => maxDepth(c, depth + 1)));
-}
-
 const matches = (node: TreeNode, q: string) =>
   node.label.toLowerCase().includes(q) || (node.note?.toLowerCase().includes(q) ?? false);
 
 /**
- * Ids of every node that either matches the query or has a matching
- * descendant — i.e. exactly the branches worth keeping on screen, plus the
- * path down to each hit so nothing matched is hidden behind a closed parent.
+ * Ids worth keeping on screen for a query and/or a tag, plus the text matches
+ * to highlight. A branch is kept when it matches or has a matching descendant,
+ * and every ancestor of a match is kept too, so nothing hides behind a closed
+ * parent. A tag declared on a family counts for everything beneath it, which is
+ * how the source file writes them.
  */
-export function searchIndex(roots: TreeNode[], query: string): { keep: Set<string>; hits: Set<string> } {
+export function filterIndex(
+  roots: TreeNode[],
+  query: string,
+  tag: Tag | null
+): { keep: Set<string>; hits: Set<string>; active: boolean } {
   const keep = new Set<string>();
   const hits = new Set<string>();
   const q = query.trim().toLowerCase();
-  if (!q) return { keep, hits };
+  const active = q.length > 0 || tag !== null;
+  if (!active) return { keep, hits, active };
 
-  const walk = (node: TreeNode, ancestors: string[]): boolean => {
-    const self = matches(node, q);
-    if (self) hits.add(node.id);
+  const walk = (node: TreeNode, ancestors: string[], inherited: Tag[]): boolean => {
+    // A node's own tags win outright; only a node that declares none inherits.
+    // That is what the file means: a family tag covers the lines beneath it,
+    // but Card issuing's [C] does not make the card balances under it
+    // commission lines — those carry their own [V] [NPL].
+    const own = node.tags ?? inherited;
+    const textOk = !q || matches(node, q);
+    const tagOk = tag === null || own.includes(tag);
+    const self = textOk && tagOk;
+    if (self && q) hits.add(node.id);
+
     const childHit = (node.children ?? []).reduce(
-      (acc, c) => walk(c, [...ancestors, node.id]) || acc,
+      (acc, c) => walk(c, [...ancestors, node.id], own) || acc,
       false
     );
     if (self || childHit) {
@@ -319,8 +408,8 @@ export function searchIndex(roots: TreeNode[], query: string): { keep: Set<strin
     }
     return self || childHit;
   };
-  roots.forEach((r) => walk(r, []));
-  return { keep, hits };
+  roots.forEach((r) => walk(r, [], []));
+  return { keep, hits, active };
 }
 
 /** Every id in a set of trees, for "expand all". */
@@ -332,4 +421,16 @@ export function allIds(roots: TreeNode[]): string[] {
   };
   roots.forEach(walk);
   return out;
+}
+
+/** How many distinct products carry a tag, counting inherited family tags. */
+export function countTagged(roots: TreeNode[], tag: Tag): number {
+  let total = 0;
+  const walk = (node: TreeNode, inherited: Tag[]) => {
+    const own = node.tags ?? inherited;
+    if (own.includes(tag) && !node.children?.length) total += 1;
+    node.children?.forEach((c) => walk(c, own));
+  };
+  roots.forEach((r) => walk(r, []));
+  return total;
 }
