@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, Op, Project, Reflection, Suggestion, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, PersonalNote, Op, Project, Reflection, Suggestion, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -24,6 +24,7 @@ interface TaskRow {
   title: string;
   description: string;
   owner: string;
+  assignees?: string[] | null;
   priority: Task["priority"];
   status: Task["status"];
   notes: string;
@@ -42,6 +43,7 @@ function rowToTask(r: TaskRow): Task {
     title: r.title,
     desc: r.description ?? "",
     owner: r.owner,
+    assignees: Array.isArray(r.assignees) && r.assignees.length ? r.assignees : undefined,
     priority: r.priority,
     status: r.status,
     notes: r.notes ?? "",
@@ -61,6 +63,7 @@ function taskToRow(t: Task): TaskRow {
     title: t.title,
     description: t.desc ?? "",
     owner: t.owner,
+    assignees: t.assignees ?? null,
     priority: t.priority,
     status: t.status,
     notes: t.notes ?? "",
@@ -80,6 +83,9 @@ function patchToRow(patch: Partial<Task>): Record<string, unknown> {
   if ("title" in patch) out.title = patch.title;
   if ("desc" in patch) out.description = patch.desc;
   if ("owner" in patch) out.owner = patch.owner;
+  // Only ever sent once the column is known to exist — otherwise every task
+  // edit would fail on a database where migration 009 has not been run.
+  if ("assignees" in patch && hasAssignees) out.assignees = patch.assignees ?? null;
   if ("priority" in patch) out.priority = patch.priority;
   if ("status" in patch) out.status = patch.status;
   if ("notes" in patch) out.notes = patch.notes;
@@ -181,6 +187,61 @@ interface SuggestionRow {
   created_at: number;
 }
 
+// Does tasks.assignees exist? Starts false and is only turned on by a
+// successful probe, so a write that somehow beats the first load omits the
+// column rather than failing outright.
+let hasAssignees = false;
+
+export function assigneesAvailable(): boolean {
+  return hasAssignees;
+}
+
+async function probeAssignees(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("tasks").select("assignees").limit(1);
+    hasAssignees = !error;
+  } catch {
+    hasAssignees = false;
+  }
+  return hasAssignees;
+}
+
+interface PersonalNoteRow {
+  id: string;
+  member: string;
+  body: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface PersonalNotesResult {
+  list: PersonalNote[];
+  error?: string;
+}
+
+// Tolerant but not silent, for the same reason as the suggestions read: an
+// unreachable table must not look like "you have not written any notes yet".
+async function fetchPersonalNotes(): Promise<PersonalNotesResult> {
+  try {
+    const { data, error } = await supabase
+      .from("personal_notes")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    if (error) return { list: [], error: error.message || String(error) };
+    return {
+      list: ((data ?? []) as PersonalNoteRow[]).map((r) => ({
+        id: r.id,
+        member: r.member ?? "",
+        body: r.body ?? "",
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      })),
+    };
+  } catch (e) {
+    return { list: [], error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export interface SuggestionsResult {
   list: Suggestion[];
   /** Why the read failed, when it did. Undefined means the read succeeded. */
@@ -265,7 +326,9 @@ export async function fetchBoard(): Promise<Board> {
     reflectionList,
     projectList,
     suggestionsRes,
+    notesRes,
     reflectionPasswords,
+    assignees,
   ] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
@@ -273,7 +336,9 @@ export async function fetchBoard(): Promise<Board> {
     fetchReflections(),
     fetchProjects(),
     fetchSuggestions(),
+    fetchPersonalNotes(),
     fetchReflectionPasswords(),
+    probeAssignees(),
   ]);
 
   if (meta.error) throw meta.error;
@@ -303,6 +368,9 @@ export async function fetchBoard(): Promise<Board> {
     projects: projectList,
     suggestions: suggestionsRes.list,
     suggestionsError: suggestionsRes.error,
+    personalNotes: notesRes.list,
+    personalNotesError: notesRes.error,
+    assigneesAvailable: assignees,
     reflectionPasswords,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
@@ -367,6 +435,7 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       // keeps inserts working even before migrations 003/007 add the columns.
       if (row.file_dir == null) delete row.file_dir;
       if (row.done_at == null) delete row.done_at;
+      if (!hasAssignees || row.assignees == null) delete row.assignees;
       await must(supabase.from("tasks").insert(row));
       break;
     }
@@ -522,6 +591,28 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
           created_at: op.suggestion.createdAt,
         })
       );
+      break;
+    case "noteAdd":
+      await must(
+        supabase.from("personal_notes").insert({
+          id: op.note.id,
+          member: op.note.member,
+          body: op.note.body,
+          created_at: op.note.createdAt,
+          updated_at: op.note.updatedAt,
+        })
+      );
+      break;
+    case "noteUpdate":
+      await must(
+        supabase
+          .from("personal_notes")
+          .update({ body: op.body, updated_at: Date.now() })
+          .eq("id", op.id)
+      );
+      break;
+    case "noteDelete":
+      await must(supabase.from("personal_notes").delete().eq("id", op.id));
       break;
     case "suggestionDelete":
       await must(supabase.from("suggestions").delete().eq("id", op.id));

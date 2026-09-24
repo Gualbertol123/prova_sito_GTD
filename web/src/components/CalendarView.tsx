@@ -47,7 +47,13 @@ export function CalendarView({ board, tasks, members, send }: Props) {
           <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-3">
             <div className="font-trajan text-[11px] uppercase text-[#8A8A8A] mb-3">{t("cal.details")}</div>
             {selected ? (
-              <TaskDetails task={selected} members={members} send={send} onDeleted={() => setSelectedId(null)} />
+              <TaskDetails
+                task={selected}
+                members={members}
+                send={send}
+                multiAssign={board.assigneesAvailable !== false}
+                onDeleted={() => setSelectedId(null)}
+              />
             ) : (
               <div className="text-[12px] text-[#A8A29E] py-4">{t("cal.selectHint")}</div>
             )}

@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
+import { taskOwners } from "../lib/owners";
 import type { Board } from "../lib/types";
 import { isArchived } from "../lib/constants";
 import { useT } from "../lib/i18n";
+
+// Names for the mail line: everyone holding the task, or nothing when nobody does.
+const mailOwners = (t: { owner: string; assignees?: string[] }) =>
+  taskOwners(t).filter((n) => n !== "Unassigned").join(", ");
 
 export function MailModal({ board, onClose }: { board: Board; onClose: () => void }) {
   const { t } = useT();
@@ -14,12 +19,12 @@ export function MailModal({ board, onClose }: { board: Board; onClose: () => voi
 
     let e = `${t("mail.completed")}\n`;
     if (done.length === 0) e += `- ${t("mail.none")}\n`;
-    else done.forEach((w) => (e += `- ${w.title}${w.owner && w.owner !== "Unassigned" ? ` (${w.owner})` : ""}\n`));
+    else done.forEach((w) => (e += `- ${w.title}${mailOwners(w) ? ` (${mailOwners(w)})` : ""}\n`));
 
     e += `\n${t("mail.nextSteps")}\n`;
     const nextLines: string[] = [
       ...focus.map((w) => w.text),
-      ...next.map((w) => `${w.title}${w.owner && w.owner !== "Unassigned" ? ` (${w.owner})` : ""}`),
+      ...next.map((w) => `${w.title}${mailOwners(w) ? ` (${mailOwners(w)})` : ""}`),
     ];
     if (nextLines.length === 0) e += `- ${t("mail.none")}\n`;
     else nextLines.forEach((l) => (e += `- ${l}\n`));

@@ -22,7 +22,14 @@ export interface Task {
   id: string;
   title: string;
   desc: string;
-  owner: string; // member name or "Unassigned"
+  owner: string; // member name or "Unassigned" — always the FIRST assignee
+  /**
+   * Every person the task is assigned to. Absent on tasks written before
+   * migration 009, and on any task while that migration has not been run;
+   * `owner` alone is then the whole assignment. Use taskOwners() rather than
+   * reading either field directly.
+   */
+  assignees?: string[];
   priority: Priority;
   status: Status;
   notes: string;
@@ -78,6 +85,16 @@ export interface Suggestion {
   createdAt: number;
 }
 
+// A note only its author sees, kept behind the same per-member password as the
+// daily reflections. Nothing links it to a task or to the board.
+export interface PersonalNote {
+  id: string;
+  member: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // The assembled board — the entire shared state, rebuilt from the Supabase
 // tables (board_meta + tasks + weekly + reflections + projects + suggestions)
 // and kept live.
@@ -92,6 +109,11 @@ export interface Board {
   suggestions: Suggestion[];
   /** Set when the suggestions read failed, so the IDEAS tab can say why. */
   suggestionsError?: string;
+  personalNotes: PersonalNote[];
+  /** Set when the personal-notes read failed, so the section can say why. */
+  personalNotesError?: string;
+  /** False when migration 009 has not been run: tasks stay single-assignee. */
+  assigneesAvailable?: boolean;
   reflectionPasswords: Record<string, string>; // member -> password (soft gate)
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
@@ -131,4 +153,7 @@ export type Op =
   | { type: "projectDelete"; id: string }
   | { type: "reflectionPasswordSet"; member: string; password: string }
   | { type: "suggestionAdd"; suggestion: Suggestion }
-  | { type: "suggestionDelete"; id: string };
+  | { type: "suggestionDelete"; id: string }
+  | { type: "noteAdd"; note: PersonalNote }
+  | { type: "noteUpdate"; id: string; body: string }
+  | { type: "noteDelete"; id: string };

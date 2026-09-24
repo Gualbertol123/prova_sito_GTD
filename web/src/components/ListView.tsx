@@ -3,17 +3,19 @@ import type { Op, Task } from "../lib/types";
 import { PRIORITY_DOT } from "../lib/constants";
 import { ownerLabel, statusLabel, useT, localeCode } from "../lib/i18n";
 import { TaskDetails } from "./TaskDetails";
+import { ownersLabel } from "../lib/owners";
 
 interface Props {
   tasks: Task[]; // already filtered to visible columns + search
   members: string[];
   send: (op: Op) => void;
   showNames?: boolean; // false hides owner names (screenshot mode)
+  multiAssign?: boolean;
 }
 
 // Flat list of every activity in the viewable columns. Click a row to expand
 // its full details inline (no popup).
-export function ListView({ tasks, members, send, showNames = true }: Props) {
+export function ListView({ tasks, members, send, showNames = true, multiAssign = true }: Props) {
   const { t, lang } = useT();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -62,7 +64,7 @@ export function ListView({ tasks, members, send, showNames = true }: Props) {
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-[12px] text-[#6B6B6B]">
-                      {showNames ? ownerLabel(t, tk.owner) : "—"}
+                      {showNames ? ownersLabel(tk, (name) => ownerLabel(t, name)) : "—"}
                     </td>
                     <td className="px-3 py-2.5 text-[12px] font-semibold text-[#0A1931]">{tk.priority}</td>
                     <td className="px-3 py-2.5">
@@ -81,6 +83,7 @@ export function ListView({ tasks, members, send, showNames = true }: Props) {
                         <div className="max-w-[560px]">
                           <TaskDetails
                             task={tk}
+                            multiAssign={multiAssign}
                             members={members}
                             send={send}
                             showNames={showNames}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Op, Priority, Status, Task } from "../lib/types";
-import { STATUS_ORDER, genId } from "../lib/constants";
+import { STATUS_ORDER, UNASSIGNED, genId } from "../lib/constants";
+import { ownerInitial, ownersLabel, ownersPatch, taskOwners } from "../lib/owners";
 import { priorityLabel, statusLabel, useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
 import { daysSince } from "../lib/dates";
@@ -14,15 +15,25 @@ interface Props {
   members: string[];
   send: (op: Op) => void;
   showNames?: boolean; // false hides the owner name (screenshot mode)
+  /** False before migration 009: a task can still only be held by one person. */
+  multiAssign?: boolean;
   onDeleted?: () => void;
 }
 
 // The full editable body for a task. Reused by the inline board card and the
 // calendar side panel — no popups anywhere.
-export function TaskDetails({ task, members, send, showNames = true, onDeleted }: Props) {
+export function TaskDetails({
+  task,
+  members,
+  send,
+  showNames = true,
+  multiAssign = true,
+  onDeleted,
+}: Props) {
   const { t, lang } = useT();
   const [confirmDel, setConfirmDel] = useState(false);
   const [newSub, setNewSub] = useState("");
+  const [assignOpen, setAssignOpen] = useState(false);
 
   const title = useSyncedField(task.title);
   const notes = useSyncedField(task.notes);
@@ -51,7 +62,21 @@ export function TaskDetails({ task, members, send, showNames = true, onDeleted }
     const next = STATUS_ORDER[idx + dir];
     if (next) send({ type: "moveTask", id: task.id, status: next });
   };
-  const initial = (task.owner || "?").charAt(0).toUpperCase();
+  const owners = taskOwners(task);
+  const memberLabel = (name: string) => (name === UNASSIGNED ? t("members.unassigned") : name);
+
+  // Picking a name adds it when the task can be shared, and replaces the whole
+  // assignment when it cannot. Taking the last name off leaves it unassigned.
+  const toggleOwner = (name: string) => {
+    if (!multiAssign || name === UNASSIGNED) {
+      patch(ownersPatch([name]));
+      return;
+    }
+    const next = owners.includes(name)
+      ? owners.filter((o) => o !== name)
+      : [...owners.filter((o) => o !== UNASSIGNED), name];
+    patch(ownersPatch(next));
+  };
 
   const addSub = () => {
     const v = newSub.trim();
@@ -74,25 +99,30 @@ export function TaskDetails({ task, members, send, showNames = true, onDeleted }
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full pl-1 pr-2 h-8 border border-[#E8E6E1]">
-          <span className="w-6 h-6 rounded-full bg-[#0A1931] text-white text-[10px] font-bold flex items-center justify-center">
-            {showNames ? initial : "•"}
+        <button
+          type="button"
+          onClick={() => showNames && setAssignOpen((v) => !v)}
+          aria-expanded={showNames ? assignOpen : undefined}
+          title={showNames ? t("assign.edit") : undefined}
+          className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full pl-1 pr-2.5 h-8 border border-[#E8E6E1] text-[12px] text-[#0A1931]"
+        >
+          <span className="flex -space-x-1.5">
+            {(showNames ? owners.slice(0, 3) : ["•"]).map((name, i) => (
+              <span
+                key={`${name}-${i}`}
+                className="w-6 h-6 rounded-full bg-[#0A1931] text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-[#F5F3EF]"
+              >
+                {showNames ? ownerInitial(name) : "•"}
+              </span>
+            ))}
           </span>
-          {showNames ? (
-            <select
-              value={task.owner}
-              onChange={(e) => patch({ owner: e.target.value })}
-              className="bg-transparent text-[12px] text-[#0A1931] outline-none cursor-pointer"
-            >
-              <option value="Unassigned">{t("members.unassigned")}</option>
-              {members.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-[12px] text-[#A8A29E] px-1">—</span>
+          <span className={showNames ? "" : "text-[#A8A29E]"}>
+            {showNames ? ownersLabel(task, memberLabel) : "—"}
+          </span>
+          {showNames && (
+            <span className="text-[9px] text-[#8A8A8A]">{assignOpen ? "▾" : "▸"}</span>
           )}
-        </div>
+        </button>
 
         <label className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full px-3 h-8 border border-[#E8E6E1] text-[12px] text-[#6B6B6B]">
           {t("task.due")}
@@ -104,6 +134,42 @@ export function TaskDetails({ task, members, send, showNames = true, onDeleted }
           />
         </label>
       </div>
+
+      {showNames && assignOpen && (
+        <div className="rounded-[12px] border border-[#E8E6E1] bg-[#F5F3EF] p-2.5 space-y-2">
+          <div className="flex items-baseline justify-between gap-2 flex-wrap">
+            <span className="font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E]">
+              {t("assign.title")}
+            </span>
+            <span className="text-[10px] text-[#8A8A8A]">
+              {t(multiAssign ? "assign.hintMulti" : "assign.hintSingle")}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[UNASSIGNED, ...members].map((m) => {
+              const on = owners.includes(m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => toggleOwner(m)}
+                  aria-pressed={on}
+                  className={`h-7 px-3 rounded-full text-[11px] border ${
+                    on
+                      ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]"
+                      : "bg-white text-[#0A1931] border-[#E8E6E1]"
+                  }`}
+                >
+                  {memberLabel(m)}
+                </button>
+              );
+            })}
+          </div>
+          {!multiAssign && (
+            <p className="text-[10px] text-[#DC2626]">{t("assign.migrationNote")}</p>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-1.5 flex-wrap">
         {PRIOS.map((p) => (

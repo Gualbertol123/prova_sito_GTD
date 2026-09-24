@@ -3,6 +3,7 @@ import type { Board, Op, Priority, Status, Task } from "../lib/types";
 import { STATUS_ORDER, PRIORITY_ORDER, isArchived } from "../lib/constants";
 import { priorityLabel, statusLabel, useT } from "../lib/i18n";
 import { TaskCard } from "./TaskCard";
+import { isOwnedBy } from "../lib/owners";
 import { QuickAdd } from "./QuickAdd";
 import { MembersBar } from "./MembersBar";
 import { PriorityDistribution } from "./PriorityDistribution";
@@ -80,7 +81,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const tasks: Task[] = board.tasks
     .filter((tk) => {
       const text = !q || tk.title.toLowerCase().includes(q) || tk.desc.toLowerCase().includes(q);
-      const owner = filters.owner === "all" || tk.owner === filters.owner;
+      const owner = filters.owner === "all" || isOwnedBy(tk, filters.owner);
       const prio = filters.priority === "all" || tk.priority === filters.priority;
       const focus = !filters.focusP1 || tk.priority === "P1";
       return text && owner && prio && focus;
@@ -327,7 +328,13 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
       <PriorityDistribution tasks={board.tasks} />
 
       {view === "list" ? (
-        <ListView tasks={listTasks} members={members} send={send} showNames={showNames} />
+        <ListView
+          tasks={listTasks}
+          members={members}
+          send={send}
+          showNames={showNames}
+          multiAssign={board.assigneesAvailable !== false}
+        />
       ) : (
         <>
           <p className="text-[12px] text-[#6B6B6B]">{t("board.help")}</p>
@@ -381,6 +388,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                   <div className="space-y-2">
                     {colTasks.map((tk) => (
                       <TaskCard
+                        multiAssign={board.assigneesAvailable !== false}
                         key={tk.id}
                         task={tk}
                         members={members}
@@ -455,6 +463,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                     {doneShown.map((tk) => (
                       <TaskCard
+                        multiAssign={board.assigneesAvailable !== false}
                         key={tk.id}
                         task={tk}
                         members={members}
@@ -512,6 +521,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                     {archivedShown.map((tk) => (
                       <TaskCard
+                        multiAssign={board.assigneesAvailable !== false}
                         key={tk.id}
                         task={tk}
                         members={members}

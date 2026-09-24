@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Board } from "../lib/types";
 import { TRACKING_PASSWORD } from "../lib/constants";
 import { localeCode, ownerLabel, useT } from "../lib/i18n";
+import { isOwnedBy } from "../lib/owners";
 
 export function TrackingView({ board }: { board: Board }) {
   const { t } = useT();
@@ -54,7 +55,7 @@ export function TrackingView({ board }: { board: Board }) {
       <div className="text-[12px] text-[#6B6B6B]">{t("track.help")}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {owners.map((m) => {
-          const active = board.tasks.filter((tk) => tk.owner === m && tk.status !== "DONE");
+          const active = board.tasks.filter((tk) => isOwnedBy(tk, m) && tk.status !== "DONE");
           const p1 = active.filter((tk) => tk.priority === "P1").length;
           const total = active.length;
           const level = p1 > 2 ? "over" : total > 4 ? "high" : "ok";

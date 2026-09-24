@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Op, Task } from "../lib/types";
 import { PRIORITY_DOT } from "../lib/constants";
 import { ownerLabel, statusLabel, useT, localeCode } from "../lib/i18n";
+import { ownerInitial, ownersLabel, taskOwners } from "../lib/owners";
 import { daysSince, daysUntil } from "../lib/dates";
 import { TaskDetails } from "./TaskDetails";
 
@@ -10,12 +11,22 @@ interface Props {
   members: string[];
   send: (op: Op) => void;
   showNames?: boolean; // false hides owner names (screenshot mode)
+  multiAssign?: boolean;
   draggable: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: (e: React.DragEvent) => void;
 }
 
-export function TaskCard({ task, members, send, showNames = true, draggable, onDragStart, onDragEnd }: Props) {
+export function TaskCard({
+  task,
+  members,
+  send,
+  showNames = true,
+  multiAssign = true,
+  draggable,
+  onDragStart,
+  onDragEnd,
+}: Props) {
   const { t, lang } = useT();
   const [open, setOpen] = useState(false);
 
@@ -24,7 +35,7 @@ export function TaskCard({ task, members, send, showNames = true, draggable, onD
   const until = daysUntil(task.dueDate);
   const waiting = task.status === "WAITING" ? daysSince(task.waitingSince) : 0;
   const dueFmt = task.dueDate ? new Date(task.dueDate).toLocaleDateString(localeCode(lang)) : "";
-  const initial = (task.owner || "?").charAt(0).toUpperCase();
+  const owners = taskOwners(task);
 
   return (
     <div
@@ -53,10 +64,17 @@ export function TaskCard({ task, members, send, showNames = true, draggable, onD
         <div className="px-3 pb-3 -mt-1 flex flex-wrap items-center gap-1.5">
           {showNames && (
             <span className="inline-flex items-center gap-1 text-[11px] text-[#6B6B6B]">
-              <span className="w-4 h-4 rounded-full bg-[#0A1931] text-white text-[8px] font-bold flex items-center justify-center">
-                {initial}
+              <span className="flex -space-x-1">
+                {owners.slice(0, 3).map((name, i) => (
+                  <span
+                    key={`${name}-${i}`}
+                    className="w-4 h-4 rounded-full bg-[#0A1931] text-white text-[8px] font-bold flex items-center justify-center ring-1 ring-white"
+                  >
+                    {ownerInitial(name)}
+                  </span>
+                ))}
               </span>
-              {ownerLabel(t, task.owner)}
+              {ownersLabel(task, (name) => ownerLabel(t, name))}
             </span>
           )}
           {task.dueDate && (
@@ -87,7 +105,13 @@ export function TaskCard({ task, members, send, showNames = true, draggable, onD
 
       {open && (
         <div className="px-3 pb-3">
-          <TaskDetails task={task} members={members} send={send} showNames={showNames} />
+          <TaskDetails
+            task={task}
+            members={members}
+            send={send}
+            showNames={showNames}
+            multiAssign={multiAssign}
+          />
         </div>
       )}
     </div>

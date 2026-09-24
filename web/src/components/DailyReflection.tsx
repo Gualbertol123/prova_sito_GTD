@@ -4,6 +4,7 @@ import { useT, localeCode, type Lang } from "../lib/i18n";
 import { useMe } from "../lib/identity";
 import { toISODate } from "../lib/dates";
 import { ensureReflectionAccess } from "../lib/db";
+import { PersonalNotes } from "./PersonalNotes";
 import {
   readReviewedToday,
   writeReviewedToday,
@@ -33,7 +34,7 @@ const label = "font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb
 interface Props {
   board: Board;
   members: string[];
-  send: (op: Op) => void;
+  send: (op: Op, onError?: (message: string) => void) => void;
 }
 
 const DURATIONS: { k: string; days: number | "never" }[] = [
@@ -123,6 +124,9 @@ export function DailyReflection({ board, members, send }: Props) {
       <SpacedReview me={me} today={today} reflections={board.reflections} />
 
       <RecentList reflections={board.reflections} member={me} lang={lang} />
+
+      {/* Below the reflections, behind the same per-member password. */}
+      <PersonalNotes board={board} me={me} send={send} />
 
       <AccountSection me={me} board={board} send={send} />
     </div>

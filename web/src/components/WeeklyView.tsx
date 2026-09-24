@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Board, Op, Task, Weekly } from "../lib/types";
 import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
+import { ownersLabel } from "../lib/owners";
 import { useT } from "../lib/i18n";
 
 interface Props {
@@ -70,7 +71,7 @@ export function WeeklyView({ board, send }: Props) {
                 >
                   <span className="min-w-0">
                     <span className="font-medium">{tk.title}</span>
-                    <span className="text-[#8A8A8A] text-[11px]"> · {tk.owner}</span>
+                    <span className="text-[#8A8A8A] text-[11px]"> · {ownersLabel(tk, (n) => n)}</span>
                     {tk.desc && <span className="text-[#8A8A8A] text-[11px] block truncate">{tk.desc}</span>}
                   </span>
                   <span className="shrink-0 flex items-center gap-1.5">
@@ -112,7 +113,7 @@ export function WeeklyView({ board, send }: Props) {
                 >
                   <span className="min-w-0 truncate">
                     <span className="font-medium text-[#0A1931]">{tk.title}</span>
-                    <span className="text-[#8A8A8A] text-[11px]"> · {tk.owner}</span>
+                    <span className="text-[#8A8A8A] text-[11px]"> · {ownersLabel(tk, (n) => n)}</span>
                   </span>
                   <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white border border-[#E8E6E1]">
                     {tk.priority}

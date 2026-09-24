@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isOwnedBy, withoutOwner } from "../lib/owners";
 import type { Board, Op } from "../lib/types";
 import { useT } from "../lib/i18n";
 
@@ -25,9 +26,13 @@ export function MembersBar({ board, send }: Props) {
 
   const remove = (m: string) => {
     send({ type: "setMembers", members: board.members.filter((x) => x !== m) });
+    // Take the departing member off every task they held. A task shared with
+    // other people keeps them; only a task nobody else holds goes unassigned.
     board.tasks
-      .filter((tk) => tk.owner === m)
-      .forEach((tk) => send({ type: "updateTask", id: tk.id, patch: { owner: "Unassigned" } }));
+      .filter((tk) => isOwnedBy(tk, m))
+      .forEach((tk) =>
+        send({ type: "updateTask", id: tk.id, patch: withoutOwner(tk, m) })
+      );
     setConfirm(null);
   };
 

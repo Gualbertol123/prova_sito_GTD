@@ -13,6 +13,7 @@ import { TrackingView } from "./components/TrackingView";
 import { SettingsView } from "./components/SettingsView";
 import { ProductTreeView } from "./components/ProductTreeView";
 import { SuggestionsView } from "./components/SuggestionsView";
+import { isOwnedBy } from "./lib/owners";
 import { DailyReflection } from "./components/DailyReflection";
 import { MailModal } from "./components/MailModal";
 import { ConnBadge } from "./components/ConnBadge";
@@ -156,7 +157,7 @@ function filteredForCalendar(
   const q = f.search.trim().toLowerCase();
   return tasks.filter((tk) => {
     const text = !q || tk.title.toLowerCase().includes(q) || tk.desc.toLowerCase().includes(q);
-    const owner = f.owner === "all" || tk.owner === f.owner;
+    const owner = f.owner === "all" || isOwnedBy(tk, f.owner);
     const prio = f.priority === "all" || tk.priority === f.priority;
     const focus = !f.focusP1 || tk.priority === "P1";
     return text && owner && prio && focus;
