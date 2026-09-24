@@ -230,6 +230,8 @@ const IT: Dict = {
   "assign.hintSingle": "Una sola persona per attivit\u00e0",
   "assign.migrationNote": "Per assegnare un\u2019attivit\u00e0 a pi\u00f9 persone serve la migrazione \u2018migration-009-assignees.sql\u2019 su Supabase.",
 
+  "reflection.paneDiary": "Diario",
+  "reflection.paneNotes": "Note",
   "notes.title": "Note personali",
   "notes.privacy": "Solo tue \u2014 nessun altro le vede qui",
   "notes.placeholder": "Un appunto per te\u2026",
@@ -614,6 +616,8 @@ const EN: Dict = {
   "assign.hintSingle": "One person per task",
   "assign.migrationNote": "Assigning a task to several people needs the \u2018migration-009-assignees.sql\u2019 migration on Supabase.",
 
+  "reflection.paneDiary": "Diary",
+  "reflection.paneNotes": "Notes",
   "notes.title": "Personal notes",
   "notes.privacy": "Yours only \u2014 nobody else sees these here",
   "notes.placeholder": "A note to yourself\u2026",

@@ -321,7 +321,12 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
         <div className="font-trajan text-[10px] uppercase tracking-widest text-[#8B6F3E] mb-2 flex items-center gap-1.5">
           <span>＋</span> {t("quick.section")}
         </div>
-        <QuickAdd members={members} send={send} showNames={showNames} />
+        <QuickAdd
+          members={members}
+          send={send}
+          showNames={showNames}
+          multiAssign={board.assigneesAvailable !== false}
+        />
       </div>
 
       {/* Priority distribution — its own space */}

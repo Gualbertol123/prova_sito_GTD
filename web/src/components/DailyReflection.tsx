@@ -12,6 +12,8 @@ import {
   setReflAuth,
   clearReflAuth,
   reflAuthValue,
+  readPref,
+  writePref,
 } from "../lib/prefs";
 
 function isoMinus(iso: string, days: number): string {
@@ -30,6 +32,8 @@ function dayLabel(iso: string, lang: Lang, t: (k: string, v?: Record<string, str
 const field =
   "w-full rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] p-2 text-[12px] outline-none focus:border-[#C9A96E] resize-none";
 const label = "font-trajan text-[10px] uppercase tracking-wide text-[#A8A29E] mb-1 block";
+
+type Pane = "diary" | "notes";
 
 interface Props {
   board: Board;
@@ -74,6 +78,15 @@ export function DailyReflection({ board, members, send }: Props) {
   const { me, setMe } = useMe();
   const today = toISODate(new Date());
   const [tick, setTick] = useState(0);
+  // Which half of this tab you are looking at. Remembered per browser: the
+  // notes used to sit under everything else, which made them a scroll away.
+  const [pane, setPane] = useState<Pane>(() =>
+    readPref("reflpane") === "notes" ? "notes" : "diary"
+  );
+  const pickPane = (next: Pane) => {
+    setPane(next);
+    writePref("reflpane", next);
+  };
   const bump = () => setTick((n) => n + 1);
 
   // Seed a reflection_access row per member (default 'password') so every
@@ -99,6 +112,7 @@ export function DailyReflection({ board, members, send }: Props) {
     );
   }
 
+  const noteCount = (board.personalNotes ?? []).filter((n) => n.member === me).length;
   const id = `${today}::${me}`;
   const existing = board.reflections.find((r) => r.id === id) ?? null;
 
@@ -119,14 +133,40 @@ export function DailyReflection({ board, members, send }: Props) {
         </button>
       </div>
 
-      <ReflectionForm key={id} id={id} me={me} date={today} existing={existing} send={send} />
+      {/* One click between the two halves, so neither is a scroll away. */}
+      <div className="flex gap-1.5">
+        {(["diary", "notes"] as Pane[]).map((key) => {
+          const on = pane === key;
+          const count = key === "notes" ? noteCount : 0;
+          return (
+            <button
+              key={key}
+              onClick={() => pickPane(key)}
+              aria-pressed={on}
+              className={`h-9 px-4 rounded-full text-[11px] font-semibold uppercase tracking-wide border ${
+                on
+                  ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]"
+                  : "bg-white text-[#0A1931] border-[#E8E6E1]"
+              }`}
+            >
+              {t(key === "diary" ? "reflection.paneDiary" : "reflection.paneNotes")}
+              {count > 0 && <span className="ml-1.5 opacity-60 tabular-nums">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
 
-      <SpacedReview me={me} today={today} reflections={board.reflections} />
+      {pane === "diary" ? (
+        <>
+          <ReflectionForm key={id} id={id} me={me} date={today} existing={existing} send={send} />
 
-      <RecentList reflections={board.reflections} member={me} lang={lang} />
+          <SpacedReview me={me} today={today} reflections={board.reflections} />
 
-      {/* Below the reflections, behind the same per-member password. */}
-      <PersonalNotes board={board} me={me} send={send} />
+          <RecentList reflections={board.reflections} member={me} lang={lang} />
+        </>
+      ) : (
+        <PersonalNotes board={board} me={me} send={send} />
+      )}
 
       <AccountSection me={me} board={board} send={send} />
     </div>

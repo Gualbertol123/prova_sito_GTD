@@ -13,6 +13,7 @@ const KEYS = {
   prio: "gtd-prio-collapsed",
   reflauth: "gtd-refl-auth",
   mysugg: "gtd-my-suggestions",
+  reflpane: "gtd-reflection-pane",
   skin: "gtd-skin",
   appearance: "gtd-appearance",
 } as const;
