@@ -7,7 +7,6 @@ import {
   downloadBlob,
   exportEditedDocx,
   preloadSuperDoc,
-  printForPdf,
   type SuperDocInstance,
 } from "../lib/reportEditor";
 
@@ -31,6 +30,7 @@ export function ReportView({ board }: Props) {
   const [custom, setCustom] = useState(false);
   const [stage, setStage] = useState<Stage>("setup");
   const [busy, setBusy] = useState<null | "docx" | "pdf">(null);
+  const [pdfProgress, setPdfProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [fileName, setFileName] = useState("Weekly_Report.docx");
 
@@ -158,6 +158,26 @@ export function ReportView({ board }: Props) {
     }
   };
 
+  // Capture the editor's rendered pages straight into a downloaded PDF.
+  const downloadPdf = async () => {
+    if (!editorEl.current) return;
+    setErr(null);
+    setBusy("pdf");
+    try {
+      const { downloadPagesAsPdf } = await import("../lib/reportPdf");
+      await downloadPagesAsPdf(
+        editorEl.current,
+        fileName.replace(/\.docx$/i, "") + ".pdf",
+        (done, total) => setPdfProgress({ done, total })
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+      setPdfProgress(null);
+    }
+  };
+
   const control =
     "h-9 rounded-full bg-white border border-[#E8E6E1] text-[13px] outline-none focus:border-[#C9A96E] px-3";
   const primaryBtn =
@@ -167,8 +187,8 @@ export function ReportView({ board }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Controls — hidden while printing */}
-      <div className="report-no-print rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-4 space-y-3">
+      {/* Controls */}
+      <div className="rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-trajan text-[11px] uppercase tracking-widest text-[#8B6F3E]">
             📄 {t("report.title")}
@@ -267,25 +287,32 @@ export function ReportView({ board }: Props) {
       {/* Editor */}
       {stage === "editing" && (
         <div className="space-y-3">
-          <div className="report-no-print flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             <button onClick={downloadEditedDocx} disabled={busy !== null} className={primaryBtn}>
               {busy === "docx" ? t("report.generating") : t("report.downloadWord")}
             </button>
-            <button onClick={printForPdf} disabled={busy !== null} className={ghostBtn}>
-              {t("report.downloadPdf")}
+            <button onClick={downloadPdf} disabled={busy !== null} className={ghostBtn}>
+              {busy === "pdf"
+                ? pdfProgress
+                  ? t("report.pdfProgress", {
+                      d: Math.min(pdfProgress.done + 1, pdfProgress.total),
+                      n: pdfProgress.total,
+                    })
+                  : t("report.generating")
+                : t("report.downloadPdf")}
             </button>
             <span className="text-[11px] text-[#8A8A8A]">{t("report.pdfHint")}</span>
           </div>
 
           <div className="report-print-root rounded-[14px] border border-[#E8E6E1] bg-white overflow-hidden">
-            <div ref={toolbarEl} className="report-no-print border-b border-[#E8E6E1]" />
+            <div ref={toolbarEl} className="border-b border-[#E8E6E1]" />
             <div ref={editorEl} className="report-editor-host min-h-[70vh] bg-[#F5F3EF]" />
           </div>
         </div>
       )}
 
       {stage === "building" && (
-        <div className="report-no-print rounded-[14px] border border-[#E8E6E1] bg-white p-10 text-center text-[13px] text-[#8A8A8A]">
+        <div className="rounded-[14px] border border-[#E8E6E1] bg-white p-10 text-center text-[13px] text-[#8A8A8A]">
           {t("report.buildingEditor")}
         </div>
       )}

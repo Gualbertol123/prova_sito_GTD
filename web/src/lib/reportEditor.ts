@@ -151,6 +151,11 @@ export async function createReportEditor({
           ruler: true,
         },
         uiDisplayFallbackFont: '"Inter", ui-sans-serif, system-ui, sans-serif',
+        // Keep every page in the DOM. By default only a window of ~5 pages
+        // around the viewport is rendered, and the PDF export captures pages
+        // from the DOM, so a longer report would lose pages. The report is only
+        // a few pages long, so rendering them all costs nothing noticeable.
+        layoutEngineOptions: { virtualization: { enabled: false } },
         onReady: () => {
           onReady?.();
           resolve(instance);
@@ -176,52 +181,4 @@ export function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// ---- PDF via the browser's print dialog -------------------------------------
-
-/**
- * "Save as PDF" through the browser's own print pipeline.
- *
- * The rendered pages are already exact A4 boxes with the letterhead and footer
- * drawn in, so printing them is the whole conversion. `print.css` hides the
- * rest of the app; the only thing that cannot be done from code is Chrome's
- * own header/footer, which the caller warns the user to untick.
- *
- * Pages are tagged portrait/landscape from their measured aspect first, so the
- * planner sheet prints landscape via its own named @page rule.
- */
-export function printForPdf(): void {
-  const pages = document.querySelectorAll<HTMLElement>(".superdoc-page");
-  pages.forEach((page) => {
-    const { width, height } = page.getBoundingClientRect();
-    page.classList.toggle("sd-print-landscape", width > height);
-  });
-
-  // Flatten the app layout between <body> and the pages. They have to stay in
-  // normal flow — Chrome only honours a named @page (the landscape planner
-  // sheet) for flowed boxes — so their ancestors' padding and max-widths are
-  // neutralised instead of the pages being lifted out.
-  const tagged: HTMLElement[] = [];
-  let node = document.querySelector<HTMLElement>(".report-print-root")?.parentElement ?? null;
-  while (node && node !== document.body) {
-    node.classList.add("report-print-passthrough");
-    tagged.push(node);
-    node = node.parentElement;
-  }
-  document.body.classList.add("printing-report");
-  // The canvas colour comes from the root element, so html needs it too.
-  document.documentElement.classList.add("printing-report");
-
-  const cleanup = () => {
-    document.body.classList.remove("printing-report");
-    document.documentElement.classList.remove("printing-report");
-    tagged.forEach((el) => el.classList.remove("report-print-passthrough"));
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  // Safety net: some browsers never fire afterprint when the dialog is cancelled.
-  setTimeout(cleanup, 60000);
-
-  window.print();
 }

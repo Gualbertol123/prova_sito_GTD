@@ -191,7 +191,7 @@ prova_sito_GTD/
     └── src/
         ├── main.tsx              ← mounts <LangProvider><IdentityProvider><AuthGate><App/>
         ├── App.tsx               ← tabs, top bar, filters state, favicon effect, routing
-        ├── index.css             ← Tailwind + small globals (drop-target, fonts, print)
+        ├── index.css             ← Tailwind + small globals (drop-target, fonts)
         ├── styles/glass.css      ← the Liquid Glass skin, scoped to [data-skin="glass"]
         ├── lib/                  ← non-UI logic
         │   ├── types.ts          ← Task/Subtask/Weekly/Reflection/Board + the Op union
@@ -209,8 +209,8 @@ prova_sito_GTD/
         │   ├── dates.ts          ← date math/formatting helpers
         │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
         │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
-        │   ├── reportEditor.ts   ← SuperDoc loader, fonts, export, print-to-PDF
-        │   ├── skin.ts           ← which visual skin is on (glass / classic)
+        │   ├── reportEditor.ts   ← SuperDoc loader, fonts, DOCX export
+        │   ├── reportPdf.ts      ← captures the editor's pages into a downloaded PDF (lazy)
         │   ├── skin.ts           ← which visual skin is on (glass / classic)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
@@ -252,7 +252,7 @@ before it goes out, without leaving the site.
 period ─▶ buildReportDocx()  ─┐
                               ├─▶ .docx in memory ─▶ SuperDoc editor ─┬─▶ Download Word
          preloadSuperDoc()  ──┘   (never written                      └─▶ Download PDF
-         (starts on tab open)      to disk here)                          (browser print)
+         (starts on tab open)      to disk here)                          (pages → jsPDF)
 ```
 
 Nothing is downloaded unless asked. **Download without editing** skips the
@@ -319,24 +319,31 @@ from ~507 kB to ~285 kB, because Supabase moved into its own chunk too.
 
 ### PDF
 
-**Download PDF** opens the browser's print dialog — pick "Save as PDF". The
-rendered pages are already exact A4 boxes with the letterhead and footer drawn
-in, so printing them *is* the conversion; `printForPdf()` plus the `@media
-print` block in `index.css` hide the rest of the app and flatten the editor's
-wrappers so the pages sit flush on the sheet.
+**Download PDF** saves a `.pdf` file directly — no print dialog.
+SuperDoc can only export DOCX, but it already draws every page as an exact A4
+box with the letterhead and footer painted in, so `reportPdf.ts` photographs
+those boxes: each `.superdoc-page` is captured with
+[modern-screenshot](https://github.com/qq15725/modern-screenshot) (the browser
+paints it through an SVG `foreignObject`, so fonts and table borders match the
+screen) and placed full-bleed on its own page with
+[jsPDF](https://github.com/parallax/jsPDF). Both libraries are lazy-loaded on
+the click, so they cost nothing up front.
 
-Two things worth knowing:
+Things worth knowing:
 
-- **Untick "Headers and footers" and set Margins to "None"** in the print
-  dialog, or Chrome overlays its own URL and date on the letterhead. The button
-  says so in the UI; it cannot be set from code.
-- **The planner prints on a portrait sheet at ~71%, not on a landscape one.**
-  Mixing page orientations in a single print run makes Chrome lay the document
-  out at the widest page and shrink every portrait sheet to fit — measured, it
-  put page 1 at 54%. Zooming the planner down to portrait width keeps the whole
-  run portrait and every other page at 100%. **The .docx is unaffected**: open
-  it in Word and the planner is still a true landscape section, so Word's own
-  "Save as PDF" gives a full landscape page.
+- **Each PDF page keeps its orientation.** The planner is a true A4 landscape
+  sheet; the other pages are A4 portrait.
+- **The text in the PDF is an image** (~190 dpi, JPEG), so it cannot be
+  selected or searched. When that matters, download the Word file and use
+  Word's own "Save as PDF". The hint next to the button says so.
+- **SuperDoc paints pages lazily.** By default it only keeps a window of pages
+  near the viewport, and it only fills in a page once it has been scrolled to.
+  The editor is created with `layoutEngineOptions: { virtualization: { enabled:
+  false } }` so every page box exists, and the exporter scrolls each page into
+  view and waits for its content before capturing it, then puts the scroll
+  position back. Without this, pages beyond the first screenful come out blank.
+- **Speed:** about 2 s per page (a normal 2-page report takes ~4 s). The button
+  shows `PDF: page n of N…` while it works.
 
 ---
 

@@ -12,6 +12,8 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "fflate": "^0.8.3",
+    "jspdf": "^4.2.1",
+    "modern-screenshot": "^4.7.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "superdoc": "^2.16.0"
