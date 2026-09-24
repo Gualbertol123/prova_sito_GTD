@@ -6,7 +6,7 @@ import { addMySuggestion, readMySuggestions, removeMySuggestion } from "../lib/p
 
 interface Props {
   board: Board;
-  send: (op: Op) => void;
+  send: (op: Op, onError?: (message: string) => void) => void;
 }
 
 // Anonymous suggestions for improving the site.
@@ -21,19 +21,35 @@ export function SuggestionsView({ board, send }: Props) {
   const [sent, setSent] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [mine, setMine] = useState<string[]>(() => readMySuggestions());
+  const [failed, setFailed] = useState<string | null>(null);
 
   const suggestions = board.suggestions ?? [];
+  // Set when the server could not be read. Without this the tab showed "no
+  // ideas yet" whether nobody had posted or the table was unreachable, so
+  // ideas could be typed in and quietly lost.
+  const unavailable = board.suggestionsError;
 
   const submit = () => {
     const body = draft.trim();
-    if (!body) return;
+    if (!body || unavailable) return;
     const id = genId();
-    send({ type: "suggestionAdd", suggestion: { id, body, createdAt: Date.now() } });
+    setFailed(null);
+    // Clear first, then send: the rejection path restores the text, and it has
+    // to run after the clear whether the write fails synchronously or later.
     addMySuggestion(id);
     setMine(readMySuggestions());
     setDraft("");
     setSent(true);
     setTimeout(() => setSent(false), 2000);
+    send({ type: "suggestionAdd", suggestion: { id, body, createdAt: Date.now() } }, (message) => {
+      // The write was rejected and rolled back: say so and hand the text back
+      // rather than leaving a "sent ✓" on an idea nobody will ever read.
+      setSent(false);
+      setFailed(message);
+      removeMySuggestion(id);
+      setMine(readMySuggestions());
+      setDraft((d) => (d.trim() ? d : body));
+    });
   };
 
   const remove = (id: string) => {
@@ -52,6 +68,14 @@ export function SuggestionsView({ board, send }: Props) {
         <p className="text-[12px] text-[#6B6B6B] mt-2">{t("sugg.intro")}</p>
       </div>
 
+      {unavailable && (
+        <div className="rounded-[14px] border border-[#FECACA] bg-[#FEF2F2] p-4 space-y-1.5">
+          <p className="text-[12px] font-semibold text-[#DC2626]">{t("sugg.unavailable")}</p>
+          <p className="text-[11px] text-[#6B6B6B]">{t("sugg.migrationNote")}</p>
+          <p className="text-[10px] text-[#A8A29E] break-words">{unavailable}</p>
+        </div>
+      )}
+
       {/* Composer */}
       <div className="rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-4 space-y-3">
         <textarea
@@ -61,18 +85,22 @@ export function SuggestionsView({ board, send }: Props) {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
           }}
           rows={4}
-          placeholder={t("sugg.placeholder")}
+          disabled={!!unavailable}
+          placeholder={t(unavailable ? "sugg.placeholderOff" : "sugg.placeholder")}
           className="w-full rounded-lg bg-white border border-[#E8E6E1] p-3 text-[13px] outline-none focus:border-[#C9A96E] resize-y"
         />
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={submit}
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || !!unavailable}
             className="h-10 px-5 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold disabled:opacity-30"
           >
             {t("sugg.send")}
           </button>
-          {sent && <span className="text-[12px] text-[#065F46]">{t("sugg.sent")}</span>}
+          {sent && !failed && (
+            <span className="text-[12px] text-[#065F46]">{t("sugg.sent")}</span>
+          )}
+          {failed && <span className="text-[12px] text-[#DC2626]">{t("sugg.failed")}</span>}
           <span className="text-[11px] text-[#8A8A8A] ml-auto">🔒 {t("sugg.privacy")}</span>
         </div>
       </div>
@@ -87,7 +115,7 @@ export function SuggestionsView({ board, send }: Props) {
 
       {suggestions.length === 0 ? (
         <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-8 text-center text-[13px] text-[#A8A29E]">
-          {t("sugg.none")}
+          {t(unavailable ? "sugg.noneUnavailable" : "sugg.none")}
         </div>
       ) : (
         <div className="space-y-2">

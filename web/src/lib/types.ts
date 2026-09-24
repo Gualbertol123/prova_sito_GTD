@@ -90,6 +90,8 @@ export interface Board {
   reflections: Reflection[];
   projects: Project[];
   suggestions: Suggestion[];
+  /** Set when the suggestions read failed, so the IDEAS tab can say why. */
+  suggestionsError?: string;
   reflectionPasswords: Record<string, string>; // member -> password (soft gate)
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend

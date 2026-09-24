@@ -181,22 +181,33 @@ interface SuggestionRow {
   created_at: number;
 }
 
-// Tolerant like the other late-migration reads: an absent table just means no
-// suggestions yet, never a broken board.
-async function fetchSuggestions(): Promise<Suggestion[]> {
+export interface SuggestionsResult {
+  list: Suggestion[];
+  /** Why the read failed, when it did. Undefined means the read succeeded. */
+  error?: string;
+}
+
+// Tolerant like the other late-migration reads — the board still loads if this
+// table is missing — but NOT silent. Returning a bare [] made an unreachable
+// table (migration 008 never run, or a select blocked by RLS) look exactly like
+// "nobody has posted an idea yet", so ideas could be typed in and lost with
+// nothing on screen ever saying why. The reason travels with the result now.
+async function fetchSuggestions(): Promise<SuggestionsResult> {
   try {
     const { data, error } = await supabase
       .from("suggestions")
       .select("*")
       .order("created_at", { ascending: false });
-    if (error || !data) return [];
-    return (data as SuggestionRow[]).map((r) => ({
-      id: r.id,
-      body: r.body ?? "",
-      createdAt: r.created_at,
-    }));
-  } catch {
-    return [];
+    if (error) return { list: [], error: error.message || String(error) };
+    return {
+      list: ((data ?? []) as SuggestionRow[]).map((r) => ({
+        id: r.id,
+        body: r.body ?? "",
+        createdAt: r.created_at,
+      })),
+    };
+  } catch (e) {
+    return { list: [], error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -253,7 +264,7 @@ export async function fetchBoard(): Promise<Board> {
     weekly,
     reflectionList,
     projectList,
-    suggestionList,
+    suggestionsRes,
     reflectionPasswords,
   ] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
@@ -290,7 +301,8 @@ export async function fetchBoard(): Promise<Board> {
     weekly: weeklyGrouped,
     reflections: reflectionList,
     projects: projectList,
-    suggestions: suggestionList,
+    suggestions: suggestionsRes.list,
+    suggestionsError: suggestionsRes.error,
     reflectionPasswords,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,

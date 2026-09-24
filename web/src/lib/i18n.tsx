@@ -224,6 +224,10 @@ const IT: Dict = {
   "sugg.confirmDelete": "Eliminare questa idea?",
   "sugg.anon": "Anonimo",
   "sugg.privacy": "Nessun nome, nessun indirizzo, nessun orario di login viene registrato. Solo il testo e la data.",
+  "sugg.unavailable": "Le idee non si caricano dal server: l\u2019elenco qui sotto pu\u00f2 essere incompleto o vuoto anche se qualcuno ha gi\u00e0 scritto.",
+  "sugg.failed": "Non salvata \u2014 riprova",
+  "sugg.placeholderOff": "Invio non disponibile finch\u00e9 il server non risponde.",
+  "sugg.noneUnavailable": "Impossibile leggere le idee dal server.",
   "sugg.migrationNote": "Le idee richiedono la migrazione 'migration-008-suggestions.sql' su Supabase.",
 
   "tree.title": "Albero prodotti \u00b7 Corporate, PMI & Small Business",
@@ -581,6 +585,10 @@ const EN: Dict = {
   "sugg.confirmDelete": "Delete this idea?",
   "sugg.anon": "Anonymous",
   "sugg.privacy": "No name, no address, no login time is recorded. Only the text and the date.",
+  "sugg.unavailable": "Ideas are not loading from the server: the list below may be incomplete or empty even if people have already written some.",
+  "sugg.failed": "Not saved \u2014 try again",
+  "sugg.placeholderOff": "Sending is unavailable until the server responds.",
+  "sugg.noneUnavailable": "The ideas could not be read from the server.",
   "sugg.migrationNote": "Ideas require the 'migration-008-suggestions.sql' migration on Supabase.",
 
   "tree.title": "Product tree \u00b7 Corporate, SME & Small Business",

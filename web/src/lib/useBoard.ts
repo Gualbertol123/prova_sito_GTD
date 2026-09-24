@@ -11,7 +11,8 @@ export interface UseBoard {
   board: Board | null;
   conn: ConnState;
   error: string | null;
-  send: (op: Op) => void;
+  /** onError fires when the write is rejected, after the optimistic change is rolled back. */
+  send: (op: Op, onError?: (message: string) => void) => void;
   reload: () => void;
 }
 
@@ -122,14 +123,18 @@ export function useBoard(): UseBoard {
   }, [reload]);
 
   const send = useCallback(
-    (op: Op) => {
+    (op: Op, onError?: (message: string) => void) => {
       const current = boardRef.current;
       if (!current) return;
       // Optimistic apply for instant feedback.
       setBoard(applyOpLocal(current, op));
       // Persist; realtime + poll reconcile to authoritative state.
       writeOp(op, current).catch((e: unknown) => {
-        setError(errMsg(e));
+        const message = errMsg(e);
+        setError(message);
+        // The banner at the top of the page is easy to miss, so let the caller
+        // tell the person right where they acted that it did not save.
+        onError?.(message);
         reload(); // undo a failed optimistic change
       });
     },
