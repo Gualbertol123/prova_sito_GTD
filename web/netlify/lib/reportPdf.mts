@@ -567,37 +567,39 @@ function FlowPages({ doc, sections, variant }: { doc: ReportDoc; sections: DocSe
 }
 
 // The planner: one landscape page. A very full board is set smaller so it
-// still fits: the scale comes from an estimate of each column's height.
-function plannerScale(columns: DocColumn[], colW: number, avail: number): number {
-  const heightAt = (s: number) =>
-    Math.max(
-      ...columns.map((c) => {
-        const textW = colW - 24 * s - 22 * s;
-        const perLine = Math.max(8, Math.floor(textW / (9.4 * s * 0.53)));
-        const items = c.items.reduce((sum, it) => {
-          const lines = Math.max(1, Math.ceil(it.text.length / perLine));
-          return sum + 13.5 * s + lines * 9.4 * s * 1.35 + (it.meta ? 11 * s : 0) + 6 * s;
-        }, 0);
-        return 36 * s + (c.items.length ? items : 20 * s);
-      })
-    );
-  if (heightAt(1) <= avail) return 1;
-  let lo = 0.4, hi = 1;
-  for (let i = 0; i < 18; i++) {
-    const mid = (lo + hi) / 2;
-    if (heightAt(mid) <= avail) lo = mid;
-    else hi = mid;
-  }
-  return lo;
+// still fits; the size is found by measuring (see plannerScale below).
+// How many sub-columns a column's cards are spread over: a long column takes
+// more of the page width, so it does not have to shrink as much.
+function spansOf(columns: DocColumn[]): number[] {
+  return columns.map((c) => Math.min(3, Math.max(1, Math.ceil(c.items.length / 9))));
 }
 
-function PlannerPage({ doc, variant }: { doc: ReportDoc; variant: number }) {
-  const p = doc.planner;
+/** The planner's fitting: text scale, and how many cards each column shows. */
+export interface PlannerFit {
+  scale: number;
+  /** Cards shown per column (the rest become "+N more"); null = all. */
+  limit: number | null;
+}
+
+function PlannerPage({ doc, variant, fit }: { doc: ReportDoc; variant: number; fit: PlannerFit }) {
   const W = A4.h;
   const H = A4.w;
   const innerW = W - PAD_X * 2;
-  const colW = (innerW - GAP * 3) / 4;
-  const s = plannerScale(p.columns, colW, H - TOP - BOTTOM - 62);
+  const s = fit.scale;
+  const p = {
+    ...doc.planner,
+    columns: doc.planner.columns.map((c) => {
+      if (fit.limit === null || c.items.length <= fit.limit) return c;
+      const rest = c.items.length - fit.limit;
+      return {
+        ...c,
+        items: [...c.items.slice(0, fit.limit), { text: `+${rest}`, meta: "", dot: "#c7c7cc" }],
+      };
+    }),
+  };
+  const spans = spansOf(doc.planner.columns);
+  const totalSpan = spans.reduce((a, b) => a + b, 0);
+  const unit = (innerW - GAP * (p.columns.length - 1)) / totalSpan;
   return h(
     Page,
     {
@@ -614,7 +616,7 @@ function PlannerPage({ doc, variant }: { doc: ReportDoc; variant: number }) {
       ...p.columns.map((c, i) =>
         h(
           Glass,
-          { key: i, radius: 16.5 * Math.max(0.7, s), style: { width: colW, marginLeft: i ? GAP : 0 } },
+          { key: i, radius: 16.5 * Math.max(0.7, s), style: { width: unit * spans[i] + GAP * (spans[i] - 1), marginLeft: i ? GAP : 0 } },
           h(
             View,
             { style: { padding: 12 * s } },
@@ -629,7 +631,12 @@ function PlannerPage({ doc, variant }: { doc: ReportDoc; variant: number }) {
               ? h(Text, { style: { marginTop: 9 * s, fontSize: 9.4 * s, color: INK3 } }, c.empty)
               : h(
                   View,
-                  { style: { marginTop: 9 * s } },
+                  {
+                    style:
+                      spans[i] > 1
+                        ? { marginTop: 9 * s, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }
+                        : { marginTop: 9 * s },
+                  },
                   ...c.items.map((it, j) =>
                     h(
                       View,
@@ -637,7 +644,8 @@ function PlannerPage({ doc, variant }: { doc: ReportDoc; variant: number }) {
                         key: j,
                         style: {
                           flexDirection: "row",
-                          marginTop: j ? 6 * s : 0,
+                          width: spans[i] > 1 ? `${100 / spans[i] - 1.5}%` : "100%",
+                          marginTop: (spans[i] > 1 ? j >= spans[i] : j > 0) ? 6 * s : 0,
                           paddingVertical: 6.75 * s,
                           paddingHorizontal: 8.25 * s,
                           borderRadius: 10.5 * s,
@@ -664,13 +672,52 @@ function PlannerPage({ doc, variant }: { doc: ReportDoc; variant: number }) {
   );
 }
 
-export function ReportDocument({ doc }: { doc: ReportDoc }) {
+// Count the pages of a rendered PDF.
+function pageCount(pdf: Buffer): number {
+  return (pdf.toString("latin1").match(/\/Type\s*\/Page(?!s)/g) ?? []).length;
+}
+
+/**
+ * How to fit the planner on one landscape page: the largest text scale at
+ * which the planner page alone renders as a single page (found by halving the
+ * interval, a few quick renders); if even the smallest readable scale is not
+ * enough, the longest columns are cut and end with "+N". The same input always
+ * gives the same answer.
+ */
+const MIN_SCALE = 0.5;
+export async function fitPlanner(doc: ReportDoc, render: (el: React.ReactElement) => Promise<Buffer>): Promise<PlannerFit> {
+  const fits = async (fit: PlannerFit) =>
+    pageCount(await render(h(Document, null, h(PlannerPage, { doc, variant: 2, fit })))) <= 1;
+  if (await fits({ scale: 1, limit: null })) return { scale: 1, limit: null };
+  if (await fits({ scale: MIN_SCALE, limit: null })) {
+    let lo = MIN_SCALE;
+    let hi = 1;
+    for (let i = 0; i < 6; i++) {
+      const mid = (lo + hi) / 2;
+      if (await fits({ scale: mid, limit: null })) lo = mid;
+      else hi = mid;
+    }
+    return { scale: Math.floor(lo * 1000) / 1000, limit: null };
+  }
+  // Too many cards even at the smallest scale: show as many as fit.
+  const longest = Math.max(...doc.planner.columns.map((c) => c.items.length));
+  let lo = 0;
+  let hi = longest;
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (await fits({ scale: MIN_SCALE, limit: mid })) lo = mid;
+    else hi = mid;
+  }
+  return { scale: MIN_SCALE, limit: lo };
+}
+
+export function ReportDocument({ doc, planner = { scale: 1, limit: null } }: { doc: ReportDoc; planner?: PlannerFit }) {
   return h(
     Document,
     { title: doc.fileName.replace(/\.pdf$/i, ""), author: doc.header.brand, creator: "TEAM GTD", producer: "TEAM GTD" },
     h(Cover, { doc }),
     h(FlowPages, { doc, sections: doc.before, variant: 1 }),
-    h(PlannerPage, { doc, variant: 2 }),
+    h(PlannerPage, { doc, variant: 2, fit: planner }),
     h(FlowPages, { doc, sections: doc.after, variant: 3 })
   );
 }

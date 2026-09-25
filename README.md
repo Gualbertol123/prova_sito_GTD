@@ -338,7 +338,10 @@ text (selectable, searchable, sharp at any zoom). The design follows the
 pages: colour washes as SVG radial gradients, white glass cards with a soft
 shadow, accent bars, pills, progress bars, checkmarks; cards are never split
 across pages and a heading never ends a page; the planner is one landscape
-page (a very full board is set smaller to fit); page numbers are automatic.
+page — its size is found by measuring: the planner page is rendered alone
+and its pages counted, shrinking until it is exactly one; a long column
+spreads its cards over sub-columns, and only a board too full even at the
+smallest readable size ends a column with "+N" — page numbers are automatic.
 The headline's colour sweep is done word by word (PDF text cannot carry a
 gradient).
 

@@ -12,7 +12,7 @@
 
 import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { ReportDocument } from "../lib/reportPdf.mts";
+import { ReportDocument, fitPlanner } from "../lib/reportPdf.mts";
 import type { ReportDoc } from "../../src/lib/reportDoc";
 
 const MAX_BODY = 1_000_000; // 1 MB of JSON is far more than any report
@@ -85,7 +85,9 @@ export default async (req: Request): Promise<Response> => {
 
   let pdf: Buffer;
   try {
-    pdf = await renderToBuffer(React.createElement(ReportDocument, { doc }) as never);
+    const render = (el: React.ReactElement) => renderToBuffer(el as never);
+    const planner = await fitPlanner(doc, render);
+    pdf = await render(React.createElement(ReportDocument, { doc, planner }));
   } catch (e) {
     console.error("report-pdf render failed", e);
     return reply(500, `PDF render failed: ${e instanceof Error ? e.message : String(e)}`);
