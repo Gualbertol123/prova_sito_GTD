@@ -32,6 +32,8 @@ export function ReportView({ board }: Props) {
   const [busy, setBusy] = useState<null | "docx" | "pdf">(null);
   const [pdfProgress, setPdfProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Set when the PDF had to fall back to page images.
+  const [pdfFallback, setPdfFallback] = useState(false);
   const [fileName, setFileName] = useState("Weekly_Report.docx");
 
   const editorEl = useRef<HTMLDivElement>(null);
@@ -165,11 +167,12 @@ export function ReportView({ board }: Props) {
     setBusy("pdf");
     try {
       const { downloadPagesAsPdf } = await import("../lib/reportPdf");
-      await downloadPagesAsPdf(
+      const mode = await downloadPagesAsPdf(
         editorEl.current,
         fileName.replace(/\.docx$/i, "") + ".pdf",
         (done, total) => setPdfProgress({ done, total })
       );
+      setPdfFallback(mode === "image");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -301,7 +304,9 @@ export function ReportView({ board }: Props) {
                   : t("report.generating")
                 : t("report.downloadPdf")}
             </button>
-            <span className="text-[11px] text-[#8A8A8A]">{t("report.pdfHint")}</span>
+            {pdfFallback && (
+              <span className="text-[11px] text-[#8B6F3E]">{t("report.pdfFallback")}</span>
+            )}
           </div>
 
           <div className="report-print-root rounded-[14px] border border-[#E8E6E1] bg-white overflow-hidden">

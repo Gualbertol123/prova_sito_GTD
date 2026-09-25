@@ -187,6 +187,7 @@ prova_sito_GTD/
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
     ├── public/robots.txt         ← Disallow: / (noindex)
     ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
+    ├── public/fonts/             ← EB Garamond + Cinzel TTFs embedded in the PDF (OFL)
     ├── vite.config.ts            ← incl. manualChunks: SuperDoc/Supabase cached separately
     └── src/
         ├── main.tsx              ← mounts <LangProvider><IdentityProvider><AuthGate><App/>
@@ -210,7 +211,7 @@ prova_sito_GTD/
         │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
         │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
         │   ├── reportEditor.ts   ← SuperDoc loader, fonts, DOCX export
-        │   ├── reportPdf.ts      ← captures the editor's pages into a downloaded PDF (lazy)
+        │   ├── reportPdf.ts      ← redraws the editor's pages as a real-text PDF (lazy)
         │   ├── skin.ts           ← which visual skin is on (glass / classic)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
@@ -252,7 +253,7 @@ before it goes out, without leaving the site.
 period ─▶ buildReportDocx()  ─┐
                               ├─▶ .docx in memory ─▶ SuperDoc editor ─┬─▶ Download Word
          preloadSuperDoc()  ──┘   (never written                      └─▶ Download PDF
-         (starts on tab open)      to disk here)                          (pages → jsPDF)
+         (starts on tab open)      to disk here)                          (layout → jsPDF)
 ```
 
 Nothing is downloaded unless asked. **Download without editing** skips the
@@ -319,31 +320,51 @@ from ~507 kB to ~285 kB, because Supabase moved into its own chunk too.
 
 ### PDF
 
-**Download PDF** saves a `.pdf` file directly — no print dialog.
-SuperDoc can only export DOCX, but it already draws every page as an exact A4
-box with the letterhead and footer painted in, so `reportPdf.ts` photographs
-those boxes: each `.superdoc-page` is captured with
-[modern-screenshot](https://github.com/qq15725/modern-screenshot) (the browser
-paints it through an SVG `foreignObject`, so fonts and table borders match the
-screen) and placed full-bleed on its own page with
-[jsPDF](https://github.com/parallax/jsPDF). Both libraries are lazy-loaded on
-the click, so they cost nothing up front.
+**Download PDF** saves a `.pdf` file directly, with no print dialog, and the
+PDF has **real text**: it can be selected, searched and copied, and it stays
+sharp at any zoom. SuperDoc can only export DOCX. But it lays every page out
+itself as absolutely positioned lines, text runs, cell borders and fills. So
+`reportPdf.ts` reads that layout back out of the DOM and redraws it with
+[jsPDF](https://github.com/parallax/jsPDF):
 
-Things worth knowing:
+| On the page | In the PDF |
+| --- | --- |
+| text runs | PDF text in embedded fonts, at the run's exact position and width |
+| background fills, cell and paragraph borders | vector rectangles |
+| `<img>` (the letterhead logo) | the image |
+| underline / strike-through | a thin rule under / through the run |
 
-- **Each PDF page keeps its orientation.** The planner is a true A4 landscape
-  sheet; the other pages are A4 portrait.
-- **The text in the PDF is an image** (~190 dpi, JPEG), so it cannot be
-  selected or searched. When that matters, download the Word file and use
-  Word's own "Save as PDF". The hint next to the button says so.
-- **SuperDoc paints pages lazily.** By default it only keeps a window of pages
-  near the viewport, and it only fills in a page once it has been scrolled to.
-  The editor is created with `layoutEngineOptions: { virtualization: { enabled:
-  false } }` so every page box exists, and the exporter scrolls each page into
-  view and waits for its content before capturing it, then puts the scroll
-  position back. Without this, pages beyond the first screenful come out blank.
-- **Speed:** about 2 s per page (a normal 2-page report takes ~4 s). The button
-  shows `PDF: page n of N…` while it works.
+It also carries over bold, italic, colour, letter-spacing and `text-transform`.
+Each PDF page keeps its orientation, so the planner is a true A4 landscape
+sheet. Nine pages take about 2 s.
+
+**Fonts.** Garamond and Trajan Pro are commercial, so the PDF embeds their open
+counterparts, which are self-hosted in `web/public/fonts/` (OFL, see the
+README there): **EB Garamond** for Garamond and **Cinzel** for Trajan Pro. The
+Google families in the editor's font menu (Lora, Roboto, …) are fetched from
+the fontsource CDN on jsDelivr only when the document uses them. Arial, Calibri
+and other sans fonts map to the PDF's built-in Helvetica; Times New Roman and
+Georgia map to Times. If a font file can't be fetched, that run falls back to
+the built-in font rather than failing. Screen fonts and PDF fonts differ
+slightly in width. That difference is absorbed by the character spacing (capped
+at 12% of the font size), so centred and right-aligned text stays in place and
+glyphs are never stretched.
+
+**Lazy painting.** SuperDoc normally keeps only a window of pages near the
+viewport, and it fills a page in only once it has been scrolled to. The editor
+is created with `layoutEngineOptions: { virtualization: { enabled: false } }` so
+every page box exists. The exporter then scrolls each page into view and waits
+for its content before reading it, and puts the scroll position back at the
+end.
+
+**Fallback.** If the vector build throws for any reason, the previous route
+takes over: a picture of each page (modern-screenshot → JPEG → jsPDF). So the
+button always produces a file. When that happens, a note next to the button
+says the text in that PDF is not selectable.
+
+**Known quirk:** in the footer SuperDoc places some runs a couple of pixels too
+close together ("PAGE1OF2", "INTERNALUSE ONLY"). It looks the same in the
+editor; the PDF just reproduces SuperDoc's layout.
 
 ---
 
