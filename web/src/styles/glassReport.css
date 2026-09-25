@@ -532,6 +532,34 @@ html[data-skin="glass"] .gr-root * {
   color: var(--gr-ink-3);
 }
 
+.gr-col-item { position: relative; }
+.gr-item-hide {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(60, 60, 67, 0.16);
+  color: rgba(29, 29, 31, 0.7);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.gr-col-item:hover > .gr-item-hide { opacity: 1; }
+.gr-retro-free {
+  margin: 10px 0 0;
+  min-height: 22px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gr-ink-2);
+  white-space: pre-wrap;
+}
+.gr-blank { opacity: 0.75; border-style: dashed !important; }
+
 /* ---- Highlight picker (screen only) -------------------------------------------- */
 
 .gr-picker-btn {

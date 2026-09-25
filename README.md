@@ -284,7 +284,7 @@ REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
 | 02 Prossimi passi | the NEXT column now, with due dates and subtasks |
 | 03 Progetti | each project from the Projects tab with its checklist and % done |
 | 04 Planner | always **one landscape page**: Backlog · Next · In Progress · Waiting side by side; a very full board is scaled down to fit |
-| 05 Retrospettiva | the WEEKLY tab's buckets that have items (wins, learnings, to improve, blockers, focus next week) |
+| 05 Retrospettiva | all five WEEKLY buckets (wins, learnings, to improve, blockers, focus next week) with their items; a bucket with no items is a box to write in, left out of the PDF while it stays empty |
 
 Only the Done section is period-filtered; the rest is how the board stands when
 the report is generated. Like the old Word report it is **name-free**: no owner
@@ -299,7 +299,9 @@ appears anywhere.
   section heading always stays with its first card and no card is split.
   Pages are laid out by block id, so hiding a card (×) just drops it and the
   rest re-packs. The planner is its own 1123 × 794 landscape page.
-- **Editing.** Every text is `contentEditable`. An edit is stored when the
+- **Editing.** Every text on the pages is `contentEditable` — titles, labels,
+  counts, dates, tile figures, headers and footers (only page numbers are
+  automatic); planner items have their own × too. An edit is stored when the
   field loses focus, the blocks are measured again and re-packed — a longer
   text simply pushes the next card to the following page. Edits live only in
   memory while the report is open; closing the report discards them.

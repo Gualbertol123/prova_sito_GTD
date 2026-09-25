@@ -65,6 +65,8 @@ function Ed({
   className = "",
   multiline = false,
   tag: Tag = "span",
+  style,
+  placeholder = "…",
 }: {
   id: string;
   value: string;
@@ -72,6 +74,8 @@ function Ed({
   className?: string;
   multiline?: boolean;
   tag?: "span" | "div" | "h1" | "h2" | "h3" | "p";
+  style?: React.CSSProperties;
+  placeholder?: string;
 }) {
   const text = edit.get(id) ?? value;
   return (
@@ -83,7 +87,8 @@ function Ed({
       contentEditable={edit.enabled}
       suppressContentEditableWarning
       spellCheck={false}
-      data-placeholder="…"
+      data-placeholder={placeholder}
+      style={style}
       onBlur={(e) => {
         const next = (e.currentTarget as HTMLElement).innerText.replace(/\n+$/, "");
         if (next !== text) edit.set(id, next);
@@ -103,11 +108,11 @@ function Ed({
 
 // ---- Small pieces ---------------------------------------------------------------
 
-function PriorityPill({ p }: { p: Priority }) {
+function PriorityPill({ p, id, edit }: { p: Priority; id: string; edit: EditCtx }) {
   return (
     <span className="gr-pill" style={{ color: PRIORITY_COLOR[p], background: `${PRIORITY_COLOR[p]}17` }}>
       <span className="gr-dot" style={{ background: PRIORITY_COLOR[p] }} />
-      {p}
+      <Ed id={id} value={p} edit={edit} />
     </span>
   );
 }
@@ -151,7 +156,7 @@ interface BlockProps {
   onHide?: (id: string) => void;
 }
 
-function Subtasks({ task, edit, limit = 8 }: { task: Task; edit: EditCtx; limit?: number }) {
+function Subtasks({ id, task, edit, limit = 8 }: { id: string; task: Task; edit: EditCtx; limit?: number }) {
   const { t } = useT();
   const subs: Subtask[] = task.subtasks ?? [];
   if (!subs.length) return null;
@@ -164,7 +169,11 @@ function Subtasks({ task, edit, limit = 8 }: { task: Task; edit: EditCtx; limit?
           <Ed id={`sub.${task.id}.${s.id}`} value={s.text} edit={edit} />
         </li>
       ))}
-      {subs.length > limit && <li className="gr-more">{t("gr.more", { n: subs.length - limit })}</li>}
+      {subs.length > limit && (
+        <li className="gr-more">
+          <Ed id={`${id}.more`} value={t("gr.more", { n: subs.length - limit })} edit={edit} />
+        </li>
+      )}
     </ul>
   );
 }
@@ -180,14 +189,19 @@ function TaskCard({ block, edit, fmtDate, onHide }: BlockProps & { block: Extrac
       <span className="gr-accent" style={{ background: accent }} />
       <HideButton onHide={onHide && (() => onHide(block.id))} />
       <div className="gr-card-top">
-        <PriorityPill p={task.priority} />
-        <span className="gr-meta">
-          {block.mode === "done" && block.completedAt
-            ? `✓ ${t("gr.completedOn")} ${fmtDate(block.completedAt)}`
-            : task.dueDate
-              ? `${t("gr.due")} ${fmtDate(task.dueDate)}`
-              : ""}
-        </span>
+        <PriorityPill p={task.priority} id={`${block.id}.prio`} edit={edit} />
+        <Ed
+          id={`${block.id}.meta`}
+          className="gr-meta"
+          edit={edit}
+          value={
+            block.mode === "done" && block.completedAt
+              ? `✓ ${t("gr.completedOn")} ${fmtDate(block.completedAt)}`
+              : task.dueDate
+                ? `${t("gr.due")} ${fmtDate(task.dueDate)}`
+                : ""
+          }
+        />
       </div>
       <Ed tag="h3" id={`${block.id}.title`} value={task.title} edit={edit} className="gr-card-title" />
       {(edit.get(`${block.id}.desc`) ?? task.desc) && (
@@ -196,12 +210,10 @@ function TaskCard({ block, edit, fmtDate, onHide }: BlockProps & { block: Extrac
       {subs.length > 0 && (
         <div className="gr-progress-row">
           <Bar value={doneSubs / subs.length} color={accent} />
-          <span className="gr-progress-label">
-            {doneSubs}/{subs.length}
-          </span>
+          <Ed id={`${block.id}.progress`} className="gr-progress-label" value={`${doneSubs}/${subs.length}`} edit={edit} />
         </div>
       )}
-      <Subtasks task={task} edit={edit} />
+      <Subtasks id={block.id} task={task} edit={edit} />
     </div>
   );
 }
@@ -218,13 +230,11 @@ function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Bloc
       <HideButton onHide={onHide && (() => onHide(block.id))} />
       <div className="gr-project-head">
         <Ed tag="h3" id={`${block.id}.name`} value={p.name || t("gr.untitled")} edit={edit} className="gr-card-title" />
-        <span className="gr-big-pct">{Math.round(share * 100)}%</span>
+        <Ed id={`${block.id}.pct`} className="gr-big-pct" value={`${Math.round(share * 100)}%`} edit={edit} />
       </div>
       <div className="gr-progress-row">
         <Bar value={share} color="linear-gradient(90deg,#5856D6,#AF52DE)" />
-        <span className="gr-progress-label">
-          {done}/{p.items.length}
-        </span>
+        <Ed id={`${block.id}.progress`} className="gr-progress-label" value={`${done}/${p.items.length}`} edit={edit} />
       </div>
       {p.items.length > 0 && (
         <ul className="gr-subs gr-subs-2col">
@@ -234,7 +244,11 @@ function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Bloc
               <Ed id={`${block.id}.item.${it.id}`} value={it.text} edit={edit} />
             </li>
           ))}
-          {p.items.length > limit && <li className="gr-more">{t("gr.more", { n: p.items.length - limit })}</li>}
+          {p.items.length > limit && (
+            <li className="gr-more">
+              <Ed id={`${block.id}.more`} value={t("gr.more", { n: p.items.length - limit })} edit={edit} />
+            </li>
+          )}
         </ul>
       )}
     </div>
@@ -243,20 +257,33 @@ function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Bloc
 
 function Retro({ block, edit, onHide }: BlockProps & { block: Extract<Block, { kind: "retro" }> }) {
   const { t } = useT();
+  const freeId = `${block.id}.text`;
+  // A bucket with nothing in the Weekly tab is a blank box to write in; left
+  // blank, it stays out of the PDF.
+  const blank = block.items.length === 0 && !(edit.get(freeId) ?? "").trim();
   return (
-    <div className="gr-glass gr-card">
+    <div className={`gr-glass gr-card ${blank ? "gr-noexport gr-blank" : ""}`}>
       <span className="gr-accent" style={{ background: SECTION_COLOR.retro }} />
       <HideButton onHide={onHide && (() => onHide(block.id))} />
-      <div className="gr-eyebrow" style={{ color: SECTION_COLOR.retro }}>
-        {t(`gr.retro.${block.bucket}`)}
-      </div>
-      <ul className="gr-bullets">
-        {block.items.map((it) => (
-          <li key={it.id}>
-            <Ed id={`${block.id}.${it.id}`} value={it.text} edit={edit} multiline />
-          </li>
-        ))}
-      </ul>
+      <Ed
+        tag="div"
+        id={`${block.id}.label`}
+        value={t(`gr.retro.${block.bucket}`)}
+        edit={edit}
+        className="gr-eyebrow"
+        style={{ color: SECTION_COLOR.retro }}
+      />
+      {block.items.length > 0 ? (
+        <ul className="gr-bullets">
+          {block.items.map((it) => (
+            <li key={it.id}>
+              <Ed id={`${block.id}.${it.id}`} value={it.text} edit={edit} multiline />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Ed tag="p" id={freeId} value="" edit={edit} multiline className="gr-retro-free" placeholder={t("gr.retro.write")} />
+      )}
     </div>
   );
 }
@@ -266,14 +293,23 @@ function SectionHead({ block, edit }: BlockProps & { block: Extract<Block, { kin
   const color = SECTION_COLOR[block.key];
   return (
     <div className="gr-section">
-      <div className="gr-eyebrow" style={{ color }}>
-        {String(block.n).padStart(2, "0")} · {t(`gr.sec.${block.key}.eyebrow`)}
-      </div>
+      <Ed
+        tag="div"
+        id={`${block.id}.eyebrow`}
+        value={`${String(block.n).padStart(2, "0")} · ${t(`gr.sec.${block.key}.eyebrow`)}`}
+        edit={edit}
+        className="gr-eyebrow"
+        style={{ color }}
+      />
       <div className="gr-section-row">
         <Ed tag="h2" id={`${block.id}.title`} value={t(`gr.sec.${block.key}.title`)} edit={edit} className="gr-h2" />
-        <span className="gr-count gr-count-lg" style={{ color, background: `${color}17` }}>
-          {block.count}
-        </span>
+        <Ed
+          id={`${block.id}.count`}
+          value={String(block.count)}
+          edit={edit}
+          className="gr-count gr-count-lg"
+          style={{ color, background: `${color}17` }}
+        />
       </div>
     </div>
   );
@@ -292,7 +328,11 @@ function BlockView(props: BlockProps) {
     case "retro":
       return <Retro {...props} block={block} />;
     case "empty":
-      return <div className="gr-glass gr-empty">{t(`gr.sec.${block.key}.empty`)}</div>;
+      return (
+        <div className="gr-glass gr-empty">
+          <Ed id={block.id} value={t(`gr.sec.${block.key}.empty`)} edit={props.edit} multiline />
+        </div>
+      );
   }
 }
 
@@ -306,6 +346,7 @@ function PageChrome({
   periodText,
   pageRef,
   landscape = false,
+  edit,
 }: {
   children: React.ReactNode;
   index: number;
@@ -314,6 +355,7 @@ function PageChrome({
   periodText: string;
   pageRef: (el: HTMLDivElement | null) => void;
   landscape?: boolean;
+  edit: EditCtx;
 }) {
   const { t } = useT();
   return (
@@ -329,14 +371,14 @@ function PageChrome({
         <div className="gr-header" style={{ left: PAD_X, right: PAD_X }}>
           <span className="gr-header-brand">
             <span className="gr-logo-dot" />
-            {boardName}
+            <Ed id="cover.board" value={boardName} edit={edit} />
           </span>
-          <span className="gr-header-period">{periodText}</span>
+          <Ed id="page.period" value={periodText} edit={edit} className="gr-header-period" />
         </div>
       )}
       {children}
       <div className="gr-footer" style={{ left: PAD_X, right: PAD_X }}>
-        <span>{t("gr.footer")}</span>
+        <Ed id="page.footer" value={t("gr.footer")} edit={edit} />
         <span>
           {index + 1} / {total}
         </span>
@@ -355,17 +397,26 @@ function PlannerPage({
   columns,
   edit,
   fmtDate,
+  hidden,
+  onHide,
 }: {
   n: number;
   columns: PlannerColumn[];
   edit: EditCtx;
   fmtDate: (v: number | string) => string;
+  hidden: Set<string>;
+  onHide: (id: string) => void;
 }) {
   const { t, lang } = useT();
   const boardRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const total = columns.reduce((a, c) => a + c.tasks.length, 0);
+  // Tasks taken off the board with their × are left out.
+  const shown = useMemo(
+    () => columns.map((c) => ({ ...c, tasks: c.tasks.filter((task) => !hidden.has(`plan.${task.id}`)) })),
+    [columns, hidden]
+  );
+  const total = shown.reduce((a, c) => a + c.tasks.length, 0);
 
   useLayoutEffect(() => {
     const fit = () => {
@@ -378,7 +429,7 @@ function PlannerPage({
     };
     fit();
     document.fonts?.ready.then(fit).catch(() => {});
-  }, [columns, edit]);
+  }, [shown, edit]);
 
   return (
     <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: L_CONTENT_W, height: L_CONTENT_H }}>
@@ -399,30 +450,45 @@ function PlannerPage({
           transformOrigin: "top left",
         }}
       >
-        {columns.map((col) => {
+        {shown.map((col) => {
           const color = STATUS_COLOR[col.status] ?? "#8E8E93";
           return (
             <div key={col.status} className="gr-glass gr-col">
               <div className="gr-band-head">
                 <span className="gr-dot gr-dot-lg" style={{ background: color }} />
-                <span className="gr-band-title">{statusLabel(lang, col.status)}</span>
-                <span className="gr-count" style={{ color, background: `${color}17` }}>
-                  {col.tasks.length}
-                </span>
+                <Ed id={`plan.col.${col.status}`} value={statusLabel(lang, col.status)} edit={edit} className="gr-band-title" />
+                <Ed
+                  id={`plan.col.${col.status}.count`}
+                  value={String(col.tasks.length)}
+                  edit={edit}
+                  className="gr-count"
+                  style={{ color, background: `${color}17` }}
+                />
               </div>
               {col.tasks.length === 0 ? (
-                <div className="gr-muted gr-col-empty">{t("gr.bandEmpty")}</div>
+                <Ed tag="div" id={`plan.col.${col.status}.empty`} value={t("gr.bandEmpty")} edit={edit} className="gr-muted gr-col-empty" />
               ) : (
                 <div className="gr-col-list">
                   {col.tasks.map((task) => (
                     <div key={task.id} className="gr-col-item">
+                      <button
+                        type="button"
+                        className="gr-item-hide gr-noexport"
+                        title={t("gr.hide")}
+                        onClick={() => onHide(`plan.${task.id}`)}
+                      >
+                        ×
+                      </button>
                       <span className="gr-dot" style={{ background: PRIORITY_COLOR[task.priority], marginTop: 5 }} />
                       <div className="gr-col-text">
                         <Ed id={`plan.${task.id}`} value={task.title} edit={edit} className="gr-col-title" />
                         {task.dueDate && (
-                          <span className="gr-col-meta">
-                            {t("gr.due")} {fmtDate(task.dueDate)}
-                          </span>
+                          <Ed
+                            id={`plan.${task.id}.due`}
+                            value={`${t("gr.due")} ${fmtDate(task.dueDate)}`}
+                            edit={edit}
+                            className="gr-col-meta"
+                          />
                         )}
                       </div>
                     </div>
@@ -548,11 +614,13 @@ function Cover({
           <span className="gr-logo-dot" />
           <Ed id="cover.board" value={board.boardName} edit={edit} />
         </span>
-        <span className="gr-glass gr-period-pill">{periodText}</span>
+        <span className="gr-glass gr-period-pill">
+          <Ed id="page.period" value={periodText} edit={edit} />
+        </span>
       </div>
 
       <div className="gr-cover-title-wrap">
-        <div className="gr-eyebrow gr-eyebrow-cover">{t("gr.cover.eyebrow")}</div>
+        <Ed tag="div" id="cover.eyebrow" value={t("gr.cover.eyebrow")} edit={edit} className="gr-eyebrow gr-eyebrow-cover" />
         <Ed tag="h1" id="cover.title" value={t("gr.cover.title")} edit={edit} className="gr-h1" />
         <Ed tag="p" id="cover.subtitle" value={t("gr.cover.subtitle")} edit={edit} className="gr-lede" multiline />
       </div>
@@ -560,19 +628,15 @@ function Cover({
       <div className="gr-tiles gr-tiles-5">
         {tiles.map((tile) => (
           <div key={tile.k} className="gr-glass gr-tile">
-            <span className="gr-tile-v" style={{ color: tile.c }}>
-              {tile.v}
-            </span>
-            <span className="gr-tile-k">{t(tile.k)}</span>
+            <Ed id={`${tile.k}.v`} value={String(tile.v)} edit={edit} className="gr-tile-v" style={{ color: tile.c }} />
+            <Ed id={`${tile.k}.k`} value={t(tile.k)} edit={edit} className="gr-tile-k" />
           </div>
         ))}
       </div>
 
       <div className={`gr-glass gr-highlights ${chosen.length ? "" : "gr-noexport"}`}>
         <div className="gr-highlights-head">
-          <span className="gr-eyebrow" style={{ color: "#34C759" }}>
-            {t("gr.cover.highlights")}
-          </span>
+          <Ed id="cover.highlightsTitle" value={t("gr.cover.highlights")} edit={edit} className="gr-eyebrow" style={{ color: "#34C759" }} />
           {edit.enabled && (
             <button type="button" className="gr-picker-btn gr-noexport" onClick={() => setPicking((v) => !v)}>
               {t("gr.pick.open")}
@@ -592,7 +656,11 @@ function Cover({
                 ) : (
                   <span className="gr-hl-dot" style={{ background: STATUS_COLOR[task.status] ?? "#8E8E93" }} />
                 )}
-                <span>{edit.get(`task.${task.id}.title`) ?? edit.get(`next.${task.id}.title`) ?? task.title}</span>
+                <Ed
+                  id={`hl.${task.id}`}
+                  value={edit.get(`task.${task.id}.title`) ?? edit.get(`next.${task.id}.title`) ?? task.title}
+                  edit={edit}
+                />
               </li>
             ))}
           </ul>
@@ -608,9 +676,7 @@ function Cover({
       </div>
 
       <div className="gr-glass gr-note">
-        <div className="gr-eyebrow" style={{ color: "#007AFF" }}>
-          {t("gr.cover.noteTitle")}
-        </div>
+        <Ed tag="div" id="cover.noteTitle" value={t("gr.cover.noteTitle")} edit={edit} className="gr-eyebrow" style={{ color: "#007AFF" }} />
         <Ed tag="p" id="cover.note" value={t("gr.cover.note")} edit={edit} className="gr-note-text" multiline />
       </div>
     </div>
@@ -725,7 +791,7 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
   };
 
   const flow = (blocks: Block[], index: number) => (
-    <PageChrome key={`p${index}`} index={index} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(index)}>
+    <PageChrome key={`p${index}`} index={index} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(index)} edit={edit}>
       <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: CONTENT_W, height: CONTENT_H }}>
         {blocks.map((b) => (
           <div key={b.id} className="gr-block">
@@ -748,7 +814,7 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
       </div>
 
       <div className="gr-pages">
-        <PageChrome index={0} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(0)}>
+        <PageChrome index={0} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(0)} edit={edit}>
           <Cover
             board={board}
             data={data}
@@ -770,8 +836,16 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
               periodText={periodText}
               pageRef={setPage(1 + before.length)}
               landscape
+              edit={edit}
             >
-              <PlannerPage n={input.planner.n} columns={input.planner.columns} edit={edit} fmtDate={fmtDate} />
+              <PlannerPage
+                n={input.planner.n}
+                columns={input.planner.columns}
+                edit={edit}
+                fmtDate={fmtDate}
+                hidden={hidden}
+                onHide={hide}
+              />
             </PageChrome>
             {after.map((blocks, i) => flow(blocks, 2 + before.length + i))}
           </>

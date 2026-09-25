@@ -95,11 +95,12 @@ export function buildBlocks(board: Board, data: ReportData, hidden: Set<string>)
   const planner = { n, columns: data.planner };
   const after = section(
     "retro",
-    RETRO_ORDER.filter((b) => (board.weekly[b] ?? []).length > 0).map((b) => ({
+    // All five buckets, always: an empty one is a box to write in.
+    RETRO_ORDER.map((b) => ({
       kind: "retro" as const,
       id: `retro.${b}`,
       bucket: b,
-      items: board.weekly[b],
+      items: board.weekly[b] ?? [],
     }))
   );
   return { before, planner, after };
