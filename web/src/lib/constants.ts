@@ -60,11 +60,8 @@ export const PRIORITY_DOT: Record<Priority, string> = {
 
 export const UNASSIGNED = "Unassigned";
 
-export const TRACKING_PASSWORD = "Matusalemme";
-
-// Universal access gate (soft, client-side). Editable in Settings once the
-// settings migration is applied; this is the fallback used before then.
-export const DEFAULT_ACCESS_PASSWORD = "IBDGTDTEAM";
+// How long a device stays logged in when Settings has no value yet. (No
+// password lives in the code: they are all checked by Supabase — lib/auth.ts.)
 export const DEFAULT_LOGIN_DAYS = 7;
 
 // Weekly-review columns config (key, label, colour classes).

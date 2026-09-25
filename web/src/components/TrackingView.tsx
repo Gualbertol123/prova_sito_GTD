@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Board } from "../lib/types";
-import { TRACKING_PASSWORD } from "../lib/constants";
+import { trackingLogin, outcomeKey } from "../lib/auth";
 import { localeCode, ownerLabel, useT } from "../lib/i18n";
 import { isOwnedBy } from "../lib/owners";
 
@@ -8,10 +8,24 @@ export function TrackingView({ board }: { board: Board }) {
   const { t } = useT();
   const [authed, setAuthed] = useState(false);
   const [pwd, setPwd] = useState("");
-  const [err, setErr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<{ key: string; detail?: string } | null>(null);
 
   if (!authed) {
-    const submit = () => (pwd === TRACKING_PASSWORD ? setAuthed(true) : setErr(true));
+    // Checked by the database (tracking_login); the password is not in the code.
+    const submit = async () => {
+      if (busy || !pwd) return;
+      setBusy(true);
+      setErr(null);
+      const out = await trackingLogin(pwd);
+      setBusy(false);
+      if (out.result === "ok") {
+        setPwd("");
+        setAuthed(true);
+      } else {
+        setErr({ key: outcomeKey(out.result), detail: out.detail });
+      }
+    };
     return (
       <div className="max-w-[420px] mx-auto mt-10 bg-white rounded-[16px] border border-[#E8E6E1] p-6 text-center">
         <div className="w-12 h-12 rounded-full bg-[#0A1931] text-[#C9A96E] flex items-center justify-center mx-auto text-[20px]">
@@ -28,7 +42,7 @@ export function TrackingView({ board }: { board: Board }) {
             autoFocus
             onChange={(e) => {
               setPwd(e.target.value);
-              setErr(false);
+              setErr(null);
             }}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             placeholder={t("track.password")}
@@ -38,12 +52,18 @@ export function TrackingView({ board }: { board: Board }) {
           />
           <button
             onClick={submit}
-            className="h-10 px-5 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold"
+            disabled={busy || !pwd}
+            className="h-10 px-5 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold disabled:opacity-60"
           >
-            {t("track.enter")}
+            {busy ? "…" : t("track.enter")}
           </button>
         </div>
-        {err && <p className="text-[11px] text-[#DC2626] mt-2">{t("track.wrong")}</p>}
+        {err && (
+          <p className="text-[11px] text-[#DC2626] mt-2">
+            {t(err.key)}
+            {err.detail && <span className="block opacity-70 mt-0.5">{err.detail}</span>}
+          </p>
+        )}
       </div>
     );
   }

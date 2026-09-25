@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { Board, Op } from "../lib/types";
-import { DEFAULT_ACCESS_PASSWORD, DEFAULT_LOGIN_DAYS } from "../lib/constants";
-import { clearAuth } from "../lib/prefs";
+import { DEFAULT_LOGIN_DAYS } from "../lib/constants";
+import { changeTeamPassword, signOutDevice, outcomeKey } from "../lib/auth";
 import { useT } from "../lib/i18n";
 import {
   processImage,
@@ -18,7 +18,6 @@ interface Props {
 
 export function SettingsView({ board, send }: Props) {
   const { t } = useT();
-  const [pwd, setPwd] = useState(board.accessPassword ?? DEFAULT_ACCESS_PASSWORD);
   const [days, setDays] = useState(String(board.loginDays ?? DEFAULT_LOGIN_DAYS));
   const [saved, setSaved] = useState(false);
   const [imgErr, setImgErr] = useState<string | null>(null);
@@ -122,23 +121,7 @@ export function SettingsView({ board, send }: Props) {
       {/* Access */}
       <section className="bg-white rounded-[14px] border border-[#E8E6E1] p-5 space-y-3">
         <h3 className="font-trajan text-[11px] uppercase tracking-widest text-[#C9A96E]">{t("settings.access")}</h3>
-        <label className="block">
-          <span className="text-[11px] uppercase tracking-wide text-[#8A8A8A]">{t("settings.accessPassword")}</span>
-          <div className="flex gap-2 mt-1">
-            <input value={pwd} onChange={(e) => setPwd(e.target.value)} className={input} />
-            <button
-              onClick={() => {
-                if (pwd.trim()) {
-                  send({ type: "setAccess", password: pwd.trim() });
-                  flashSaved();
-                }
-              }}
-              className={saveBtn}
-            >
-              {t("settings.save")}
-            </button>
-          </div>
-        </label>
+        <TeamPasswordForm input={input} saveBtn={saveBtn} />
         <label className="block">
           <span className="text-[11px] uppercase tracking-wide text-[#8A8A8A]">{t("settings.loginDuration")}</span>
           <div className="flex gap-2 mt-1">
@@ -158,8 +141,8 @@ export function SettingsView({ board, send }: Props) {
         </label>
 
         <button
-          onClick={() => {
-            clearAuth();
+          onClick={async () => {
+            await signOutDevice();
             window.location.reload();
           }}
           className="h-10 px-4 rounded-full text-[12px] font-semibold text-[#DC2626] border border-[#FECACA] hover:bg-[#FEF2F2]"
@@ -169,6 +152,68 @@ export function SettingsView({ board, send }: Props) {
       </section>
 
       <p className="text-[11px] text-[#8A8A8A]">{t("settings.migrationNote")}</p>
+    </div>
+  );
+}
+
+// Change the shared team password (Supabase Auth). Needs the current one; on
+// success every other device is logged out and must use the new password.
+// Forgotten? An admin resets it from Supabase (README → Security → Admin).
+function TeamPasswordForm({ input, saveBtn }: { input: string; saveBtn: string }) {
+  const { t } = useT();
+  const [cur, setCur] = useState("");
+  const [np, setNp] = useState("");
+  const [np2, setNp2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; key: string; detail?: string } | null>(null);
+
+  const submit = async () => {
+    if (busy) return;
+    if (np.length < 8) return setMsg({ ok: false, key: "settings.pwdTooShort" });
+    if (np !== np2) return setMsg({ ok: false, key: "settings.pwdMismatch" });
+    setBusy(true);
+    setMsg(null);
+    const out = await changeTeamPassword(cur, np);
+    setBusy(false);
+    if (out.result === "ok") {
+      setCur("");
+      setNp("");
+      setNp2("");
+      setMsg({ ok: true, key: "settings.pwdChanged" });
+    } else {
+      setMsg({ ok: false, key: out.result === "wrong" ? "settings.pwdWrongCurrent" : outcomeKey(out.result), detail: out.detail });
+    }
+  };
+
+  const onChange = (set: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    set(e.target.value);
+    setMsg(null);
+  };
+
+  return (
+    <div className="block">
+      <span className="text-[11px] uppercase tracking-wide text-[#8A8A8A]">{t("settings.teamPassword")}</span>
+      <div className="space-y-2 mt-1">
+        <input type="password" autoComplete="current-password" value={cur} onChange={onChange(setCur)}
+          placeholder={t("settings.pwdCurrent")} className={input} />
+        <input type="password" autoComplete="new-password" value={np} onChange={onChange(setNp)}
+          placeholder={t("settings.pwdNew")} className={input} />
+        <div className="flex gap-2">
+          <input type="password" autoComplete="new-password" value={np2} onChange={onChange(setNp2)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder={t("settings.pwdConfirm")} className={input} />
+          <button onClick={submit} disabled={busy || !cur || !np || !np2} className={`${saveBtn} disabled:opacity-60`}>
+            {busy ? "…" : t("settings.save")}
+          </button>
+        </div>
+      </div>
+      <p className="text-[11px] text-[#A8A29E] mt-1">{t("settings.pwdHint")}</p>
+      {msg && (
+        <p className={`text-[12px] mt-1 ${msg.ok ? "text-[#065F46]" : "text-[#DC2626]"}`}>
+          {t(msg.key)}
+          {msg.detail && <span className="block opacity-70 mt-0.5 text-[11px]">{msg.detail}</span>}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,14 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabaseConfig";
 
-// persistSession:false + autoRefreshToken:false → the client keeps nothing in
-// localStorage. We use only the anonymous key (no login), so there is no
-// session to persist. Everything lives in memory for the session only, which
-// satisfies the "nothing saved or cached locally" requirement.
+// The team logs in with a real Supabase Auth account (see lib/auth.ts), and
+// the database only answers to that logged-in session. The session (an access
+// token plus a refresh token — never the password) is kept in localStorage so
+// the login survives a reload; AuthGate ends it after the configured number
+// of days, and "Log out this device" removes it. Board content itself is
+// still never cached locally.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+    persistSession: true,
+    autoRefreshToken: true,
     detectSessionInUrl: false,
+    storageKey: "gtd-session",
   },
 });

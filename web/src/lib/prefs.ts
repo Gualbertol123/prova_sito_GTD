@@ -68,7 +68,8 @@ export function writeWeights(w: Record<string, number>): void {
   writePref("weights", JSON.stringify(w));
 }
 
-// Cached login token: { exp: epoch-ms }.
+// When this device's team login ends: { exp: epoch-ms }. The session itself
+// is Supabase's (lib/supabaseClient.ts); AuthGate ends it at this time.
 export function readAuthExp(): number | null {
   const a = readJson<{ exp?: number }>("auth", {});
   return typeof a?.exp === "number" ? a.exp : null;

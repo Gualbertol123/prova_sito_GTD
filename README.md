@@ -27,16 +27,16 @@ full file map, how to run and deploy it, and how to extend it.
 | **WEEKLY** | Weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **REPORT** | Generates the Word report on the Intesa Sanpaolo template and opens it in **SuperDoc**, a real DOCX editor running in the browser (see §5). Nothing is downloaded until asked: correct anything in the editor — text, tables, fonts — then **Download Word** or **Download PDF**. There is also a **Download without editing** button that skips the editor entirely. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
-| **REFLECTION** | **Personal**, behind a per-user password (default `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can view and change your own password. Passwords live in the `reflection_access` table — an admin can reset any of them in Supabase. A **Diary / Notes** switch at the top of the tab, behind the same password, holds **Personal notes**: free-form notes only you see, in the `personal_notes` table (the chip carries their count, and the tab reopens on whichever half you used last). Private in the interface, not in the database — the anon key can read that table like any other. |
-| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password lives in code — see §9. |
+| **REFLECTION** | **Personal**, behind a per-user password (initial password `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can change your own password (the current one is required). Passwords are stored as **bcrypt hashes** and checked by the database (`reflection_login`); 5 wrong tries lock that name for 5 minutes; an admin resets a forgotten one from Supabase (§11). A **Diary / Notes** switch at the top of the tab, behind the same password, holds **Personal notes**: free-form notes only you see, in the `personal_notes` table (the chip carries their count, and the tab reopens on whichever half you used last). Private from outsiders, but *within the team* the privacy is in the interface only — see §11. |
+| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password is a bcrypt hash in the database, checked by `tracking_login`; set it from Supabase (§11). |
 | **IDEAS** | Anonymous suggestions for improving the site. Nothing identifying is stored — the row is only `{id, body, created_at}`, and the composer ignores the "You" identity the rest of the app uses. The browser that posted an idea keeps its ids in `localStorage` so it can delete its own; that list never leaves the device, and nobody can delete anyone else's. |
-| **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); shared access password; login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
+| **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); change the shared team password (current one required; logs every other device out); login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
 
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
 switch (§10, on by default), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
-mail client). The whole app sits behind a shared-password gate and is
-`noindex`.
+mail client). The whole app sits behind a real login (one shared Supabase Auth
+account, §11) and is `noindex`.
 
 ---
 
@@ -50,7 +50,8 @@ Browser — React SPA (state in memory only)
   │  live   : Postgres realtime (WebSocket) → change events → debounced refetch
   ▼
 Supabase project (free tier)
-  Postgres tables (RLS open to the anon key) + realtime publication
+  Supabase Auth (one shared team account) → JWT on every request
+  Postgres tables (RLS: logged-in team account only) + realtime publication
 ```
 
 **Operation model.** The UI never writes SQL. Every edit is a typed `Op`
@@ -75,10 +76,11 @@ anywhere, and its "document open" telemetry is switched off explicitly
 (`telemetry: { enabled: false }`), so report contents and filenames are not
 reported to a third party.
 
-**What is cached in the browser.** Board **data is never cached** — the Supabase
-client runs memory-only with `persistSession:false` (`supabaseClient.ts`), so
-closing the tab leaves no copy of any task. Only **per-device UI preferences**
-live in `localStorage` (`prefs.ts`):
+**What is cached in the browser.** Board **data is never cached** — it lives in
+memory only, so closing the tab leaves no copy of any task. `localStorage` holds
+the **login session** (Supabase access + refresh token, never the password; key
+`gtd-session`, `supabaseClient.ts`) and **per-device UI preferences**
+(`prefs.ts`):
 
 | Key | Meaning |
 | --- | --- |
@@ -89,7 +91,8 @@ live in `localStorage` (`prefs.ts`):
 | `gtd-prio-collapsed` | priority chart collapsed |
 | `gtd-me` | which member "you" are |
 | `gtd-reviewed` | learnings reviewed today (spaced review) |
-| `gtd-auth` | access-gate token `{exp}` (login cache) |
+| `gtd-session` | the Supabase Auth session (tokens, not the password) |
+| `gtd-auth` | when this device's login ends `{exp}` (Settings → login duration) |
 | `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
 | `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
 | `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
@@ -99,14 +102,16 @@ live in `localStorage` (`prefs.ts`):
 
 ## 3. Data model (Supabase)
 
-Seven tables, all with **RLS enabled and an open policy for the anon key** (any
-signed-out visitor with the anon key can read/write — see §9) and all in the
-`supabase_realtime` publication.
+Eight tables in `public`, all with **RLS enabled and one policy: the logged-in
+team account only** (`is_team_member()`; the anon key alone gets nothing — §11).
+All except `reflection_access` are in the `supabase_realtime` publication. A
+`private` schema, which the website's API cannot reach, holds the team list and
+the Tracking password hash.
 
 **`board_meta`** — one row, `id = 'main'`, holds board-wide state:
-`board_name`, `members text[]`, `subtitle_it`, `subtitle_en`, `access_password`
-(default in code), `login_days` (default 7), `logo_url`, `favicon_url` (data
-URLs).
+`board_name`, `members text[]`, `subtitle_it`, `subtitle_en`, `login_days`
+(default 7), `logo_url`, `favicon_url` (data URLs). (The old clear-text
+`access_password` column is dropped by migration 012.)
 
 **`tasks`** — one row per task: `id`, `title`, `description` (app `desc`),
 `owner`, `assignees text[]`, `priority`, `status`, `notes`, `subtasks jsonb`, `due_date`,
@@ -127,17 +132,27 @@ needs no migration.
 **`projects`** — one row per project: `id`, `name`, `items jsonb`
 (`[{id,text,done,doneAt}]`, same shape as subtasks), `created_at`, `updated_at`.
 
-**`reflection_access`** — one row per member: `member`, `password`, `updated_at`.
-The per-member Reflection gate; an admin resets a password by editing the
-`password` cell in the Supabase Table Editor.
+**`reflection_access`** — one row per member: `member`, `password_hash`
+(bcrypt), `failed_attempts`, `locked_until`, `updated_at`. **Not readable from
+the browser at all**; used only by the `reflection_login` /
+`reflection_change_password` database functions. Reset a password with
+`private.admin_set_reflection_password` (§11) — editing the table by hand does
+not work any more.
+
+**`personal_notes`** — one row per note: `id`, `member`, `body`, `created_at`,
+`updated_at`.
+
+**`private.team_accounts`** — the Supabase Auth user id(s) allowed to use the
+board. **`private.app_secrets`** — the Tracking password hash.
 
 **`suggestions`** — one row per anonymous idea: `id`, `body`, `created_at`.
 Deliberately **no author column**.
 
 SQL files in `supabase/`:
 
-- `schema.sql` — the **complete** schema for a fresh project (all tables +
-  policies + realtime).
+- `schema.sql` — the **complete** schema for a fresh, empty project (all
+  tables, team-only policies, password functions, realtime). Not for a project
+  that already has data — use the migrations.
 - `migration-002-settings.sql` — adds subtitle / access-password / login-days
   columns to `board_meta`.
 - `migration-003-branding-filedir.sql` — adds `logo_url` / `favicon_url` and
@@ -155,8 +170,16 @@ SQL files in `supabase/`:
   held by several people. `owner` stays the first name in that list.
 - `migration-010-personal-notes.sql` — adds the `personal_notes` table (notes
   shown only to the member who wrote them, under the daily reflections).
+- `migration-011-auth-step1.sql` — **real login, step 1 (additive).** Team
+  list, bcrypt-hashed Reflection/Tracking passwords, the password functions and
+  the admin tools. The old site keeps working after it. See §11.
+- `migration-012-auth-step2-lockdown.sql` — **real login, step 2.** Closes all
+  tables to the anon key, hides `reflection_access`, deletes the clear-text
+  password columns. Run only after the new site is live and you have logged in
+  with it. See §11.
 
-The migrations are additive and safe on live data; run any you haven't yet. The
+Migrations 002–011 are additive and safe on live data; run any you haven't yet.
+012 changes access rules (not data) and must follow the order in §11. The
 app degrades gracefully before they're applied (settings can't save, reflections
 stay empty, tasks stay single-assignee) thanks to tolerant reads and fallbacks —
 and the screens that depend on a missing table now say so instead of looking
@@ -178,13 +201,14 @@ prova_sito_GTD/
 │   ├── migration-003-branding-filedir.sql
 │   ├── migration-004-reflections.sql
 │   ├── migration-005-projects.sql
-│   ├── migration-006-reflection-access.sql
-│   └── migration-007-done-at.sql
+│   ├── migration-006-reflection-access.sql … migration-010-personal-notes.sql
+│   ├── migration-011-auth-step1.sql          ← real login, step 1 (additive)
+│   └── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
     ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, superdoc
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
-    ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+    ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_TEAM_EMAIL
     ├── public/robots.txt         ← Disallow: / (noindex)
     ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
     ├── public/fonts/             ← EB Garamond + Cinzel TTFs embedded in the PDF (OFL)
@@ -196,9 +220,10 @@ prova_sito_GTD/
         ├── styles/glass.css      ← the Liquid Glass skin, scoped to [data-skin="glass"]
         ├── lib/                  ← non-UI logic
         │   ├── types.ts          ← Task/Subtask/Weekly/Reflection/Board + the Op union
-        │   ├── constants.ts      ← statuses, priorities, tabs, weekly columns, passwords
-        │   ├── supabaseConfig.ts ← URL + anon key (env or placeholder)
-        │   ├── supabaseClient.ts ← createClient, memory-only, persistSession:false
+        │   ├── constants.ts      ← statuses, priorities, tabs, weekly columns (no passwords)
+        │   ├── supabaseConfig.ts ← URL + anon key + team e-mail (env or placeholder)
+        │   ├── supabaseClient.ts ← createClient; the login session is kept in localStorage
+        │   ├── auth.ts           ← team login/logout/password change + Reflection/Tracking checks
         │   ├── db.ts             ← row<->type mapping, fetchBoard, seedIfEmpty, writeOp
         │   ├── localReducer.ts   ← applyOpLocal (optimistic in-memory updates)
         │   ├── useBoard.ts       ← load + realtime + poll + optimistic send()  (core hook)
@@ -218,7 +243,7 @@ prova_sito_GTD/
             ├── TopBar.tsx        ← logo, editable title + subtitle, mail button, right slot
             ├── ConnBadge.tsx · LangToggle.tsx · IdentityPicker.tsx   ← header controls
             ├── GlassToggle.tsx    ← the Liquid Glass on/off switch
-            ├── AuthGate.tsx      ← shared-password gate (cached login)
+            ├── AuthGate.tsx      ← team login screen (Supabase Auth) + login-duration expiry
             ├── BoardView.tsx     ← toolbar, quick-add, columns, list toggle, edit-layout, DnD
             ├── QuickAdd.tsx      ← full new-task bar
             ├── TaskCard.tsx      ← compact card + inline expansion
@@ -234,7 +259,7 @@ prova_sito_GTD/
             ├── DailyReflection.tsx ← reflection form + recent + spaced review
             ├── TrackingView.tsx  ← password-gated workload monitor
             ├── SuggestionsView.tsx ← anonymous improvement ideas
-            ├── SettingsView.tsx  ← branding upload, access password, login duration
+            ├── SettingsView.tsx  ← branding upload, team password change, login duration
             └── MailModal.tsx     ← mail-update text generator
 ```
 
@@ -372,14 +397,14 @@ editor; the PDF just reproduces SuperDoc's layout.
 
 ```bash
 cd web
-cp .env.example .env      # fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+cp .env.example .env      # fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_TEAM_EMAIL
 npm install
 npm run dev               # http://localhost:5173
 npm run build             # type-check (tsc -b) + production build to web/dist
 ```
 
 You need a Supabase project (the app talks to it directly). Point `.env` at any
-project where you've run `schema.sql`.
+project set up as in §7 / §11 and log in with the team password.
 
 ---
 
@@ -389,10 +414,13 @@ project where you've run `schema.sql`.
 
 1. **https://supabase.com** → sign in → **New project** (any region; a strong DB
    password you won't reuse). Wait ~2 min.
-2. **SQL Editor → New query** → paste **all** of `supabase/schema.sql` → **Run**.
-   For an existing project, instead run whichever `migration-00X-*.sql` files you
-   haven't run yet (they're additive).
-3. **Project Settings → API** → copy the **Project URL** and the **anon public**
+2. **Authentication → Sign In / Providers**: turn **off** "Allow new users to
+   sign up". **Authentication → Users → Add user → Create new user**: the team
+   e-mail + a strong team password, tick **Auto Confirm User**.
+3. **SQL Editor → New query** → paste **all** of `supabase/schema.sql`, put the
+   team e-mail and a Tracking password on its last lines → **Run**.
+   For an existing project with data, follow §11 instead.
+4. **Project Settings → API** → copy the **Project URL** and the **anon public**
    key.
 
 ### Part 2 — Netlify frontend
@@ -403,16 +431,17 @@ project where you've run `schema.sql`.
    --prefix web run build`, publish `web/dist`). Choose the branch that holds the
    code (currently `claude/hopeful-noether-u6oblf`; switch to `main` after
    merging).
-3. **Site configuration → Environment variables** → add `VITE_SUPABASE_URL` and
-   `VITE_SUPABASE_ANON_KEY`. (Neither is secret; the anon key is meant to ship in
-   the browser.)
-4. **Deploy**. Open the URL; enter the access password; the board seeds itself on
+3. **Site configuration → Environment variables** → add `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_ANON_KEY` and `VITE_TEAM_EMAIL` (the team user's e-mail). None
+   is secret: the anon key is meant to ship in the browser and gets nothing
+   without the team password.
+4. **Deploy**. Open the URL; enter the team password; the board seeds itself on
    first load and the badge reads **Live**. Open a second browser to see edits
    sync.
 
 Env-var changes require a **redeploy** (Vite inlines `VITE_*` at build time).
 Alternative hosts (Vercel / Cloudflare Pages / GitHub Pages) work identically —
-same build command, publish `web/dist`, same two env vars.
+same build command, publish `web/dist`, same three env vars.
 
 ---
 
@@ -421,14 +450,10 @@ same build command, publish `web/dist`, same two env vars.
 - **Free Supabase pauses after ~7 days of inactivity.** The first visitor after
   a quiet week sees errors until someone clicks **Restore** in the Supabase
   dashboard (~1–2 min). Regular use keeps it awake.
-- **Access is a soft gate, not real security.** The whole app is behind a shared
-  password (stored in `board_meta.access_password`, default in
-  `web/src/lib/constants.ts` → `DEFAULT_ACCESS_PASSWORD`; editable in Settings;
-  login cached per device for `login_days`). The `TRACKING` tab has its own
-  separate password (`constants.ts` → `TRACKING_PASSWORD`). Because the anon key
-  allows DB read/write, this only deters casual access. The site is also
-  `noindex` (meta + robots.txt + `X-Robots-Tag`). For true per-person access, add
-  Supabase Auth and tighten the RLS policies in `schema.sql`.
+- **Access is a real login** (§11): one shared Supabase Auth account, and the
+  database refuses every request that is not logged in as it. The site is also
+  `noindex` (meta + robots.txt + `X-Robots-Tag`) and sends strict security
+  headers (`netlify.toml`).
 - **Logo/favicon are stored as data URLs in `board_meta`**, which the board
   refetches on its sync cycle. Uploads accept up to 5 MB but are **rasterised and
   downscaled** to a small icon before storage (`image.ts`) precisely so the
@@ -441,7 +466,8 @@ same build command, publish `web/dist`, same two env vars.
 - **Free-tier limits** (≈500 MB DB, ≈200 concurrent realtime connections) are far
   above a small team's needs.
 - **Two identities in the header** — the "You" picker (per-device default author
-  / task owner) and the login — are conveniences, not accounts.
+  / task owner) and the Reflection login — are conveniences, not accounts; the
+  only account is the shared team login.
 
 ---
 
@@ -458,17 +484,20 @@ Because everything flows through the `Op` union, most changes follow one path:
   `send(op)`.
 - **Add a tab:** add the id to `TabId`/`TABS` in `constants.ts` → add `tabs.<id>`
   to both languages in `i18n.tsx` → render it in `App.tsx`.
-- **Add a table:** create it in `schema.sql` + a migration, fetch it tolerantly in
+- **Add a table:** create it in `schema.sql` + a migration **with the same
+  team-only policy as the others** (`for all to authenticated using ((select
+  public.is_team_member())) with check (...)`, and `revoke all ... from anon`) —
+  a new table with an open policy would be readable by anyone — fetch it tolerantly in
   `db.ts` `fetchBoard`, add a realtime listener in `useBoard.ts`, and default it
   to empty in `localReducer.ts`.
 - **Translations:** every user-facing string goes through `t('key')`; keep the IT
   and EN dictionaries in `i18n.tsx` at parity.
 
 ### Possible next steps (not done)
-- Real authentication (Supabase Auth) + per-user RLS if the board needs to be
-  private for real. Note that today **every client downloads every reflection
-  and every Reflection password** on each refetch, so the per-member Reflection
-  gate is a UI convenience, not privacy.
+- Per-person accounts (one Supabase Auth user per member) + per-member RLS, if
+  reflections and personal notes must be private *between teammates* too. With
+  the shared account, every logged-in device downloads every reflection and
+  note; only the Reflection password in the interface keeps them apart (§11).
 - Merge `claude/hopeful-noether-u6oblf` into `main` and point Netlify at `main`.
 - Drag-to-reorder for weekly items / members (subtasks already have it).
 - Weekly items are still uncontrolled `defaultValue` textareas, so another
@@ -561,3 +590,95 @@ React mounts so the first frame is already the right skin.
   take neutral fill rather than the systemBlue the primary-action rule gives
   everything else. They are containers, not actions, and in light mode blue
   pills on a white header were unreadable.
+
+---
+
+## 11. Security — login, passwords and admin resets
+
+### How it works
+
+- **One shared team account in Supabase Auth.** The login screen sends the
+  password to Supabase Auth together with the team e-mail (`VITE_TEAM_EMAIL`);
+  the browser never downloads any password. Supabase stores it as a bcrypt hash.
+- **The database only answers to that account.** Every table has one policy:
+  `to authenticated using ((select public.is_team_member()))`, and `anon` has
+  no table rights at all. `is_team_member()` checks the caller against
+  `private.team_accounts`, so even an account created by mistake gets nothing.
+  The anon key in the site's code is therefore harmless on its own.
+- **Reflection and Tracking passwords are bcrypt hashes** checked by database
+  functions (`reflection_login`, `reflection_change_password`,
+  `tracking_login`), callable only by the logged-in team account. Five wrong
+  tries in a row lock that password for 5 minutes. None of them is in the code.
+- **Sessions.** A device stays logged in for Settings → *Login duration* days
+  (the Supabase session is kept in `localStorage`, refreshed automatically);
+  then it must log in again. *Log out this device* ends it at once; changing
+  the team password in Settings logs every other device out.
+- **Transport and browser.** Everything is HTTPS; `netlify.toml` sends HSTS, a
+  strict Content Security Policy, `X-Frame-Options: DENY`, `nosniff`,
+  `no-referrer` and a locked-down `Permissions-Policy`.
+
+**What the shared account does not do:** separate teammates from each other.
+Anyone with the team password can read every reflection and personal note
+through the API; the per-member Reflection password keeps them apart in the
+interface only. If that matters, move to one Supabase Auth user per member.
+
+### Supabase settings to keep
+
+- **Authentication → Sign In / Providers → "Allow new users to sign up": OFF.**
+- **Authentication → Providers → Email → Minimum password length**: 12 is a
+  good value (the app asks for at least 8).
+- Keep the **service_role** key out of the site and out of Git — the site only
+  ever needs the anon key.
+
+### Upgrading a live project (done once, in this order)
+
+Board data is never modified by these steps; only access rules and the old
+clear-text password columns change. Taking a copy first is still wise:
+Table Editor → each table → **Export → CSV** (works on the free plan).
+
+1. **Supabase → Authentication → Sign In / Providers**: turn off
+   *Allow new users to sign up*.
+2. **Authentication → Users → Add user → Create new user**: an e-mail for the
+   team (e.g. a shared mailbox you control) and a **new** strong password —
+   not the old `IBDGTDTEAM`, which has been visible in the site's code. Tick
+   **Auto Confirm User**.
+3. **SQL Editor**: open `supabase/migration-011-auth-step1.sql`, replace
+   `team@example.com` on its last lines with that e-mail, **Run**. (If the
+   e-mail does not match the user, it stops and changes nothing.) The current
+   site keeps working.
+4. **Netlify → Site configuration → Environment variables**: add
+   `VITE_TEAM_EMAIL` = that e-mail. Then deploy the new code (push to the
+   deployed branch, or *Deploys → Trigger deploy*).
+5. Open the site, log in with the new team password, check the board, the
+   Reflection tab (everyone's current password still works) and Tracking
+   (still `Matusalemme` until you change it in step 7).
+6. **SQL Editor**: run `supabase/migration-012-auth-step2-lockdown.sql`. From
+   now on the database is closed to everyone but the team account. Other open
+   tabs need a reload and a login.
+7. **Change the passwords that were exposed** (SQL Editor):
+   `select private.admin_set_tracking_password('new tracking password');`
+   and ask everyone still on the Reflection password `password` to change it
+   in the Reflection tab (or reset it for them, below).
+
+If step 5 fails, nothing is lost: the database is still open as before; fix
+the cause (see the message on the login screen) before running step 6.
+
+### Admin: resets and account changes (Supabase → SQL Editor)
+
+These functions live in the `private` schema, which the website cannot call;
+only someone signed in to the Supabase dashboard can run them.
+
+| To… | Run |
+| --- | --- |
+| Reset the **team** password (and log every device out) | `select private.admin_set_team_password('new password');` |
+| …without logging devices out | `select private.admin_set_team_password('new password', false);` |
+| Reset a member's **Reflection** password (also unlocks it) | `select private.admin_set_reflection_password('Name', 'new password');` |
+| Put a member back on the initial password | `select private.admin_set_reflection_password('Name', 'password');` |
+| Set the **Tracking** password (also unlocks it) | `select private.admin_set_tracking_password('new password');` |
+| Allow another Auth user to use the board | `select private.admin_add_team_account('e-mail');` |
+| Stop an Auth user from using the board | `select private.admin_remove_team_account('e-mail');` |
+
+The team password can also be changed from the dashboard (Authentication →
+Users → the team user) or by a logged-in teammate in Settings. Stored
+passwords cannot be read back by anyone — only replaced.
+

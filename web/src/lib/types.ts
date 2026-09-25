@@ -114,13 +114,11 @@ export interface Board {
   personalNotesError?: string;
   /** False when migration 009 has not been run: tasks stay single-assignee. */
   assigneesAvailable?: boolean;
-  reflectionPasswords: Record<string, string>; // member -> password (soft gate)
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
   // Editable settings (nullable until the settings migration is applied).
   subtitleIt?: string;
   subtitleEn?: string;
-  accessPassword?: string;
   loginDays?: number;
   logoUrl?: string;
   faviconUrl?: string;
@@ -140,7 +138,7 @@ export type Op =
   | { type: "setMembers"; members: string[] }
   | { type: "renameBoard"; name: string }
   | { type: "setSubtitle"; lang: "it" | "en"; text: string }
-  | { type: "setAccess"; password?: string; loginDays?: number }
+  | { type: "setAccess"; loginDays?: number }
   | { type: "setBranding"; logoUrl?: string | null; faviconUrl?: string | null }
   | { type: "weeklyAdd"; column: keyof Weekly; item: WeeklyItem }
   | { type: "weeklyUpdate"; column: keyof Weekly; id: string; text: string }
@@ -151,7 +149,6 @@ export type Op =
   | { type: "projectAdd"; project: Project }
   | { type: "projectUpdate"; id: string; patch: Partial<Project> }
   | { type: "projectDelete"; id: string }
-  | { type: "reflectionPasswordSet"; member: string; password: string }
   | { type: "suggestionAdd"; suggestion: Suggestion }
   | { type: "suggestionDelete"; id: string }
   | { type: "noteAdd"; note: PersonalNote }

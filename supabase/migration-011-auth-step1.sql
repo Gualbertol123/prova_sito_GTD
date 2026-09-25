@@ -1,19 +1,24 @@
 -- ============================================================================
--- TEAM GTD — Supabase schema (FRESH INSTALL)
+-- Migration 011 — real login, step 1 of 2 (ADDITIVE, safe on live data)
 --
--- For a brand-new, empty Supabase project only. An existing project with data
--- is upgraded with the migration-0XX files instead (see README.md).
+-- Run this in Supabase → SQL Editor AFTER you have created the shared team
+-- user in Authentication → Users (see "Security setup" in README.md).
 --
--- Before running this:
---   1. Authentication → Sign In / Providers: turn OFF "Allow new users to
---      sign up".
---   2. Authentication → Users → Add user → Create new user: the shared team
---      e-mail + a strong password, tick "Auto Confirm User".
---   3. Put that e-mail on the LAST line of this file.
--- Then: SQL Editor → New query → paste all of this → Run.
+-- What it does — nothing here removes or rewrites board data:
+--   * creates a `private` schema the browser API cannot reach;
+--   * records which Supabase Auth user(s) count as "the team";
+--   * stores the Reflection and Tracking passwords as bcrypt hashes and adds
+--     server-side functions that check / change them, so the browser never
+--     sees a password again;
+--   * adds admin-only reset functions you run from this SQL Editor.
 --
--- Result: only the team account can read or write anything; every password
--- is stored as a bcrypt hash and checked on the server.
+-- The site that is live right now keeps working unchanged after this runs.
+-- Step 2 (migration-012) is what actually closes the database to the public;
+-- run it only once the new site is deployed and you have logged in with it.
+--
+-- >>> EDIT ONE LINE: at the very bottom, put the team account's e-mail. <<<
+-- If that e-mail does not match a user in Authentication → Users, the whole
+-- script stops with an error and nothing is changed.
 -- ============================================================================
 
 begin;
@@ -23,119 +28,19 @@ create extension if not exists pgcrypto with schema extensions;
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 
--- ---- Tables ----------------------------------------------------------------
-
--- Single-row table holding board name, team members and app settings.
-create table if not exists public.board_meta (
-  id              text primary key,
-  board_name      text  not null default 'TEAM GTD FINALE',
-  members         text[] not null default '{}',
-  subtitle_it     text,
-  subtitle_en     text,
-  login_days      integer default 7,
-  logo_url        text,
-  favicon_url     text
-);
-
--- One row per task.
-create table if not exists public.tasks (
-  id             text primary key,
-  title          text   not null default '',
-  description    text   not null default '',   -- app field "desc"
-  owner          text   not null default 'Unassigned',
-  priority       text   not null default 'P3', -- P1..P4
-  status         text   not null default 'NEXT',
-  notes          text   not null default '',
-  subtasks       jsonb  not null default '[]'::jsonb,
-  due_date       text,                          -- ISO yyyy-mm-dd
-  waiting_since  text,                          -- ISO yyyy-mm-dd
-  file_dir       text,                          -- shared network file path
-  done_at        bigint,                        -- when it entered DONE (archive timer)
-  updated_at     bigint not null default 0,
-  created_at     bigint not null default 0,     -- ordering within a column
-  assignees      text[]                         -- everyone on a shared task
-);
-
--- One row per team member per day — the Daily Reflection.
-create table if not exists public.reflections (
-  id          text primary key,   -- "<date>::<member>"
-  member      text not null,
-  date        text not null,      -- yyyy-mm-dd
-  done        text not null default '',
-  well        text not null default '',
-  improve     text not null default '',
-  learning    text not null default '',
-  updated_at  bigint not null default 0,
-  created_at  bigint not null default 0
-);
-create index if not exists reflections_date_idx on public.reflections (date);
-
--- Per-member Reflection password, as a bcrypt hash. Never readable from the
--- browser; checked and changed only through the functions further down.
-create table if not exists public.reflection_access (
-  member          text primary key,
-  updated_at      bigint not null default 0,
-  password_hash   text not null,
-  failed_attempts integer not null default 0,
-  locked_until    timestamptz
-);
-
--- One row per project — each project is a checklist of items (like subtasks).
-create table if not exists public.projects (
-  id          text primary key,
-  name        text  not null default '',
-  items       jsonb not null default '[]'::jsonb,
-  created_at  bigint not null default 0,
-  updated_at  bigint not null default 0
-);
-create index if not exists projects_created_idx on public.projects (created_at);
-
--- One row per anonymous improvement suggestion (no author column, by design).
-create table if not exists public.suggestions (
-  id          text primary key,
-  body        text   not null default '',
-  created_at  bigint not null default 0
-);
-create index if not exists suggestions_created_idx on public.suggestions (created_at);
-
--- One row per personal note, tagged with the member who wrote it.
-create table if not exists public.personal_notes (
-  id          text primary key,
-  member      text   not null default '',
-  body        text   not null default '',
-  created_at  bigint not null default 0,
-  updated_at  bigint not null default 0
-);
-create index if not exists personal_notes_member_idx
-  on public.personal_notes (member, updated_at desc);
-
--- One row per weekly-review item.
-create table if not exists public.weekly (
-  id          text primary key,
-  bucket      text   not null,                  -- well | learnings | improve | blockers | focus
-  body        text   not null default '',       -- the item text
-  created_at  bigint not null default 0
-);
-
--- Server-only secrets (the Tracking tab password), as bcrypt hashes.
-create table if not exists private.app_secrets (
-  name            text primary key,
-  password_hash   text not null,
-  failed_attempts integer not null default 0,
-  locked_until    timestamptz,
-  updated_at      timestamptz not null default now()
-);
-revoke all on table private.app_secrets from public, anon, authenticated;
-
--- The Supabase Auth user id(s) allowed to use the board.
+-- ---- Who is "the team" -----------------------------------------------------
+-- The Supabase Auth user id(s) allowed to use the board. Signing up is turned
+-- off in the dashboard, but this list means that even an account created by
+-- mistake gets nothing.
 create table if not exists private.team_accounts (
   user_id   uuid primary key references auth.users (id) on delete cascade,
   added_at  timestamptz not null default now()
 );
 revoke all on table private.team_accounts from public, anon, authenticated;
 
--- ---- Team check ------------------------------------------------------------
-
+-- True when the caller is logged in as a team account. Used by every table
+-- policy (after step 2) and by the password functions below. It only ever
+-- answers about the caller, so it is safe to expose.
 create or replace function public.is_team_member()
 returns boolean
 language sql
@@ -150,49 +55,72 @@ $$;
 revoke all on function public.is_team_member() from public, anon;
 grant execute on function public.is_team_member() to authenticated;
 
--- ---- Access (Row Level Security) -------------------------------------------
--- Only a logged-in team account can read or write. The public (anon) key that
--- ships in the website gets nothing.
+-- ---- Reflection passwords: hash them -------------------------------------
+-- The table may not exist if migration 006 was never run.
+create table if not exists public.reflection_access (
+  member      text primary key,
+  password    text  not null default 'password',
+  updated_at  bigint not null default 0
+);
+alter table public.reflection_access enable row level security;
 
-alter table public.board_meta        enable row level security;
-alter table public.tasks             enable row level security;
-alter table public.weekly            enable row level security;
-alter table public.reflections       enable row level security;
-alter table public.projects          enable row level security;
-alter table public.suggestions       enable row level security;
-alter table public.personal_notes    enable row level security;
-alter table public.reflection_access enable row level security;  -- no policy: no browser access
+alter table public.reflection_access add column if not exists password_hash   text;
+alter table public.reflection_access add column if not exists failed_attempts integer not null default 0;
+alter table public.reflection_access add column if not exists locked_until    timestamptz;
 
-drop policy if exists "team only board_meta"     on public.board_meta;
-drop policy if exists "team only tasks"          on public.tasks;
-drop policy if exists "team only weekly"         on public.weekly;
-drop policy if exists "team only reflections"    on public.reflections;
-drop policy if exists "team only projects"       on public.projects;
-drop policy if exists "team only suggestions"    on public.suggestions;
-drop policy if exists "team only personal_notes" on public.personal_notes;
+-- Hash every password that is stored in clear text today, so everyone keeps
+-- the password they already use.
+update public.reflection_access
+   set password_hash = extensions.crypt(coalesce(password, 'password'), extensions.gen_salt('bf', 10))
+ where password_hash is null;
 
-create policy "team only board_meta" on public.board_meta for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only tasks" on public.tasks for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only weekly" on public.weekly for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only reflections" on public.reflections for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only projects" on public.projects for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only suggestions" on public.suggestions for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only personal_notes" on public.personal_notes for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
+-- Until step 2 the currently deployed site still writes clear-text passwords
+-- into `password`. Keep the hash in step with it so nothing a member does in
+-- the meantime is lost. (Dropped in step 2 together with the column.)
+create or replace function private.reflection_access_sync_hash()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.password_hash is null then
+      new.password_hash := extensions.crypt(coalesce(new.password, 'password'), extensions.gen_salt('bf', 10));
+    end if;
+  elsif new.password is distinct from old.password then
+    new.password_hash := extensions.crypt(coalesce(new.password, 'password'), extensions.gen_salt('bf', 10));
+  end if;
+  return new;
+end;
+$$;
 
-revoke all on table public.board_meta, public.tasks, public.weekly, public.reflections,
-  public.projects, public.suggestions, public.personal_notes from anon;
-revoke all on table public.reflection_access from anon, authenticated;
+drop trigger if exists reflection_access_sync_hash on public.reflection_access;
+create trigger reflection_access_sync_hash
+  before insert or update on public.reflection_access
+  for each row execute function private.reflection_access_sync_hash();
+
+-- ---- Tracking password: move it out of the website's code ------------------
+create table if not exists private.app_secrets (
+  name            text primary key,
+  password_hash   text not null,
+  failed_attempts integer not null default 0,
+  locked_until    timestamptz,
+  updated_at      timestamptz not null default now()
+);
+revoke all on table private.app_secrets from public, anon, authenticated;
+
+-- Seeded with the password the Tracking tab uses today so the tab keeps
+-- working. That password has been readable in the site's code, so CHANGE IT
+-- right after the upgrade: select private.admin_set_tracking_password('...');
+insert into private.app_secrets (name, password_hash)
+values ('tracking', extensions.crypt('Matusalemme', extensions.gen_salt('bf', 10)))
+on conflict (name) do nothing;
 
 -- ---- Password checks the website calls ------------------------------------
--- Team accounts only; 5 wrong guesses in a row lock that password for 5
--- minutes. Results: 'ok' | 'wrong' | 'locked' | 'unknown' | 'invalid' | 'forbidden'.
+-- All of them: team accounts only; wrong guesses are counted, and after 5 in a
+-- row that password is locked for 5 minutes. Results are plain words the app
+-- understands: 'ok' | 'wrong' | 'locked' | 'unknown' | 'invalid' | 'forbidden'.
 
 create or replace function public.reflection_login(p_member text, p_password text)
 returns text
@@ -314,7 +242,9 @@ grant execute on function public.reflection_change_password(text, text, text) to
 grant execute on function public.tracking_login(text)                         to authenticated;
 
 -- ---- Admin tools: run these from the Supabase SQL Editor only -------------
+-- They live in the `private` schema, which the website's API cannot call.
 
+-- Allow a Supabase Auth user (by e-mail) to use the board.
 create or replace function private.admin_add_team_account(p_email text)
 returns text
 language plpgsql
@@ -333,6 +263,7 @@ begin
 end;
 $$;
 
+-- Stop a Supabase Auth user (by e-mail) from using the board.
 create or replace function private.admin_remove_team_account(p_email text)
 returns text
 language plpgsql
@@ -346,6 +277,7 @@ begin
 end;
 $$;
 
+-- Set a new shared team password and (by default) log every device out.
 create or replace function private.admin_set_team_password(p_new text, p_sign_out_everyone boolean default true)
 returns text
 language plpgsql
@@ -377,6 +309,7 @@ begin
 end;
 $$;
 
+-- Set (reset) one member's Reflection password and clear any lock.
 create or replace function private.admin_set_reflection_password(p_member text, p_new text)
 returns text
 language plpgsql
@@ -399,6 +332,7 @@ begin
 end;
 $$;
 
+-- Set the Tracking tab password and clear any lock.
 create or replace function private.admin_set_tracking_password(p_new text)
 returns text
 language plpgsql
@@ -425,33 +359,10 @@ revoke all on function private.admin_remove_team_account(text)             from 
 revoke all on function private.admin_set_team_password(text, boolean)      from public, anon, authenticated;
 revoke all on function private.admin_set_reflection_password(text, text)   from public, anon, authenticated;
 revoke all on function private.admin_set_tracking_password(text)           from public, anon, authenticated;
-
--- ---- Realtime --------------------------------------------------------------
--- Change events for the board tables (they respect the policies above).
--- reflection_access is deliberately NOT published.
-
-do $$
-declare
-  t text;
-begin
-  foreach t in array array[
-    'board_meta', 'tasks', 'weekly', 'reflections', 'projects', 'suggestions', 'personal_notes'
-  ] loop
-    if not exists (
-      select 1 from pg_publication_tables
-       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
-    ) then
-      execute format('alter publication supabase_realtime add table public.%I', t);
-    end if;
-  end loop;
-end $$;
+revoke all on function private.reflection_access_sync_hash()               from public, anon, authenticated;
 
 -- ---- The team account -------------------------------------------------------
 -- >>> Replace the e-mail below with the team user you created. <<<
 select private.admin_add_team_account('team@example.com');
-
--- Pick the Tracking tab password here (change it any time with the same call).
--- >>> Replace the placeholder with a password of your choice. <<<
-select private.admin_set_tracking_password('CHANGE-ME-tracking-password');
 
 commit;

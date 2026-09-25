@@ -272,37 +272,6 @@ async function fetchSuggestions(): Promise<SuggestionsResult> {
   }
 }
 
-async function fetchReflectionPasswords(): Promise<Record<string, string>> {
-  try {
-    const { data, error } = await supabase.from("reflection_access").select("*");
-    if (error || !data) return {};
-    const map: Record<string, string> = {};
-    for (const row of data as { member: string; password: string }[]) {
-      if (row.member) map[row.member] = row.password ?? "password";
-    }
-    return map;
-  } catch {
-    return {};
-  }
-}
-
-// Make sure every current member has a row (default password 'password') so the
-// admin can see/reset them all in the Supabase table editor. Existing rows are
-// never overwritten.
-export async function ensureReflectionAccess(members: string[]): Promise<void> {
-  if (members.length === 0) return;
-  try {
-    await supabase
-      .from("reflection_access")
-      .upsert(
-        members.map((m) => ({ member: m, password: "password", updated_at: Date.now() })),
-        { onConflict: "member", ignoreDuplicates: true }
-      );
-  } catch {
-    /* table not present yet — ignore */
-  }
-}
-
 async function fetchReflections(): Promise<Reflection[]> {
   // Tolerant: the table may not exist yet (before migration-004). Any failure
   // here must NOT break the board — reflections simply come back empty.
@@ -327,7 +296,6 @@ export async function fetchBoard(): Promise<Board> {
     projectList,
     suggestionsRes,
     notesRes,
-    reflectionPasswords,
     assignees,
   ] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
@@ -337,7 +305,6 @@ export async function fetchBoard(): Promise<Board> {
     fetchProjects(),
     fetchSuggestions(),
     fetchPersonalNotes(),
-    fetchReflectionPasswords(),
     probeAssignees(),
   ]);
 
@@ -371,11 +338,9 @@ export async function fetchBoard(): Promise<Board> {
     personalNotes: notesRes.list,
     personalNotesError: notesRes.error,
     assigneesAvailable: assignees,
-    reflectionPasswords,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
-    accessPassword: (m?.access_password as string) ?? undefined,
     loginDays: (m?.login_days as number) ?? undefined,
     logoUrl: (m?.logo_url as string) ?? undefined,
     faviconUrl: (m?.favicon_url as string) ?? undefined,
@@ -528,7 +493,6 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       break;
     case "setAccess": {
       const upd: Record<string, unknown> = {};
-      if (op.password !== undefined) upd.access_password = op.password;
       if (op.loginDays !== undefined) upd.login_days = op.loginDays;
       await must(supabase.from("board_meta").update(upd).eq("id", "main"));
       break;
@@ -616,16 +580,6 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       break;
     case "suggestionDelete":
       await must(supabase.from("suggestions").delete().eq("id", op.id));
-      break;
-    case "reflectionPasswordSet":
-      await must(
-        supabase
-          .from("reflection_access")
-          .upsert(
-            { member: op.member, password: op.password, updated_at: Date.now() },
-            { onConflict: "member" }
-          )
-      );
       break;
   }
 }

@@ -20,7 +20,6 @@ export function applyOpLocal(board: Board, op: Op): Board {
     projects: [...(board.projects ?? [])],
     suggestions: [...(board.suggestions ?? [])],
     personalNotes: [...(board.personalNotes ?? [])],
-    reflectionPasswords: { ...(board.reflectionPasswords ?? {}) },
     updatedAt: now,
   };
 
@@ -101,7 +100,6 @@ export function applyOpLocal(board: Board, op: Op): Board {
       else b.subtitleEn = op.text;
       break;
     case "setAccess":
-      if (op.password !== undefined) b.accessPassword = op.password;
       if (op.loginDays !== undefined) b.loginDays = op.loginDays;
       break;
     case "setBranding":
@@ -158,9 +156,6 @@ export function applyOpLocal(board: Board, op: Op): Board {
       break;
     case "suggestionDelete":
       b.suggestions = b.suggestions.filter((s) => s.id !== op.id);
-      break;
-    case "reflectionPasswordSet":
-      b.reflectionPasswords = { ...b.reflectionPasswords, [op.member]: op.password };
       break;
   }
 

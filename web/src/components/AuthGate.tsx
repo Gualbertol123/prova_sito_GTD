@@ -1,54 +1,98 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { DEFAULT_ACCESS_PASSWORD, DEFAULT_LOGIN_DAYS } from "../lib/constants";
-import { readAuthExp, writeAuth } from "../lib/prefs";
+import { isTeamEmailConfigured } from "../lib/supabaseConfig";
+import { signInTeam, signOutDevice, outcomeKey } from "../lib/auth";
+import { readAuthExp, clearAuth } from "../lib/prefs";
 import { useT } from "../lib/i18n";
 
-// Soft, universal access gate. The shared password and login duration live in
-// board_meta (editable in Settings) with hardcoded fallbacks, so the gate works
-// even before the settings migration is applied. On success the login is cached
-// in localStorage for the configured number of days.
+// The team login. The password is checked by Supabase Auth — the browser
+// never downloads it — and the database refuses everything to a visitor who is
+// not logged in. On success the session is kept on this device for the login
+// duration set in Settings; after that it is ended and the password is asked
+// again.
+type GateState = "checking" | "out" | "in";
+
+// setTimeout cannot wait longer than ~24.8 days; re-check at least that often.
+const MAX_TIMER_MS = 2_000_000_000;
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { t } = useT();
-  const [authed, setAuthed] = useState(() => {
-    const exp = readAuthExp();
-    return exp !== null && exp > Date.now();
-  });
+  const [state, setState] = useState<GateState>("checking");
   const [pwd, setPwd] = useState("");
-  const [err, setErr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<{ key: string; detail?: string } | null>(null);
 
-  // Fetched access settings (with fallbacks).
-  const cfg = useRef({ password: DEFAULT_ACCESS_PASSWORD, days: DEFAULT_LOGIN_DAYS });
-
+  // Restore a saved session, if it is still within its login duration.
   useEffect(() => {
-    if (authed) return;
-    let cancelled = false;
-    supabase
-      .from("board_meta")
-      .select("*")
-      .eq("id", "main")
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled || !data) return;
-        const row = data as Record<string, unknown>;
-        cfg.current = {
-          password: (row.access_password as string) || DEFAULT_ACCESS_PASSWORD,
-          days: (row.login_days as number) || DEFAULT_LOGIN_DAYS,
-        };
-      });
+    let alive = true;
+    (async () => {
+      let hasSession = false;
+      try {
+        const { data } = await supabase.auth.getSession();
+        hasSession = !!data.session;
+      } catch {
+        hasSession = false;
+      }
+      if (!alive) return;
+      const exp = readAuthExp();
+      if (hasSession && exp !== null && exp > Date.now()) {
+        setState("in");
+      } else {
+        if (hasSession) await signOutDevice();
+        else clearAuth();
+        if (alive) setState("out");
+      }
+    })();
+
+    // Logged out elsewhere (Settings, an expired or revoked session, an admin
+    // password reset): show the login again.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT" && alive) {
+        clearAuth();
+        setState("out");
+      }
+    });
     return () => {
-      cancelled = true;
+      alive = false;
+      sub.subscription.unsubscribe();
     };
-  }, [authed]);
+  }, []);
 
-  if (authed) return <>{children}</>;
+  // End the session when the login duration runs out, even in a tab that
+  // stays open.
+  useEffect(() => {
+    if (state !== "in") return;
+    let timer: ReturnType<typeof setTimeout>;
+    const arm = () => {
+      const exp = readAuthExp();
+      const left = exp === null ? 0 : exp - Date.now();
+      if (left <= 0) {
+        signOutDevice().then(() => setState("out"));
+        return;
+      }
+      timer = setTimeout(arm, Math.min(left, MAX_TIMER_MS));
+    };
+    arm();
+    return () => clearTimeout(timer);
+  }, [state]);
 
-  const submit = () => {
-    if (pwd === cfg.current.password) {
-      writeAuth(Date.now() + cfg.current.days * 86400000);
-      setAuthed(true);
+  if (state === "in") return <>{children}</>;
+
+  if (state === "checking") {
+    return <div className="min-h-screen bg-[#0A1931]" />;
+  }
+
+  const submit = async () => {
+    if (busy || !pwd) return;
+    setBusy(true);
+    setErr(null);
+    const out = await signInTeam(pwd);
+    setBusy(false);
+    if (out.result === "ok") {
+      setPwd("");
+      setState("in");
     } else {
-      setErr(true);
+      setErr({ key: outcomeKey(out.result), detail: out.detail });
     }
   };
 
@@ -62,27 +106,40 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           {t("auth.title")}
         </h1>
         <p className="text-[12px] text-[#8A8A8A] mt-2 mb-5">{t("auth.prompt")}</p>
-        <input
-          type="password"
-          autoFocus
-          value={pwd}
-          onChange={(e) => {
-            setPwd(e.target.value);
-            setErr(false);
-          }}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder={t("auth.password")}
-          className={`w-full h-11 rounded-full bg-[#F5F3EF] border px-4 text-[14px] text-center outline-none ${
-            err ? "border-[#DC2626]" : "border-[#E8E6E1] focus:border-[#C9A96E]"
-          }`}
-        />
-        {err && <p className="text-[11px] text-[#DC2626] mt-2">{t("auth.wrong")}</p>}
-        <button
-          onClick={submit}
-          className="mt-4 w-full h-11 rounded-full bg-[#0A1931] text-[#C9A96E] text-[13px] font-semibold tracking-wide hover:bg-[#112040]"
-        >
-          {t("auth.enter")}
-        </button>
+        {!isTeamEmailConfigured ? (
+          <p className="text-[12px] text-[#DC2626]">{t("auth.noEmail")}</p>
+        ) : (
+          <>
+            <input
+              type="password"
+              autoFocus
+              autoComplete="current-password"
+              value={pwd}
+              onChange={(e) => {
+                setPwd(e.target.value);
+                setErr(null);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+              placeholder={t("auth.password")}
+              className={`w-full h-11 rounded-full bg-[#F5F3EF] border px-4 text-[14px] text-center outline-none ${
+                err ? "border-[#DC2626]" : "border-[#E8E6E1] focus:border-[#C9A96E]"
+              }`}
+            />
+            {err && (
+              <p className="text-[11px] text-[#DC2626] mt-2">
+                {t(err.key)}
+                {err.detail && <span className="block opacity-70 mt-0.5">{err.detail}</span>}
+              </p>
+            )}
+            <button
+              onClick={submit}
+              disabled={busy || !pwd}
+              className="mt-4 w-full h-11 rounded-full bg-[#0A1931] text-[#C9A96E] text-[13px] font-semibold tracking-wide hover:bg-[#112040] disabled:opacity-60"
+            >
+              {busy ? t("auth.checking") : t("auth.enter")}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

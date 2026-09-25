@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Board, Op, Reflection } from "../lib/types";
 import { useT, localeCode, type Lang } from "../lib/i18n";
 import { useMe } from "../lib/identity";
 import { toISODate } from "../lib/dates";
-import { ensureReflectionAccess } from "../lib/db";
+import { reflectionLogin, reflectionChangePassword, outcomeKey } from "../lib/auth";
 import { PersonalNotes } from "./PersonalNotes";
 import {
   readReviewedToday,
@@ -89,20 +89,11 @@ export function DailyReflection({ board, members, send }: Props) {
   };
   const bump = () => setTick((n) => n + 1);
 
-  // Seed a reflection_access row per member (default 'password') so every
-  // member is visible/resettable in the Supabase table editor.
-  const membersKey = members.join("|");
-  useEffect(() => {
-    ensureReflectionAccess(members);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [membersKey]);
-
   const authed = !!me && isReflAuthed(me);
 
   if (!authed) {
     return (
       <ReflectionLogin
-        board={board}
         members={members}
         onAuthed={(user) => {
           setMe(user);
@@ -168,17 +159,15 @@ export function DailyReflection({ board, members, send }: Props) {
         <PersonalNotes board={board} me={me} send={send} />
       )}
 
-      <AccountSection me={me} board={board} send={send} />
+      <AccountSection me={me} />
     </div>
   );
 }
 
 function ReflectionLogin({
-  board,
   members,
   onAuthed,
 }: {
-  board: Board;
   members: string[];
   onAuthed: (user: string) => void;
 }) {
@@ -187,16 +176,22 @@ function ReflectionLogin({
   const [user, setUser] = useState(me && members.includes(me) ? me : members[0] ?? "");
   const [pwd, setPwd] = useState("");
   const [remember, setRemember] = useState<number | "never">(30);
-  const [err, setErr] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<{ key: string; detail?: string } | null>(null);
 
-  const submit = () => {
-    if (!user) return;
-    const expected = board.reflectionPasswords[user] ?? "password";
-    if (pwd === expected) {
+  // Checked by the database (reflection_login); passwords are stored there
+  // as hashes and never sent to the browser.
+  const submit = async () => {
+    if (!user || busy) return;
+    setBusy(true);
+    setErr(null);
+    const out = await reflectionLogin(user, pwd);
+    setBusy(false);
+    if (out.result === "ok") {
       setReflAuth(user, remember);
       onAuthed(user);
     } else {
-      setErr(true);
+      setErr({ key: outcomeKey(out.result), detail: out.detail });
     }
   };
 
@@ -216,7 +211,7 @@ function ReflectionLogin({
             value={user}
             onChange={(e) => {
               setUser(e.target.value);
-              setErr(false);
+              setErr(null);
             }}
             className="mt-1 w-full h-10 rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[13px] outline-none focus:border-[#C9A96E]"
           >
@@ -233,7 +228,7 @@ function ReflectionLogin({
             autoFocus
             onChange={(e) => {
               setPwd(e.target.value);
-              setErr(false);
+              setErr(null);
             }}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             className={`mt-1 w-full h-10 rounded-lg bg-[#F5F3EF] border px-3 text-[13px] outline-none ${
@@ -241,68 +236,107 @@ function ReflectionLogin({
             }`}
           />
         </label>
-        {err && <p className="text-[11px] text-[#DC2626]">{t("reflAuth.wrong")}</p>}
+        {err && (
+          <p className="text-[11px] text-[#DC2626]">
+            {t(err.key)}
+            {err.detail && <span className="block opacity-70 mt-0.5">{err.detail}</span>}
+          </p>
+        )}
         <div className="pt-1">
           <RememberSelect value={remember} onChange={setRemember} />
         </div>
       </div>
       <button
         onClick={submit}
-        className="mt-4 w-full h-10 rounded-full bg-[#0A1931] text-[#C9A96E] text-[13px] font-semibold"
+        disabled={busy}
+        className="mt-4 w-full h-10 rounded-full bg-[#0A1931] text-[#C9A96E] text-[13px] font-semibold disabled:opacity-60"
       >
-        {t("reflAuth.enter")}
+        {busy ? t("auth.checking") : t("reflAuth.enter")}
       </button>
       <p className="text-[11px] text-[#A8A29E] mt-3 text-center">{t("reflAuth.hint")}</p>
     </div>
   );
 }
 
-function AccountSection({ me, board, send }: { me: string; board: Board; send: (op: Op) => void }) {
+function AccountSection({ me }: { me: string }) {
   const { t } = useT();
-  const current = board.reflectionPasswords[me] ?? "password";
-  const [show, setShow] = useState(false);
+  const [cur, setCur] = useState("");
   const [np, setNp] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; key: string; detail?: string } | null>(null);
   const [remember, setRemember] = useState<number | "never">(() =>
     reflAuthValue(me) === "never" ? "never" : 30
   );
 
-  const change = () => {
-    const v = np.trim();
-    if (!v || v === current) return;
-    send({ type: "reflectionPasswordSet", member: me, password: v });
-    setNp("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+  // Changing needs the current password: the server checks it, so a teammate
+  // at an unlocked screen cannot quietly change someone else's.
+  const change = async () => {
+    if (busy || !cur || !np) return;
+    if (np.length < 6) {
+      setMsg({ ok: false, key: "authr.invalid" });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    const out = await reflectionChangePassword(me, cur, np);
+    setBusy(false);
+    if (out.result === "ok") {
+      setCur("");
+      setNp("");
+      setMsg({ ok: true, key: "reflAuth.changed" });
+      setTimeout(() => setMsg(null), 2500);
+    } else {
+      setMsg({ ok: false, key: out.result === "wrong" ? "reflAuth.wrongCurrent" : outcomeKey(out.result), detail: out.detail });
+    }
   };
+
+  const field =
+    "flex-1 min-w-0 h-9 rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[13px] outline-none focus:border-[#C9A96E]";
 
   return (
     <div className="bg-white rounded-[14px] border border-[#E8E6E1] p-4 space-y-3">
       <h4 className="font-trajan text-[11px] uppercase tracking-widest text-[#8A8A8A]">
         {t("reflAuth.account")}
       </h4>
-      <div className="flex items-center gap-2 text-[12px] flex-wrap">
-        <span className="text-[#8A8A8A]">{t("reflAuth.password")}:</span>
-        <span className="font-mono text-[#0A1931]">
-          {show ? current : "•".repeat(Math.max(6, current.length))}
-        </span>
-        <button onClick={() => setShow((s) => !s)} className="text-[11px] text-[#8B6F3E] underline underline-offset-2">
-          {show ? t("reflAuth.hide") : t("reflAuth.show")}
-        </button>
-      </div>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <input
+          type="password"
+          autoComplete="current-password"
+          value={cur}
+          onChange={(e) => {
+            setCur(e.target.value);
+            setMsg(null);
+          }}
+          placeholder={t("reflAuth.currentPassword")}
+          className={field}
+        />
+        <input
+          type="password"
+          autoComplete="new-password"
           value={np}
-          onChange={(e) => setNp(e.target.value)}
+          onChange={(e) => {
+            setNp(e.target.value);
+            setMsg(null);
+          }}
           onKeyDown={(e) => e.key === "Enter" && change()}
           placeholder={t("reflAuth.newPassword")}
-          className="flex-1 min-w-0 h-9 rounded-lg bg-[#F5F3EF] border border-[#E8E6E1] px-3 text-[13px] outline-none focus:border-[#C9A96E]"
+          className={field}
         />
-        <button onClick={change} className="h-9 px-4 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold shrink-0">
-          {t("settings.save")}
+        <button
+          onClick={change}
+          disabled={busy || !cur || !np}
+          className="h-9 px-4 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold shrink-0 disabled:opacity-60"
+        >
+          {busy ? "…" : t("settings.save")}
         </button>
       </div>
-      {saved && <div className="text-[12px] text-[#065F46]">{t("reflAuth.changed")}</div>}
+      <p className="text-[11px] text-[#A8A29E]">{t("reflAuth.newHint")}</p>
+      {msg && (
+        <div className={`text-[12px] ${msg.ok ? "text-[#065F46]" : "text-[#DC2626]"}`}>
+          {t(msg.key)}
+          {msg.detail && <span className="block opacity-70 mt-0.5 text-[11px]">{msg.detail}</span>}
+        </div>
+      )}
       <RememberSelect
         value={remember}
         onChange={(v) => {
