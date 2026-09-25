@@ -71,11 +71,10 @@ export async function downloadGlassPdf(
   for (let i = 0; i < 2; i++) await new Promise((r) => requestAnimationFrame(() => r(null)));
 
   try {
-    const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
-    const wPt = pdf.internal.pageSize.getWidth();
-    const hPt = pdf.internal.pageSize.getHeight();
-
+    let pdf: JsPDF | null = null;
     for (const [i, page] of pages.entries()) {
+      const landscape = page.offsetWidth > page.offsetHeight;
+      const orientation = landscape ? "landscape" : "portrait";
       // 2.5× of a 96-dpi page is 240 dpi: crisp type at a few hundred kB a page.
       const img = await domToJpeg(page, {
         width: page.offsetWidth,
@@ -85,11 +84,13 @@ export async function downloadGlassPdf(
         backgroundColor: "#f5f5f7",
         filter: (node) => !(node instanceof Element && node.classList.contains("gr-noexport")),
       });
-      if (i > 0) pdf.addPage("a4", "portrait");
-      pdf.addImage(img, "JPEG", 0, 0, wPt, hPt, undefined, "FAST");
+      if (!pdf) pdf = new jsPDF({ unit: "pt", format: "a4", orientation, compress: true });
+      else pdf.addPage("a4", orientation);
+      pdf.addImage(img, "JPEG", 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), undefined, "FAST");
       addTextLayer(pdf, page);
       onPage?.(i + 1, pages.length);
     }
+    if (!pdf) return;
     pdf.save(fileName);
   } finally {
     root.classList.remove("gr-exporting");

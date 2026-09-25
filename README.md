@@ -279,11 +279,11 @@ REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
 
 | Page | Content |
 | --- | --- |
-| Cover | board name and period, an editable headline and subtitle, a ring with the share of active work closed this week (done ÷ done + in progress + next), tiles for completed tasks, closed subtasks, in progress, next, waiting and average project progress, an **In evidenza** list of what was completed, and an editable **In sintesi** paragraph for the week's summary |
+| Cover | board name and period, an editable headline and subtitle, tiles for completed tasks, closed subtasks, in progress, next and waiting, an **In evidenza** list whose tasks you pick with **Scegli attività** (up to 8, from the completed, in-progress, next and waiting tasks; left out of the PDF when empty), and an editable **In sintesi** paragraph |
 | 01 Completate | every task that entered DONE inside the period, with priority, completion date, its subtasks and a progress bar |
 | 02 Prossimi passi | the NEXT column now, with due dates and subtasks |
 | 03 Progetti | each project from the Projects tab with its checklist and % done |
-| 04 Planner | Backlog · Next · In Progress · Waiting as bands of task chips |
+| 04 Planner | always **one landscape page**: Backlog · Next · In Progress · Waiting side by side; a very full board is scaled down to fit |
 | 05 Retrospettiva | the WEEKLY tab's buckets that have items (wins, learnings, to improve, blockers, focus next week) |
 
 Only the Done section is period-filtered; the rest is how the board stands when
@@ -297,6 +297,8 @@ appears anywhere.
   `GlassReport.tsx` renders every block once off-screen at page width,
   measures it, and packs blocks onto 794 × 1123 px pages (A4 at 96 dpi); a
   section heading always stays with its first card and no card is split.
+  Pages are laid out by block id, so hiding a card (×) just drops it and the
+  rest re-packs. The planner is its own 1123 × 794 landscape page.
 - **Editing.** Every text is `contentEditable`. An edit is stored when the
   field loses focus, the blocks are measured again and re-packed — a longer
   text simply pushes the next card to the following page. Edits live only in

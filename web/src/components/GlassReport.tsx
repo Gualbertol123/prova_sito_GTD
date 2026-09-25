@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Board, Priority, Project, Status, Subtask, Task } from "../lib/types";
-import type { ReportData } from "../lib/reportData";
+import type { PlannerColumn, ReportData } from "../lib/reportData";
 import { statusLabel, useT } from "../lib/i18n";
 import {
   buildBlocks,
@@ -132,34 +132,6 @@ function Bar({ value, color }: { value: number; color: string }) {
   );
 }
 
-function Ring({ value, size = 150, stroke = 14 }: { value: number; size?: number; stroke?: number }) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="gr-ring">
-      <defs>
-        <linearGradient id="grRingGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#34C759" />
-          <stop offset="55%" stopColor="#32ADE6" />
-          <stop offset="100%" stopColor="#5856D6" />
-        </linearGradient>
-      </defs>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(60,60,67,0.10)" strokeWidth={stroke} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="url(#grRingGrad)"
-        strokeWidth={stroke}
-        strokeLinecap="round"
-        strokeDasharray={`${c * Math.max(0.001, Math.min(1, value))} ${c}`}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
-  );
-}
-
 function HideButton({ onHide }: { onHide?: () => void }) {
   const { t } = useT();
   if (!onHide) return null;
@@ -269,35 +241,6 @@ function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Bloc
   );
 }
 
-function Band({ block, edit, onHide }: BlockProps & { block: Extract<Block, { kind: "band" }> }) {
-  const { t, lang } = useT();
-  const color = STATUS_COLOR[block.status] ?? "#8E8E93";
-  return (
-    <div className="gr-glass gr-band">
-      <HideButton onHide={onHide && (() => onHide(block.id))} />
-      <div className="gr-band-head">
-        <span className="gr-dot gr-dot-lg" style={{ background: color }} />
-        <span className="gr-band-title">{statusLabel(lang, block.status)}</span>
-        <span className="gr-count" style={{ color, background: `${color}17` }}>
-          {block.tasks.length}
-        </span>
-      </div>
-      {block.tasks.length === 0 ? (
-        <div className="gr-muted">{t("gr.bandEmpty")}</div>
-      ) : (
-        <div className="gr-chips">
-          {block.tasks.map((task) => (
-            <span key={task.id} className="gr-chip">
-              <span className="gr-dot" style={{ background: PRIORITY_COLOR[task.priority] }} />
-              <Ed id={`${block.id}.${task.id}`} value={task.title} edit={edit} />
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Retro({ block, edit, onHide }: BlockProps & { block: Extract<Block, { kind: "retro" }> }) {
   const { t } = useT();
   return (
@@ -346,8 +289,6 @@ function BlockView(props: BlockProps) {
       return <TaskCard {...props} block={block} />;
     case "project":
       return <ProjectCard {...props} block={block} />;
-    case "band":
-      return <Band {...props} block={block} />;
     case "retro":
       return <Retro {...props} block={block} />;
     case "empty":
@@ -364,6 +305,7 @@ function PageChrome({
   boardName,
   periodText,
   pageRef,
+  landscape = false,
 }: {
   children: React.ReactNode;
   index: number;
@@ -371,10 +313,15 @@ function PageChrome({
   boardName: string;
   periodText: string;
   pageRef: (el: HTMLDivElement | null) => void;
+  landscape?: boolean;
 }) {
   const { t } = useT();
   return (
-    <div className={`gr-page gr-bg-${index % 4}`} ref={pageRef} style={{ width: PAGE_W, height: PAGE_H }}>
+    <div
+      className={`gr-page gr-bg-${index % 4} ${landscape ? "gr-landscape" : ""}`}
+      ref={pageRef}
+      style={{ width: landscape ? PAGE_H : PAGE_W, height: landscape ? PAGE_W : PAGE_H }}
+    >
       <div className="gr-blob gr-blob-a" />
       <div className="gr-blob gr-blob-b" />
       <div className="gr-blob gr-blob-c" />
@@ -398,21 +345,195 @@ function PageChrome({
   );
 }
 
+// The planner: always one landscape page, the four columns side by side. When
+// the columns hold more than fits, the whole board is scaled down to fit.
+const L_CONTENT_W = PAGE_H - PAD_X * 2;
+const L_CONTENT_H = PAGE_W - HEAD - FOOT;
+
+function PlannerPage({
+  n,
+  columns,
+  edit,
+  fmtDate,
+}: {
+  n: number;
+  columns: PlannerColumn[];
+  edit: EditCtx;
+  fmtDate: (v: number | string) => string;
+}) {
+  const { t, lang } = useT();
+  const boardRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const total = columns.reduce((a, c) => a + c.tasks.length, 0);
+
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = boardRef.current;
+      const head = headRef.current;
+      if (!el || !head) return;
+      const avail = L_CONTENT_H - head.offsetHeight - GAP;
+      const natural = el.scrollHeight; // unaffected by the transform
+      setScale(natural > avail ? Math.max(0.45, avail / natural) : 1);
+    };
+    fit();
+    document.fonts?.ready.then(fit).catch(() => {});
+  }, [columns, edit]);
+
+  return (
+    <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: L_CONTENT_W, height: L_CONTENT_H }}>
+      <div ref={headRef}>
+        <SectionHead
+          block={{ kind: "section", id: "sec.planner", key: "planner", n, count: total }}
+          edit={edit}
+          fmtDate={fmtDate}
+        />
+      </div>
+      <div
+        ref={boardRef}
+        className="gr-planner"
+        style={{
+          marginTop: GAP,
+          width: `${100 / scale}%`,
+          transform: scale < 1 ? `scale(${scale})` : undefined,
+          transformOrigin: "top left",
+        }}
+      >
+        {columns.map((col) => {
+          const color = STATUS_COLOR[col.status] ?? "#8E8E93";
+          return (
+            <div key={col.status} className="gr-glass gr-col">
+              <div className="gr-band-head">
+                <span className="gr-dot gr-dot-lg" style={{ background: color }} />
+                <span className="gr-band-title">{statusLabel(lang, col.status)}</span>
+                <span className="gr-count" style={{ color, background: `${color}17` }}>
+                  {col.tasks.length}
+                </span>
+              </div>
+              {col.tasks.length === 0 ? (
+                <div className="gr-muted gr-col-empty">{t("gr.bandEmpty")}</div>
+              ) : (
+                <div className="gr-col-list">
+                  {col.tasks.map((task) => (
+                    <div key={task.id} className="gr-col-item">
+                      <span className="gr-dot" style={{ background: PRIORITY_COLOR[task.priority], marginTop: 5 }} />
+                      <div className="gr-col-text">
+                        <Ed id={`plan.${task.id}`} value={task.title} edit={edit} className="gr-col-title" />
+                        {task.dueDate && (
+                          <span className="gr-col-meta">
+                            {t("gr.due")} {fmtDate(task.dueDate)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---- Cover --------------------------------------------------------------------
+
+/** Tasks that can be put in the cover's highlights, grouped as on the board. */
+function highlightCandidates(board: Board, data: ReportData): { status: Status; tasks: Task[] }[] {
+  const doneIds = new Set(data.done.map((r) => r.task.id));
+  return [
+    { status: "DONE" as Status, tasks: data.done.map((r) => r.task) },
+    ...(["IN PROGRESS", "NEXT", "WAITING"] as Status[]).map((status) => ({
+      status,
+      tasks: board.tasks.filter((t) => t.status === status && !doneIds.has(t.id)),
+    })),
+  ].filter((g) => g.tasks.length > 0);
+}
+
+const MAX_HIGHLIGHTS = 8;
+
+function HighlightPicker({
+  groups,
+  selected,
+  onChange,
+  onClose,
+}: {
+  groups: { status: Status; tasks: Task[] }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+  onClose: () => void;
+}) {
+  const { t, lang } = useT();
+  const toggle = (id: string) =>
+    onChange(
+      selected.includes(id)
+        ? selected.filter((x) => x !== id)
+        : selected.length < MAX_HIGHLIGHTS
+          ? [...selected, id]
+          : selected
+    );
+  return (
+    <div className="gr-picker gr-noexport">
+      <div className="gr-picker-head">
+        <span>{t("gr.pick.title", { n: selected.length, max: MAX_HIGHLIGHTS })}</span>
+        <button type="button" className="gr-picker-btn" onClick={onClose}>
+          {t("gr.pick.done")}
+        </button>
+      </div>
+      <div className="gr-picker-body">
+        {groups.map((g) => (
+          <div key={g.status} className="gr-picker-group">
+            <div className="gr-picker-status">
+              <span className="gr-dot" style={{ background: g.status === "DONE" ? "#34C759" : STATUS_COLOR[g.status] }} />
+              {g.status === "DONE" ? t("gr.pick.doneGroup") : statusLabel(lang, g.status)}
+            </div>
+            {g.tasks.map((task) => {
+              const on = selected.includes(task.id);
+              return (
+                <label key={task.id} className={`gr-picker-row ${on ? "gr-picker-on" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    disabled={!on && selected.length >= MAX_HIGHLIGHTS}
+                    onChange={() => toggle(task.id)}
+                  />
+                  <span className="gr-dot" style={{ background: PRIORITY_COLOR[task.priority] }} />
+                  <span>{task.title}</span>
+                </label>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Cover({
   board,
+  data,
   stats,
   periodText,
   edit,
   highlights,
+  setHighlights,
 }: {
   board: Board;
+  data: ReportData;
   stats: CoverStats;
   periodText: string;
   edit: EditCtx;
-  /** The first completed tasks, most important first. */
-  highlights: Task[];
+  highlights: string[];
+  setHighlights: (ids: string[]) => void;
 }) {
   const { t } = useT();
+  const [picking, setPicking] = useState(false);
+  const groups = useMemo(() => highlightCandidates(board, data), [board, data]);
+  const byId = useMemo(() => new Map(groups.flatMap((g) => g.tasks.map((task) => [task.id, task] as const))), [groups]);
+  const chosen = highlights.map((id) => byId.get(id)).filter((x): x is Task => !!x);
+  const doneIds = useMemo(() => new Set(data.done.map((r) => r.task.id)), [data]);
+
   const tiles: { k: string; v: number; c: string }[] = [
     { k: "gr.stat.done", v: stats.done, c: "#34C759" },
     { k: "gr.stat.subtasks", v: stats.subtasks, c: "#32ADE6" },
@@ -436,50 +557,55 @@ function Cover({
         <Ed tag="p" id="cover.subtitle" value={t("gr.cover.subtitle")} edit={edit} className="gr-lede" multiline />
       </div>
 
-      <div className="gr-cover-hero">
-        <div className="gr-glass gr-ring-card">
-          <div className="gr-ring-wrap">
-            <Ring value={stats.closeRate} />
-            <div className="gr-ring-center">
-              <span className="gr-ring-pct">{Math.round(stats.closeRate * 100)}%</span>
-              <span className="gr-ring-label">{t("gr.stat.closeRate")}</span>
-            </div>
-          </div>
-          <p className="gr-ring-note">{t("gr.stat.closeRateNote")}</p>
-        </div>
-        <div className="gr-tiles">
-          {tiles.map((tile) => (
-            <div key={tile.k} className="gr-glass gr-tile">
-              <span className="gr-tile-v" style={{ color: tile.c }}>
-                {tile.v}
-              </span>
-              <span className="gr-tile-k">{t(tile.k)}</span>
-            </div>
-          ))}
-          <div className="gr-glass gr-tile">
-            <span className="gr-tile-v" style={{ color: "#5856D6" }}>
-              {stats.projectAvg === null ? "—" : `${Math.round(stats.projectAvg * 100)}%`}
+      <div className="gr-tiles gr-tiles-5">
+        {tiles.map((tile) => (
+          <div key={tile.k} className="gr-glass gr-tile">
+            <span className="gr-tile-v" style={{ color: tile.c }}>
+              {tile.v}
             </span>
-            <span className="gr-tile-k">{t("gr.stat.projects")}</span>
+            <span className="gr-tile-k">{t(tile.k)}</span>
           </div>
-        </div>
+        ))}
       </div>
 
-      {highlights.length > 0 && (
-        <div className="gr-glass gr-highlights">
-          <div className="gr-eyebrow" style={{ color: "#34C759" }}>
+      <div className={`gr-glass gr-highlights ${chosen.length ? "" : "gr-noexport"}`}>
+        <div className="gr-highlights-head">
+          <span className="gr-eyebrow" style={{ color: "#34C759" }}>
             {t("gr.cover.highlights")}
+          </span>
+          {edit.enabled && (
+            <button type="button" className="gr-picker-btn gr-noexport" onClick={() => setPicking((v) => !v)}>
+              {t("gr.pick.open")}
+            </button>
+          )}
+        </div>
+        {chosen.length === 0 ? (
+          <div className="gr-muted gr-noexport" style={{ marginTop: 10 }}>
+            {t("gr.pick.empty")}
           </div>
+        ) : (
           <ul>
-            {highlights.map((task) => (
+            {chosen.map((task) => (
               <li key={task.id}>
-                <Check done />
-                <span>{edit.get(`task.${task.id}.title`) ?? task.title}</span>
+                {doneIds.has(task.id) ? (
+                  <Check done />
+                ) : (
+                  <span className="gr-hl-dot" style={{ background: STATUS_COLOR[task.status] ?? "#8E8E93" }} />
+                )}
+                <span>{edit.get(`task.${task.id}.title`) ?? edit.get(`next.${task.id}.title`) ?? task.title}</span>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+        {picking && (
+          <HighlightPicker
+            groups={groups}
+            selected={highlights}
+            onChange={setHighlights}
+            onClose={() => setPicking(false)}
+          />
+        )}
+      </div>
 
       <div className="gr-glass gr-note">
         <div className="gr-eyebrow" style={{ color: "#007AFF" }}>
@@ -501,31 +627,54 @@ export interface GlassReportProps {
   pagesRef: React.MutableRefObject<HTMLDivElement[]>;
 }
 
+// Pack measured blocks onto pages; returns block ids per page. A section
+// heading always travels with its first card.
+function pack(blocks: Block[], heights: Map<string, number>): string[][] {
+  const pages: string[][] = [];
+  let cur: string[] = [];
+  let used = 0;
+  blocks.forEach((b, i) => {
+    const h = heights.get(b.id) ?? 0;
+    const nextH = b.kind === "section" && i + 1 < blocks.length ? GAP + (heights.get(blocks[i + 1].id) ?? 0) : 0;
+    if (cur.length && used + GAP + h + nextH > CONTENT_H) {
+      pages.push(cur);
+      cur = [];
+      used = 0;
+    }
+    used += (cur.length ? GAP : 0) + h;
+    cur.push(b.id);
+  });
+  if (cur.length) pages.push(cur);
+  return pages;
+}
+
 export function GlassReport({ board, data, periodText, pagesRef }: GlassReportProps) {
   const { lang } = useT();
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
-  const [layout, setLayout] = useState<number[][] | null>(null);
+  const [highlights, setHighlights] = useState<string[]>(() =>
+    [...data.done]
+      .sort((a, b) => a.task.priority.localeCompare(b.task.priority))
+      .slice(0, 4)
+      .map((r) => r.task.id)
+  );
+  const [layout, setLayout] = useState<{ before: string[][]; after: string[][] } | null>(null);
   const measureRef = useRef<HTMLDivElement>(null);
 
-  const blocks = useMemo(() => buildBlocks(board, data, hidden), [board, data, hidden]);
+  const input = useMemo(() => buildBlocks(board, data, hidden), [board, data, hidden]);
+  const all = useMemo(() => [...input.before, ...input.after], [input]);
+  const byId = useMemo(() => new Map(all.map((b) => [b.id, b])), [all]);
   const stats = useMemo(() => coverStats(board, data), [board, data]);
-  const highlights = useMemo(
-    () =>
-      data.done
-        .filter((r) => !hidden.has(`task.${r.task.id}`))
-        .map((r) => r.task)
-        .sort((a, b) => a.priority.localeCompare(b.priority))
-        .slice(0, 6),
-    [data, hidden]
-  );
 
   const fmtDate = useCallback(
     (v: number | string) => {
-      const d = typeof v === "number" ? new Date(v) : (() => {
-        const [y, m, dd] = v.split("-").map(Number);
-        return new Date(y, m - 1, dd);
-      })();
+      const d =
+        typeof v === "number"
+          ? new Date(v)
+          : (() => {
+              const [y, m, dd] = v.split("-").map(Number);
+              return new Date(y, m - 1, dd);
+            })();
       return d.toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "numeric", month: "short" });
     },
     [lang]
@@ -542,79 +691,91 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
   const measureEdit: EditCtx = useMemo(() => ({ ...edit, enabled: false }), [edit]);
   const hide = useCallback((id: string) => setHidden((h) => new Set(h).add(id)), []);
 
-  // Measure every block at page width and pack them onto pages. A section
-  // heading always travels with its first card.
+  // Measure every block at page width and pack each run onto pages.
   useLayoutEffect(() => {
     let cancelled = false;
-    const pack = () => {
+    const run = () => {
       const host = measureRef.current;
       if (!host || cancelled) return;
-      const heights = Array.from(host.children).map((el) => (el as HTMLElement).getBoundingClientRect().height);
-      const pages: number[][] = [];
-      let cur: number[] = [];
-      let used = 0;
-      for (let i = 0; i < blocks.length; i++) {
-        const h = heights[i] + (cur.length ? GAP : 0);
-        const withNext =
-          blocks[i].kind === "section" && i + 1 < blocks.length ? h + GAP + heights[i + 1] : h;
-        if (cur.length && used + withNext > CONTENT_H) {
-          pages.push(cur);
-          cur = [];
-          used = 0;
-        }
-        used += cur.length ? heights[i] + GAP : heights[i];
-        cur.push(i);
-      }
-      if (cur.length) pages.push(cur);
-      setLayout(pages);
+      const heights = new Map<string, number>();
+      host.querySelectorAll<HTMLElement>(":scope > [data-block]").forEach((el) => {
+        heights.set(el.dataset.block!, el.getBoundingClientRect().height);
+      });
+      setLayout({ before: pack(input.before, heights), after: pack(input.after, heights) });
     };
-    pack();
-    // Re-pack once web fonts have loaded (text widths change).
-    document.fonts?.ready.then(pack).catch(() => {});
+    run();
+    document.fonts?.ready.then(run).catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [blocks, edits]);
+  }, [input, edits]);
 
-  const total = 1 + (layout?.length ?? 0);
+  // Page list: cover, portrait pages, the landscape planner, portrait pages.
+  // Ids a stale layout still names but that are gone (just hidden) are skipped.
+  const flowPages = (ids: string[][]) =>
+    ids.map((page) => page.map((id) => byId.get(id)).filter((b): b is Block => !!b)).filter((p) => p.length);
+  const before = layout ? flowPages(layout.before) : [];
+  const after = layout ? flowPages(layout.after) : [];
+  const total = 1 + before.length + 1 + after.length;
+  const boardName = edits["cover.board"] ?? board.boardName;
+
   pagesRef.current = [];
   const setPage = (i: number) => (el: HTMLDivElement | null) => {
     if (el) pagesRef.current[i] = el;
   };
 
+  const flow = (blocks: Block[], index: number) => (
+    <PageChrome key={`p${index}`} index={index} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(index)}>
+      <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: CONTENT_W, height: CONTENT_H }}>
+        {blocks.map((b) => (
+          <div key={b.id} className="gr-block">
+            <BlockView block={b} edit={edit} fmtDate={fmtDate} onHide={hide} />
+          </div>
+        ))}
+      </div>
+    </PageChrome>
+  );
+
   return (
     <div className="gr-root">
       {/* Off-screen copy used only to measure block heights. */}
       <div ref={measureRef} className="gr-measure" style={{ width: CONTENT_W }} aria-hidden>
-        {blocks.map((b) => (
-          <div key={b.id} className="gr-block">
+        {all.map((b) => (
+          <div key={b.id} data-block={b.id} className="gr-block">
             <BlockView block={b} edit={measureEdit} fmtDate={fmtDate} />
           </div>
         ))}
       </div>
 
       <div className="gr-pages">
-        <PageChrome index={0} total={total} boardName={board.boardName} periodText={periodText} pageRef={setPage(0)}>
-          <Cover board={board} stats={stats} periodText={periodText} edit={edit} highlights={highlights} />
-        </PageChrome>
-        {layout?.map((idxs, p) => (
-          <PageChrome
-            key={p}
-            index={p + 1}
-            total={total}
-            boardName={edits["cover.board"] ?? board.boardName}
+        <PageChrome index={0} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(0)}>
+          <Cover
+            board={board}
+            data={data}
+            stats={stats}
             periodText={periodText}
-            pageRef={setPage(p + 1)}
-          >
-            <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: CONTENT_W, height: CONTENT_H }}>
-              {idxs.map((i) => (
-                <div key={blocks[i].id} className="gr-block">
-                  <BlockView block={blocks[i]} edit={edit} fmtDate={fmtDate} onHide={hide} />
-                </div>
-              ))}
-            </div>
-          </PageChrome>
-        ))}
+            edit={edit}
+            highlights={highlights}
+            setHighlights={setHighlights}
+          />
+        </PageChrome>
+        {layout && (
+          <>
+            {before.map((blocks, i) => flow(blocks, 1 + i))}
+            <PageChrome
+              key="planner"
+              index={1 + before.length}
+              total={total}
+              boardName={boardName}
+              periodText={periodText}
+              pageRef={setPage(1 + before.length)}
+              landscape
+            >
+              <PlannerPage n={input.planner.n} columns={input.planner.columns} edit={edit} fmtDate={fmtDate} />
+            </PageChrome>
+            {after.map((blocks, i) => flow(blocks, 2 + before.length + i))}
+          </>
+        )}
       </div>
     </div>
   );
