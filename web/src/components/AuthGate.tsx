@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { isTeamEmailConfigured } from "../lib/supabaseConfig";
-import { signInTeam, signOutDevice, outcomeKey } from "../lib/auth";
-import { readAuthExp, clearAuth } from "../lib/prefs";
+import { signInTeam, signOutDevice, outcomeKey, checkSession, AUTH_CHECK_EVENT } from "../lib/auth";
+import { readAuthExp, clearLoginState } from "../lib/prefs";
 import { useT } from "../lib/i18n";
 
 // The team login. The password is checked by Supabase Auth — the browser
@@ -14,6 +14,9 @@ type GateState = "checking" | "out" | "in";
 
 // setTimeout cannot wait longer than ~24.8 days; re-check at least that often.
 const MAX_TIMER_MS = 2_000_000_000;
+// How often an open tab re-checks that its session is still alive (a password
+// reset by an admin revokes it; supabase-js does not always announce that).
+const SESSION_CHECK_MS = 30_000;
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { t } = useT();
@@ -21,34 +24,33 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [pwd, setPwd] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<{ key: string; detail?: string } | null>(null);
+  // Guards against a double submit (Enter + click) before `busy` re-renders.
+  const submitting = useRef(false);
 
-  // Restore a saved session, if it is still within its login duration.
+  // Restore a saved session, if it is still within its login duration and the
+  // account is still on the team list.
   useEffect(() => {
     let alive = true;
     (async () => {
-      let hasSession = false;
-      try {
-        const { data } = await supabase.auth.getSession();
-        hasSession = !!data.session;
-      } catch {
-        hasSession = false;
-      }
-      if (!alive) return;
       const exp = readAuthExp();
-      if (hasSession && exp !== null && exp > Date.now()) {
+      const within = exp !== null && exp > Date.now();
+      const session = await checkSession({ team: within });
+      if (!alive) return;
+      if (within && session !== "gone") {
+        // "unknown" (offline): let the board show its own connection state;
+        // the periodic check below logs out once the server says "gone".
         setState("in");
       } else {
-        if (hasSession) await signOutDevice();
-        else clearAuth();
+        await signOutDevice();
         if (alive) setState("out");
       }
     })();
 
-    // Logged out elsewhere (Settings, an expired or revoked session, an admin
-    // password reset): show the login again.
+    // Logged out elsewhere (Settings, another tab, a revoked session): show
+    // the login again.
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT" && alive) {
-        clearAuth();
+        clearLoginState();
         setState("out");
       }
     });
@@ -58,22 +60,43 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // End the session when the login duration runs out, even in a tab that
-  // stays open.
+  // While logged in: end the session when the login duration runs out, and
+  // re-check it periodically, when the tab comes back, and whenever a request
+  // is refused — so a revoked login returns to this screen, not a broken board.
   useEffect(() => {
     if (state !== "in") return;
+    let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    const end = async () => {
+      if (stopped) return;
+      stopped = true;
+      await signOutDevice();
+      setState("out");
+    };
     const arm = () => {
       const exp = readAuthExp();
       const left = exp === null ? 0 : exp - Date.now();
-      if (left <= 0) {
-        signOutDevice().then(() => setState("out"));
-        return;
-      }
+      if (left <= 0) return void end();
       timer = setTimeout(arm, Math.min(left, MAX_TIMER_MS));
     };
+    const check = async () => {
+      if (stopped) return;
+      if ((await checkSession({ team: true })) === "gone") await end();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
     arm();
-    return () => clearTimeout(timer);
+    const poll = setInterval(check, SESSION_CHECK_MS);
+    window.addEventListener(AUTH_CHECK_EVENT, check);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      window.removeEventListener(AUTH_CHECK_EVENT, check);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [state]);
 
   if (state === "in") return <>{children}</>;
@@ -83,10 +106,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   const submit = async () => {
-    if (busy || !pwd) return;
+    if (submitting.current || !pwd) return;
+    submitting.current = true;
     setBusy(true);
     setErr(null);
     const out = await signInTeam(pwd);
+    submitting.current = false;
     setBusy(false);
     if (out.result === "ok") {
       setPwd("");

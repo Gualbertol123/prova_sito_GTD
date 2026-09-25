@@ -1,7 +1,8 @@
-import { supabase } from "./supabaseClient";
+import { supabase, SESSION_STORAGE_KEY } from "./supabaseClient";
 import { TEAM_EMAIL } from "./supabaseConfig";
 import { DEFAULT_LOGIN_DAYS } from "./constants";
-import { clearAuth, writeAuth } from "./prefs";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
+import { clearLoginState, writeAuth } from "./prefs";
 
 // Everything that touches a password goes through here. The browser never
 // holds a password it did not just receive from the person typing it:
@@ -78,13 +79,21 @@ export async function signInTeam(password: string): Promise<AuthOutcome> {
   }
 }
 
-/** Forget the login on this device only. */
+/** Forget the login on this device only (and its Reflection logins). */
 export async function signOutDevice(): Promise<void> {
-  clearAuth();
+  clearLoginState();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } catch {
-    /* offline — the local session is cleared anyway */
+    /* offline — cleared below anyway */
+  }
+  // supabase-js keeps a session whose refresh was refused (it returns early
+  // from signOut); remove it outright so no dead token stays on the device.
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(`${SESSION_STORAGE_KEY}-user`);
+  } catch {
+    /* storage disabled */
   }
 }
 
@@ -139,6 +148,36 @@ export function reflectionChangePassword(member: string, current: string, next: 
 /** Check the Tracking tab password on the server. */
 export function trackingLogin(password: string): Promise<AuthOutcome> {
   return rpcResult("tracking_login", { p_password: password });
+}
+
+// Ask the login gate to re-check the session now (e.g. after a request was
+// refused), instead of waiting for its next periodic check.
+export const AUTH_CHECK_EVENT = "gtd-auth-check";
+export function requestAuthCheck(): void {
+  window.dispatchEvent(new Event(AUTH_CHECK_EVENT));
+}
+
+export type SessionState = "valid" | "gone" | "unknown";
+
+/**
+ * Is this device's session still alive? "gone" when Supabase has no usable
+ * session any more (revoked by a password reset, refresh token rejected, or
+ * the account removed from the team list); "unknown" when it could not tell
+ * (offline, server error) — never log someone out for a network blip.
+ */
+export async function checkSession(opts: { team?: boolean } = {}): Promise<SessionState> {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (!data.session) return error && isAuthRetryableFetchError(error) ? "unknown" : "gone";
+    if (opts.team) {
+      const team = await supabase.rpc("is_team_member");
+      if (team.error) return "unknown";
+      if (team.data === false) return "gone";
+    }
+    return "valid";
+  } catch {
+    return "unknown";
+  }
 }
 
 /** i18n key for an outcome, for the message shown to the person. */

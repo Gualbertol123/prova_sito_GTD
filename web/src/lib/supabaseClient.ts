@@ -7,11 +7,13 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabaseConfig";
 // the login survives a reload; AuthGate ends it after the configured number
 // of days, and "Log out this device" removes it. Board content itself is
 // still never cached locally.
+export const SESSION_STORAGE_KEY = "gtd-session";
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    storageKey: "gtd-session",
+    storageKey: SESSION_STORAGE_KEY,
   },
 });

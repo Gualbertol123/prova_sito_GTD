@@ -4,6 +4,7 @@ import { fetchBoard, seedIfEmpty, writeOp } from "./db";
 import { applyOpLocal } from "./localReducer";
 import { supabase } from "./supabaseClient";
 import { isConfigured } from "./supabaseConfig";
+import { requestAuthCheck } from "./auth";
 
 export type ConnState = "connecting" | "online" | "reconnecting" | "offline";
 
@@ -21,6 +22,9 @@ export interface UseBoard {
 // primary path; this just guarantees convergence.
 const POLL_MS = 12000;
 
+// Marks a reload skipped for lack of a session (not an error to show).
+const SKIP = Symbol("no-session");
+
 // Loads the board from Supabase, keeps it live via Postgres realtime, and
 // dispatches optimistic ops. All board state is in memory only.
 export function useBoard(): UseBoard {
@@ -36,13 +40,27 @@ export function useBoard(): UseBoard {
 
   const reload = useCallback(() => {
     const seq = ++loadSeq.current;
-    fetchBoard()
+    // No live session (e.g. its refresh was refused after a password reset):
+    // do not query with the bare public key — hand over to the login gate.
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!data.session) {
+          requestAuthCheck();
+          throw SKIP;
+        }
+        return fetchBoard();
+      })
       .then((b) => {
         if (seq !== loadSeq.current) return; // a newer reload already won
         setError(null);
         setBoard(b);
       })
-      .catch((e: unknown) => setError(errMsg(e)));
+      .catch((e: unknown) => {
+        if (e === SKIP) return;
+        setError(errMsg(e));
+        requestAuthCheck(); // a refused read may mean the login has ended
+      });
   }, []);
 
   useEffect(() => {
@@ -135,6 +153,7 @@ export function useBoard(): UseBoard {
         // The banner at the top of the page is easy to miss, so let the caller
         // tell the person right where they acted that it did not save.
         onError?.(message);
+        requestAuthCheck();
         reload(); // undo a failed optimistic change
       });
     },

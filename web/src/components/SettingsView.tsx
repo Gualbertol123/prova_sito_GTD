@@ -181,7 +181,11 @@ function TeamPasswordForm({ input, saveBtn }: { input: string; saveBtn: string }
       setNp2("");
       setMsg({ ok: true, key: "settings.pwdChanged" });
     } else {
-      setMsg({ ok: false, key: out.result === "wrong" ? "settings.pwdWrongCurrent" : outcomeKey(out.result), detail: out.detail });
+      const key =
+        out.result === "wrong" ? "settings.pwdWrongCurrent"
+        : out.result === "invalid" ? "settings.pwdRejected" // Supabase's own rule, e.g. its minimum length
+        : outcomeKey(out.result);
+      setMsg({ ok: false, key, detail: out.detail });
     }
   };
 

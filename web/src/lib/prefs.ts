@@ -77,8 +77,11 @@ export function readAuthExp(): number | null {
 export function writeAuth(exp: number): void {
   writePref("auth", JSON.stringify({ exp }));
 }
-export function clearAuth(): void {
+// Leaving the team login also forgets every per-member Reflection login on
+// this device, so the next person to log in here cannot open someone's diary.
+export function clearLoginState(): void {
   removePref("auth");
+  removePref("reflauth");
 }
 
 // Priority-distribution collapsed state (default collapsed to save space).
