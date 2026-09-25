@@ -25,7 +25,7 @@ full file map, how to run and deploy it, and how to extend it.
 | **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: assignees, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose assignees/priority/status/due up front); search + owner/priority/Focus-P1 filters. A task can be held by **one person or several** — open the assignee pill to tick names; the first one stays the `owner` column, so filters, the tracking view and the weekly recap all count a shared task for everyone on it. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
 | **WEEKLY** | Weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
-| **REPORT** | Generates the Word report on the Intesa Sanpaolo template and opens it in **SuperDoc**, a real DOCX editor running in the browser (see §5). Nothing is downloaded until asked: correct anything in the editor — text, tables, fonts — then **Download Word** or **Download PDF**. There is also a **Download without editing** button that skips the editor entirely. |
+| **REPORT** | Builds the weekly report as **A4 pages in Liquid Glass** (light mode) right in the tab (see §5): a cover with the week's numbers, then Done, Next, Projects, the Planner and the weekly retro. Click any text on the pages to edit it; hover a card and press × to leave it out; **Download PDF** saves exactly what is on screen. The old Intesa Sanpaolo Word template is still one click away as **Word (classic template)**. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (initial password `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can change your own password (the current one is required). Passwords are stored as **bcrypt hashes** and checked by the database (`reflection_login`); 5 wrong tries lock that name for 5 minutes; an admin resets a forgotten one from Supabase (§11). A **Diary / Notes** switch at the top of the tab, behind the same password, holds **Personal notes**: free-form notes only you see, in the `personal_notes` table (the chip carries their count, and the tab reopens on whichever half you used last). Private from outsiders, but *within the team* the privacy is in the interface only — see §11. |
 | **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password is a bcrypt hash in the database, checked by `tracking_login`; set it from Supabase (§11). |
@@ -70,11 +70,8 @@ by a 12s safety-net poll while the tab is visible, plus a refetch on tab-focus
 and on network `online`, and a full re-pull on every (re)subscribe. So clients
 converge even if a realtime packet is missed.
 
-**The report editor runs entirely in the browser.** SuperDoc opens the
-generated `.docx`, edits it, and writes it back — no document is ever uploaded
-anywhere, and its "document open" telemetry is switched off explicitly
-(`telemetry: { enabled: false }`), so report contents and filenames are not
-reported to a third party.
+**The report runs entirely in the browser.** It is laid out, edited and turned
+into a PDF on the device; no report content is ever uploaded anywhere.
 
 **What is cached in the browser.** Board **data is never cached** — it lives in
 memory only, so closing the tab leaves no copy of any task. `localStorage` holds
@@ -206,13 +203,13 @@ prova_sito_GTD/
 │   └── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
-    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, superdoc
+    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, jspdf, modern-screenshot, @fontsource-variable/inter
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_TEAM_EMAIL
     ├── public/robots.txt         ← Disallow: / (noindex)
     ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
     ├── public/fonts/             ← EB Garamond + Cinzel TTFs embedded in the PDF (OFL)
-    ├── vite.config.ts            ← incl. manualChunks: SuperDoc/Supabase cached separately
+    ├── vite.config.ts            ← manualChunks (Supabase cached separately); fails a build without VITE_TEAM_EMAIL
     └── src/
         ├── main.tsx              ← mounts <LangProvider><IdentityProvider><AuthGate><App/>
         ├── App.tsx               ← tabs, top bar, filters state, favicon effect, routing
@@ -234,9 +231,9 @@ prova_sito_GTD/
         │   ├── image.ts          ← logo/favicon validate + rasterise + downscale
         │   ├── dates.ts          ← date math/formatting helpers
         │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
-        │   ├── reportDocx.ts     ← builds the .docx from the template (lazy-loaded)
-        │   ├── reportEditor.ts   ← SuperDoc loader, fonts, DOCX export
-        │   ├── reportPdf.ts      ← redraws the editor's pages as a real-text PDF (lazy)
+        │   ├── glassReportModel.ts ← the Liquid Glass report as blocks + cover figures
+        │   ├── glassReportPdf.ts ← captures the report pages into a PDF (lazy)
+        │   ├── reportDocx.ts     ← the classic Word template (.docx, lazy-loaded)
         │   ├── skin.ts           ← which visual skin is on (glass / classic)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
         └── components/
@@ -269,127 +266,67 @@ Rough size: ~7.1k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
 
 ---
 
-## 5. Weekly report — generate, edit, export
-
-The **REPORT** tab turns the board into the Word report and lets you fix it up
-before it goes out, without leaving the site.
+## 5. Weekly report — Liquid Glass, edited in place, exported to PDF
 
 ```
-period ─▶ buildReportDocx()  ─┐
-                              ├─▶ .docx in memory ─▶ SuperDoc editor ─┬─▶ Download Word
-         preloadSuperDoc()  ──┘   (never written                      └─▶ Download PDF
-         (starts on tab open)      to disk here)                          (layout → jsPDF)
+REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
+   collectReport()  ─▶ buildBlocks() ─▶ measured and packed onto A4 pages (GlassReport)
+                                          │  click any text to edit · × hides a card
+                                          └─▶ Download PDF (glassReportPdf.ts)
 ```
 
-Nothing is downloaded unless asked. **Download without editing** skips the
-editor and saves the generated file directly.
+### What is in it
 
-### The document
+| Page | Content |
+| --- | --- |
+| Cover | board name and period, an editable headline and subtitle, a ring with the share of active work closed this week (done ÷ done + in progress + next), tiles for completed tasks, closed subtasks, in progress, next, waiting and average project progress, an **In evidenza** list of what was completed, and an editable **In sintesi** paragraph for the week's summary |
+| 01 Completate | every task that entered DONE inside the period, with priority, completion date, its subtasks and a progress bar |
+| 02 Prossimi passi | the NEXT column now, with due dates and subtasks |
+| 03 Progetti | each project from the Projects tab with its checklist and % done |
+| 04 Planner | Backlog · Next · In Progress · Waiting as bands of task chips |
+| 05 Retrospettiva | the WEEKLY tab's buckets that have items (wins, learnings, to improve, blockers, focus next week) |
 
-Built on the real template at `web/public/report-template.docx`:
-`reportDocx.ts` unzips it, replaces only the body of `word/document.xml`, and
-zips it back, so `styles.xml` (Garamond 11pt), `header1.xml` (the logo
-letterhead) and `footer1.xml` (`PAGE {PAGE} OF {NUMPAGES}` as real Word fields,
-which is what makes page numbers automatic) all survive untouched.
+Only the Done section is period-filtered; the rest is how the board stands when
+the report is generated. Like the old Word report it is **name-free**: no owner
+appears anywhere.
 
-| Page | Section | Filled with |
-| --- | --- | --- |
-| 1 (portrait) | `Weekly Report` + `dd/mm/yyyy – dd/mm/yyyy` | the selected period |
-| | **Done** | tasks that entered DONE inside the period, with their subtasks |
-| | **Next** | whatever is in the NEXT column right now |
-| | **Current Projects** | the Projects tab, each with its checklist and `done / total` |
-| 2 (landscape) | `Planner` + the same period | **Backlog · Next · In Progress · Waiting** side by side |
+### How it is built
 
-Only **Done** is period-filtered. No owner names anywhere, no images, no tick
-marks — see the layout rules in `reportDocx.ts`.
-
-### The editor (SuperDoc)
-
-[SuperDoc](https://github.com/superdoc-dev/superdoc) edits DOCX natively in the
-browser — it writes back to the OOXML rather than round-tripping through HTML,
-so the letterhead, the footer's page-number fields and the portrait/landscape
-section split all survive a round trip (there are assertions for exactly this
-in the commit that added it).
-
-- **Licence: AGPL-3.0.** Fine for internal, non-commercial use. Redistributing
-  this app commercially would need SuperDoc's commercial licence instead.
-- **Telemetry is off.** SuperDoc posts a document-open event to
-  `ingest.superdoc.dev` by default; `telemetry: { enabled: false }` in
-  `reportEditor.ts` disables it, and the test that verified this asserted zero
-  requests to that host. No document ever leaves the browser.
-- **Fonts.** Nine Google Fonts are registered and added to the toolbar's font
-  dropdown alongside the document's own (Garamond, Trajan Pro, Arial…).
-  EB Garamond leads the list because it is the open counterpart of the
-  template's Garamond. The stylesheet is fetched from the same Google CDN the
-  app already uses for Cinzel and Inter, and failing to load it is non-fatal —
-  the editor still opens, just without the extra families. If the corporate
-  network blocks Google, self-host the woff2 files and point
-  `fonts.families[].faces[].url` at them instead.
-
-### Weight and caching
-
-SuperDoc is ~12 MB installed, so it is kept out of the main bundle entirely:
-
-- `preloadSuperDoc()` starts the dynamic import **when the REPORT tab opens**,
-  so it downloads in parallel with building the document rather than after it.
-  The promise is module-level, so it loads once per page load however many
-  times the editor is opened.
-- `manualChunks` in `vite.config.ts` pins SuperDoc (and Supabase) to their own
-  content-hashed chunks. An ordinary app deploy leaves the browser's cached
-  SuperDoc valid; a SuperDoc upgrade invalidates only SuperDoc's chunk.
-- `/assets/*` is served `Cache-Control: public, max-age=31536000, immutable`
-  (`netlify.toml`). Safe because the filenames are content-hashed.
-
-Net effect on everyone who never opens the tab: the main bundle went **down**,
-from ~507 kB to ~285 kB, because Supabase moved into its own chunk too.
+- **Blocks and pages.** `glassReportModel.ts` turns the data into blocks (a
+  section heading, a task card, a project, a planner band, a retro bucket).
+  `GlassReport.tsx` renders every block once off-screen at page width,
+  measures it, and packs blocks onto 794 × 1123 px pages (A4 at 96 dpi); a
+  section heading always stays with its first card and no card is split.
+- **Editing.** Every text is `contentEditable`. An edit is stored when the
+  field loses focus, the blocks are measured again and re-packed — a longer
+  text simply pushes the next card to the following page. Edits live only in
+  memory while the report is open; closing the report discards them.
+- **The look.** `styles/glassReport.css`: soft colour washes (radial
+  gradients, arranged differently on each page) under white glass panels
+  built from translucent fills, a bright rim, a specular sheen and soft
+  shadows, in Apple's light system palette. It deliberately does not depend on
+  `backdrop-filter`, so the PDF matches the screen. Type is Inter, self-hosted
+  through `@fontsource-variable/inter`, because the capture cannot fetch
+  Google Fonts under the site's Content Security Policy.
 
 ### PDF
 
-**Download PDF** saves a `.pdf` file directly, with no print dialog, and the
-PDF has **real text**: it can be selected, searched and copied, and it stays
-sharp at any zoom. SuperDoc can only export DOCX. But it lays every page out
-itself as absolutely positioned lines, text runs, cell borders and fills. So
-`reportPdf.ts` reads that layout back out of the DOM and redraws it with
-[jsPDF](https://github.com/parallax/jsPDF):
+Glass (translucency, gradients, gradient type) has no PDF equivalent, so each
+page is captured with `modern-screenshot` at 240 dpi and placed on an A4 page
+with jsPDF — the PDF looks exactly like the screen. On top of each picture
+every word is written again as **invisible text** at the same position, so the
+PDF can still be searched and its text selected and copied (Latin-1 only; the
+✓ and · symbols are left out of that layer). Editing highlights, the × buttons
+and page shadows are switched off while capturing. A five-page report is
+about 1.5 MB. Everything here loads on click only.
 
-| On the page | In the PDF |
-| --- | --- |
-| text runs | PDF text in embedded fonts, at the run's exact position and width |
-| background fills, cell and paragraph borders | vector rectangles |
-| `<img>` (the letterhead logo) | the image |
-| underline / strike-through | a thin rule under / through the run |
+### Word (classic template)
 
-It also carries over bold, italic, colour, letter-spacing and `text-transform`.
-Each PDF page keeps its orientation, so the planner is a true A4 landscape
-sheet. Nine pages take about 2 s.
-
-**Fonts.** Garamond and Trajan Pro are commercial, so the PDF embeds their open
-counterparts, which are self-hosted in `web/public/fonts/` (OFL, see the
-README there): **EB Garamond** for Garamond and **Cinzel** for Trajan Pro. The
-Google families in the editor's font menu (Lora, Roboto, …) are fetched from
-the fontsource CDN on jsDelivr only when the document uses them. Arial, Calibri
-and other sans fonts map to the PDF's built-in Helvetica; Times New Roman and
-Georgia map to Times. If a font file can't be fetched, that run falls back to
-the built-in font rather than failing. Screen fonts and PDF fonts differ
-slightly in width. That difference is absorbed by the character spacing (capped
-at 12% of the font size), so centred and right-aligned text stays in place and
-glyphs are never stretched.
-
-**Lazy painting.** SuperDoc normally keeps only a window of pages near the
-viewport, and it fills a page in only once it has been scrolled to. The editor
-is created with `layoutEngineOptions: { virtualization: { enabled: false } }` so
-every page box exists. The exporter then scrolls each page into view and waits
-for its content before reading it, and puts the scroll position back at the
-end.
-
-**Fallback.** If the vector build throws for any reason, the previous route
-takes over: a picture of each page (modern-screenshot → JPEG → jsPDF). So the
-button always produces a file. When that happens, a note next to the button
-says the text in that PDF is not selectable.
-
-**Known quirk:** in the footer SuperDoc places some runs a couple of pixels too
-close together ("PAGE1OF2", "INTERNALUSE ONLY"). It looks the same in the
-editor; the PDF just reproduces SuperDoc's layout.
+The previous Intesa Sanpaolo Word report is still available as a direct
+download (**Word (classic template)**): `reportDocx.ts` fills
+`web/public/report-template.docx` with the same Done / Next / Projects /
+Planner content. There is no Word editor any more — edit the downloaded file in
+Word if needed.
 
 ---
 
@@ -458,11 +395,6 @@ same build command, publish `web/dist`, same three env vars.
   refetches on its sync cycle. Uploads accept up to 5 MB but are **rasterised and
   downscaled** to a small icon before storage (`image.ts`) precisely so the
   shared row — and everyone's bandwidth — stays light. Don't bypass that.
-- **SuperDoc is AGPL-3.0.** The report editor is fine for internal,
-  non-commercial use, which is what this board is. Redistributing the app
-  commercially, or as a hosted product, would need SuperDoc's commercial
-  licence. Its telemetry is disabled in code — if you ever upgrade the package,
-  re-check that `telemetry: { enabled: false }` is still honoured.
 - **Free-tier limits** (≈500 MB DB, ≈200 concurrent realtime connections) are far
   above a small team's needs.
 - **Two identities in the header** — the "You" picker (per-device default author
@@ -570,10 +502,9 @@ React mounts so the first frame is already the right skin.
 
 ### What it deliberately does not touch
 
-- **The report editor.** SuperDoc renders the actual Word document, so it must
-  look like the document: no glass, no dark, no filters inside `.superdoc*` or
-  `.report-print-root`, and the page keeps its white fill and `color-scheme:
-  light`.
+- **The report.** The weekly report has its own light Liquid Glass design
+  (`styles/glassReport.css`, scoped to `.gr-root`), which the app skin does not
+  restyle.
 - **Printing.** Background, colour, translucency, blur and shadow are all
   stripped. Print output measures identical in both appearances and to the
   pre-skin baseline (73% ink on page 1) with white paper.

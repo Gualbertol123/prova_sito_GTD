@@ -23,19 +23,16 @@ export default defineConfig(({ command, mode }) => {
       sourcemap: false,
       rollupOptions: {
         output: {
-          // Keep the heavy, rarely-changing libraries in their own chunks so an
-          // ordinary app deploy does not invalidate the browser's cached copy of
-          // them — and a SuperDoc upgrade invalidates only SuperDoc's chunk.
-          // Filenames stay content-hashed, so these are safe to cache forever
+          // Keep the rarely-changing Supabase client in its own chunk so an
+          // ordinary app deploy does not invalidate the browser's cached copy.
+          // Filenames stay content-hashed, so this is safe to cache forever
           // (see the immutable Cache-Control on /assets/* in netlify.toml).
           manualChunks: {
-            superdoc: ["superdoc"],
             supabase: ["@supabase/supabase-js"],
           },
         },
       },
-      // SuperDoc alone is well over the default warning size; it is deliberately
-      // split out and lazy-loaded, so the warning is noise here.
+      // jsPDF (loaded only when a PDF is made) is a large chunk by itself.
       chunkSizeWarningLimit: 1200,
     },
   };

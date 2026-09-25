@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Board } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { collectReport, weekPeriod, type Period } from "../lib/reportData";
-import {
-  createReportEditor,
-  downloadBlob,
-  exportEditedDocx,
-  preloadSuperDoc,
-  type SuperDocInstance,
-} from "../lib/reportEditor";
+import { reportPdfName } from "../lib/glassReportModel";
+import { GlassReport } from "./GlassReport";
+import "@fontsource-variable/inter";
+import "../styles/glassReport.css";
 
 interface Props {
   board: Board;
@@ -16,14 +13,14 @@ interface Props {
 
 const WEEKS_BACK = 12;
 
-type Stage = "setup" | "building" | "editing";
+type Stage = "setup" | "editing";
 
 // The REPORT tab.
 //
-// Flow: pick a period → Generate. The .docx is built in memory and handed
-// straight to the SuperDoc editor; it is only written to disk when someone
-// actually asks for it. SuperDoc starts downloading the moment this tab
-// mounts, so it is normally already in memory by the time a report exists.
+// Flow: pick a period → Generate. The report is laid out right here as A4
+// pages in Liquid Glass (GlassReport); every text on it can be edited in
+// place, cards can be hidden, and "Download PDF" saves exactly what is on
+// screen. The old Word template is still available as a direct download.
 export function ReportView({ board }: Props) {
   const { t, lang } = useT();
   const [period, setPeriod] = useState<Period>(() => weekPeriod(0));
@@ -32,31 +29,9 @@ export function ReportView({ board }: Props) {
   const [busy, setBusy] = useState<null | "docx" | "pdf">(null);
   const [pdfProgress, setPdfProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  // Set when the PDF had to fall back to page images.
-  const [pdfFallback, setPdfFallback] = useState(false);
-  const [fileName, setFileName] = useState("Weekly_Report.docx");
 
-  const editorEl = useRef<HTMLDivElement>(null);
-  const toolbarEl = useRef<HTMLDivElement>(null);
-  const instance = useRef<SuperDocInstance | null>(null);
-  const pendingFile = useRef<File | null>(null);
-
-  // Warm the editor bundle as soon as the tab is opened, so the download
-  // overlaps with choosing a period and building the document.
-  useEffect(() => {
-    preloadSuperDoc().catch(() => {
-      /* reported when the editor is actually needed */
-    });
-  }, []);
-
-  // Tear the editor down when leaving the tab.
-  useEffect(
-    () => () => {
-      instance.current?.destroy();
-      instance.current = null;
-    },
-    []
-  );
+  const pagesRef = useRef<HTMLDivElement[]>([]);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const weeks = useMemo(
     () => Array.from({ length: WEEKS_BACK }, (_, i) => ({ offset: i, ...weekPeriod(i) })),
@@ -64,11 +39,12 @@ export function ReportView({ board }: Props) {
   );
   const data = useMemo(() => collectReport(board, period), [board, period]);
 
-  const fmt = (iso: string) => {
+  const fmt = (iso: string, withYear = false) => {
     const [y, m, d] = iso.split("-").map(Number);
     return new Date(y, m - 1, d).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
       day: "2-digit",
       month: "short",
+      ...(withYear ? { year: "numeric" } : {}),
     });
   };
   const weekLabel = (w: { offset: number; from: string; to: string }) => {
@@ -78,63 +54,10 @@ export function ReportView({ board }: Props) {
     return range;
   };
   const selected = weeks.find((w) => w.from === period.from && w.to === period.to);
+  const periodText = `${fmt(period.from)} – ${fmt(period.to, true)}`;
 
-  // Build the .docx (never downloaded here) and open it in the editor.
-  const generate = async () => {
-    setErr(null);
-    setStage("building");
-    try {
-      // Both halves start together: the document builds while SuperDoc lands.
-      const [{ buildReportDocx, reportFileName }] = await Promise.all([
-        import("../lib/reportDocx"),
-        preloadSuperDoc(),
-      ]);
-      const blob = await buildReportDocx(data);
-      const name = reportFileName(data);
-      setFileName(name);
-      pendingFile.current = new File([blob], name, { type: blob.type });
-      setStage("editing"); // mounts the editor host elements
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-      setStage("setup");
-    }
-  };
-
-  // Mount SuperDoc once the host elements exist.
-  useEffect(() => {
-    if (stage !== "editing" || !pendingFile.current) return;
-    const file = pendingFile.current;
-    pendingFile.current = null;
-    let cancelled = false;
-    (async () => {
-      try {
-        const sd = await createReportEditor({
-          editorEl: editorEl.current!,
-          toolbarEl: toolbarEl.current!,
-          file,
-        });
-        if (cancelled) sd.destroy();
-        else instance.current = sd;
-      } catch (e) {
-        if (!cancelled) {
-          setErr(e instanceof Error ? e.message : String(e));
-          setStage("setup");
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [stage]);
-
-  const closeEditor = () => {
-    instance.current?.destroy();
-    instance.current = null;
-    setStage("setup");
-  };
-
-  // Download the document straight from the generator, skipping the editor.
-  const downloadUnedited = async () => {
+  // The old Word template, straight to a download.
+  const downloadWord = async () => {
     setErr(null);
     setBusy("docx");
     try {
@@ -147,32 +70,17 @@ export function ReportView({ board }: Props) {
     }
   };
 
-  const downloadEditedDocx = async () => {
-    if (!instance.current) return;
-    setErr(null);
-    setBusy("docx");
-    try {
-      downloadBlob(await exportEditedDocx(instance.current), fileName);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  // Capture the editor's rendered pages straight into a downloaded PDF.
   const downloadPdf = async () => {
-    if (!editorEl.current) return;
+    const root = rootRef.current;
+    const pages = pagesRef.current.filter(Boolean);
+    if (!root || !pages.length) return;
     setErr(null);
     setBusy("pdf");
     try {
-      const { downloadPagesAsPdf } = await import("../lib/reportPdf");
-      const mode = await downloadPagesAsPdf(
-        editorEl.current,
-        fileName.replace(/\.docx$/i, "") + ".pdf",
-        (done, total) => setPdfProgress({ done, total })
+      const { downloadGlassPdf } = await import("../lib/glassReportPdf");
+      await downloadGlassPdf(root.querySelector(".gr-root") as HTMLElement, pages, reportPdfName(data), (done, total) =>
+        setPdfProgress({ done, total })
       );
-      setPdfFallback(mode === "image");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -260,17 +168,26 @@ export function ReportView({ board }: Props) {
 
           {stage !== "editing" ? (
             <>
-              <button onClick={generate} disabled={stage === "building"} className={primaryBtn}>
-                {stage === "building" ? t("report.generating") : t("report.generate")}
+              <button onClick={() => setStage("editing")} className={primaryBtn}>
+                {t("report.generate")}
               </button>
-              <button onClick={downloadUnedited} disabled={busy !== null} className={ghostBtn}>
-                {t("report.downloadDirect")}
+              <button onClick={downloadWord} disabled={busy !== null} className={ghostBtn}>
+                {busy === "docx" ? t("report.generating") : t("report.downloadWordClassic")}
               </button>
             </>
           ) : (
-            <button onClick={closeEditor} className={ghostBtn}>
-              {t("report.close")}
-            </button>
+            <>
+              <button onClick={downloadPdf} disabled={busy !== null} className={primaryBtn}>
+                {busy === "pdf"
+                  ? pdfProgress
+                    ? t("report.pdfProgress", { d: pdfProgress.done, n: pdfProgress.total })
+                    : t("report.generating")
+                  : t("report.downloadPdf")}
+              </button>
+              <button onClick={() => setStage("setup")} disabled={busy !== null} className={ghostBtn}>
+                {t("report.close")}
+              </button>
+            </>
           )}
         </div>
 
@@ -287,38 +204,10 @@ export function ReportView({ board }: Props) {
         )}
       </div>
 
-      {/* Editor */}
       {stage === "editing" && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={downloadEditedDocx} disabled={busy !== null} className={primaryBtn}>
-              {busy === "docx" ? t("report.generating") : t("report.downloadWord")}
-            </button>
-            <button onClick={downloadPdf} disabled={busy !== null} className={ghostBtn}>
-              {busy === "pdf"
-                ? pdfProgress
-                  ? t("report.pdfProgress", {
-                      d: Math.min(pdfProgress.done + 1, pdfProgress.total),
-                      n: pdfProgress.total,
-                    })
-                  : t("report.generating")
-                : t("report.downloadPdf")}
-            </button>
-            {pdfFallback && (
-              <span className="text-[11px] text-[#8B6F3E]">{t("report.pdfFallback")}</span>
-            )}
-          </div>
-
-          <div className="report-print-root rounded-[14px] border border-[#E8E6E1] bg-white overflow-hidden">
-            <div ref={toolbarEl} className="border-b border-[#E8E6E1]" />
-            <div ref={editorEl} className="report-editor-host min-h-[70vh] bg-[#F5F3EF]" />
-          </div>
-        </div>
-      )}
-
-      {stage === "building" && (
-        <div className="rounded-[14px] border border-[#E8E6E1] bg-white p-10 text-center text-[13px] text-[#8A8A8A]">
-          {t("report.buildingEditor")}
+        <div ref={rootRef} className="space-y-2">
+          <div className="text-[11px] text-[#8A8A8A] text-center">{t("report.editHint")}</div>
+          <GlassReport board={board} data={data} periodText={periodText} pagesRef={pagesRef} />
         </div>
       )}
     </div>
