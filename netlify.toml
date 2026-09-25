@@ -15,6 +15,9 @@
   node_bundler = "esbuild"
   # Shipped as-is rather than bundled: its internal font imports break when bundled.
   external_node_modules = ["@react-pdf/renderer"]
+  # pdfkit loads its built-in font data with require(), which Netlify's file
+  # tracing does not follow: without these the function crashes (502).
+  included_files = ["web/node_modules/pdfkit/js/standard-fonts/**", "web/node_modules/pdfkit/js/data/**"]
 
 # Single-page app: serve index.html for any path.
 [[redirects]]

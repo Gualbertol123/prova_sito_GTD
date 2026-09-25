@@ -83,7 +83,13 @@ export default async (req: Request): Promise<Response> => {
   }
   if (!looksLikeDoc(doc)) return reply(400, "Not a report document.");
 
-  const pdf = await renderToBuffer(React.createElement(ReportDocument, { doc }) as never);
+  let pdf: Buffer;
+  try {
+    pdf = await renderToBuffer(React.createElement(ReportDocument, { doc }) as never);
+  } catch (e) {
+    console.error("report-pdf render failed", e);
+    return reply(500, `PDF render failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
   const name = doc.fileName.replace(/[^\w.-]+/g, "_").slice(0, 120) || "Weekly_Report.pdf";
   return new Response(new Uint8Array(pdf), {
     status: 200,
