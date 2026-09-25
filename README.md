@@ -203,9 +203,12 @@ prova_sito_GTD/
 │   └── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
-    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, jspdf (brings html2canvas), @fontsource-variable/inter
+    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, @react-pdf/renderer (server PDF), @fontsource-variable/inter (screen), @fontsource/inter (PDF)
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_TEAM_EMAIL
+    ├── netlify/functions/report-pdf.mts ← POST → the weekly report PDF (team login only)
+    ├── netlify/lib/reportPdf.mts ← the PDF layout (@react-pdf/renderer)
+    ├── scripts/gen-pdf-fonts.mjs ← embeds Inter into the function at build time
     ├── public/robots.txt         ← Disallow: / (noindex)
     ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
     ├── public/fonts/             ← EB Garamond + Cinzel TTFs embedded in the PDF (OFL)
@@ -232,7 +235,7 @@ prova_sito_GTD/
         │   ├── dates.ts          ← date math/formatting helpers
         │   ├── reportData.ts     ← week maths + Done / Next / Projects / Planner collection
         │   ├── glassReportModel.ts ← the Liquid Glass report as blocks + cover figures
-        │   ├── glassReportPdf.ts ← captures the report pages into a PDF (lazy)
+        │   ├── reportDoc.ts      ← the report as data (texts read from the pages) for the server PDF
         │   ├── reportDocx.ts     ← the classic Word template (.docx, lazy-loaded)
         │   ├── skin.ts           ← which visual skin is on (glass / classic)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
@@ -272,7 +275,7 @@ Rough size: ~7.1k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
 REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
    collectReport()  ─▶ buildBlocks() ─▶ measured and packed onto A4 pages (GlassReport)
                                           │  click any text to edit · × hides a card
-                                          └─▶ Download PDF (glassReportPdf.ts)
+                                          └─▶ Download PDF ─▶ server (Netlify Function) ─▶ .pdf
 ```
 
 ### What is in it
@@ -312,25 +315,41 @@ appears anywhere.
   `backdrop-filter`, so the PDF matches the screen. Type is Inter, self-hosted
   through `@fontsource-variable/inter`.
 
-### PDF
+### PDF — made on the server
 
-Glass (translucency, gradients, gradient type) has no PDF equivalent, so each
-page becomes a 240 dpi picture on an A4 page (jsPDF), in two passes that both
-use the page **exactly as it is laid out on screen** — nothing is laid out
-again, so text cannot wrap differently and cards cannot be squashed, whatever
-the browser or its fonts:
+A PDF captured in the browser comes out differently on every device (each
+lays out text with its own fonts and engine), so the PDF is made on the server
+instead, by a Netlify Function: `web/netlify/functions/report-pdf.mts`.
 
-1. **Boxes.** `html2canvas` paints the page with its text switched off. For
-   the capture, backdrop blur and inset rim shadows are turned off (the
-   capture cannot draw them), and the glass sheen is part of each card's
-   background so its corners stay rounded.
-2. **Words.** Every word is read from the live page (position, font, colour,
-   letter spacing, gradient) and painted onto the picture at that exact place.
+1. **Download PDF** builds a `ReportDoc` (`web/src/lib/reportDoc.ts`): the
+   report's structure from the same model the pages use, and every text
+   exactly as it currently reads on the pages (each editable text carries a
+   `data-ed-id`), so edits, hidden cards and the chosen highlights are all in
+   it. It is POSTed to `/.netlify/functions/report-pdf` with the person's
+   Supabase access token.
+2. The function checks that token with the database's own
+   `is_team_member()` (401/403 otherwise), then lays the report out with
+   **@react-pdf/renderer** (`web/netlify/lib/reportPdf.mts`) — its own layout
+   engine and the **Inter** font files embedded in the function — and returns
+   the file. Nothing is stored.
 
-On top of each picture every word is written again as **invisible text**, so
-the PDF can still be searched and its text selected and copied (Latin-1 only;
-✓ and · are left out of that layer). Editing highlights and the × buttons are
-not captured. Everything here loads on click only.
+So the same report gives the same PDF on every device. The text is real PDF
+text (selectable, searchable, sharp at any zoom). The design follows the
+pages: colour washes as SVG radial gradients, white glass cards with a soft
+shadow, accent bars, pills, progress bars, checkmarks; cards are never split
+across pages and a heading never ends a page; the planner is one landscape
+page (a very full board is set smaller to fit); page numbers are automatic.
+The headline's colour sweep is done word by word (PDF text cannot carry a
+gradient).
+
+**Fonts** are generated into `web/netlify/lib/fonts.generated.mjs` by
+`scripts/gen-pdf-fonts.mjs` on every build (from `@fontsource/inter`: Latin,
+plus Latin Extended as a fallback). `@react-pdf/renderer` is shipped to the
+function unbundled (`external_node_modules` in `netlify.toml`).
+
+**Netlify needs** the existing `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_ANON_KEY` variables to be available to **Functions** too (the
+default "All scopes"); the function uses them to check the login.
 
 ### Word (classic template)
 

@@ -9,6 +9,13 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# Server-side PDF for the weekly report (web/netlify/functions/report-pdf.mts).
+[functions]
+  directory = "web/netlify/functions"
+  node_bundler = "esbuild"
+  # Shipped as-is rather than bundled: its internal font imports break when bundled.
+  external_node_modules = ["@react-pdf/renderer"]
+
 # Single-page app: serve index.html for any path.
 [[redirects]]
   from = "/*"

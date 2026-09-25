@@ -1,4 +1,4 @@
-import type { Board, Project, Status, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, Priority, Project, Status, Task, Weekly, WeeklyItem } from "./types";
 import type { PlannerColumn, ReportData } from "./reportData";
 
 // -----------------------------------------------------------------------------
@@ -11,6 +11,27 @@ import type { PlannerColumn, ReportData } from "./reportData";
 // always one landscape page, the four columns side by side. Like the Word report, it is
 // name-free: no owner is shown anywhere.
 // -----------------------------------------------------------------------------
+
+// Apple's light system colours, shared by the pages and the server PDF.
+export const PRIORITY_COLOR: Record<Priority, string> = {
+  P1: "#FF3B30",
+  P2: "#FF9500",
+  P3: "#007AFF",
+  P4: "#8E8E93",
+};
+export const STATUS_COLOR: Partial<Record<Status, string>> = {
+  BACKLOG: "#8E8E93",
+  NEXT: "#007AFF",
+  "IN PROGRESS": "#AF52DE",
+  WAITING: "#FF9500",
+};
+export const SECTION_COLOR: Record<SectionKey, string> = {
+  done: "#34C759",
+  next: "#007AFF",
+  projects: "#5856D6",
+  planner: "#AF52DE",
+  retro: "#FF2D55",
+};
 
 export type SectionKey = "done" | "next" | "projects" | "planner" | "retro";
 

@@ -59,10 +59,6 @@ html[data-skin="glass"] .gr-root * {
   background: #f5f5f7;
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.06);
 }
-.gr-root.gr-exporting .gr-page {
-  border-radius: 0;
-  box-shadow: none;
-}
 
 /* Colour washes: three large radial blooms per page, arranged differently on
    each page so the report does not feel tiled. */
@@ -638,29 +634,7 @@ html[data-skin="glass"] .gr-root * {
   content: attr(data-placeholder);
   color: var(--gr-ink-3);
 }
-/* No transitions while capturing: a fading highlight would be caught mid-fade. */
-.gr-root.gr-exporting *,
-.gr-root.gr-exporting *::before { transition: none !important; }
-.gr-root.gr-exporting .gr-ed { box-shadow: none !important; }
-/* The PDF capture paints every box where it sits on screen; blur and
-   gradient lettering are the two things it cannot paint itself. */
-.gr-root.gr-exporting .gr-glass {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-  /* Outer shadows only: the capture draws inset shadows as a flat box. */
-  box-shadow:
-    0 0 0 0.5px rgba(60, 60, 67, 0.06),
-    0 10px 30px rgba(15, 23, 42, 0.07),
-    0 2px 6px rgba(15, 23, 42, 0.04) !important;
-}
-/* While a page is being captured its text is painted separately. */
-.gr-root.gr-textless .gr-page,
-.gr-root.gr-textless .gr-page * {
-  color: transparent !important;
-  -webkit-text-fill-color: transparent !important;
-}
-.gr-root.gr-textless .gr-gradtext { background: none !important; }
-.gr-root.gr-exporting .gr-ed:empty::before { content: none; }
+
 
 .gr-hide {
   position: absolute !important;
@@ -680,7 +654,6 @@ html[data-skin="glass"] .gr-root * {
   transition: opacity 0.15s ease;
 }
 .gr-glass:hover > .gr-hide { opacity: 1; }
-.gr-root.gr-exporting .gr-noexport { display: none !important; }
 
 @media print {
   .gr-hide { display: none !important; }

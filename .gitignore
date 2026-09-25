@@ -25,3 +25,7 @@ npm-debug.log*
 
 # TS build info
 *.tsbuildinfo
+
+# Generated at build time (fonts for the server-side PDF)
+web/netlify/lib/fonts.generated.mjs
+web/netlify/lib/fonts.generated.d.mts

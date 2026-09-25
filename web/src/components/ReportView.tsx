@@ -2,8 +2,9 @@ import { useMemo, useRef, useState } from "react";
 import type { Board } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { collectReport, weekPeriod, type Period } from "../lib/reportData";
-import { reportPdfName } from "../lib/glassReportModel";
 import { GlassReport } from "./GlassReport";
+import type { ReportDoc } from "../lib/reportDoc";
+import { supabase } from "../lib/supabaseClient";
 import "@fontsource-variable/inter";
 import "../styles/glassReport.css";
 
@@ -19,19 +20,19 @@ type Stage = "setup" | "editing";
 //
 // Flow: pick a period → Generate. The report is laid out right here as A4
 // pages in Liquid Glass (GlassReport); every text on it can be edited in
-// place, cards can be hidden, and "Download PDF" saves exactly what is on
-// screen. The old Word template is still available as a direct download.
+// place, cards can be hidden, and "Download PDF" sends the report — texts
+// as they now read on the pages — to the server, which makes the PDF
+// (netlify/functions/report-pdf.mts), so it is the same on every device.
+// The old Word template is still available as a direct download.
 export function ReportView({ board }: Props) {
   const { t, lang } = useT();
   const [period, setPeriod] = useState<Period>(() => weekPeriod(0));
   const [custom, setCustom] = useState(false);
   const [stage, setStage] = useState<Stage>("setup");
   const [busy, setBusy] = useState<null | "docx" | "pdf">(null);
-  const [pdfProgress, setPdfProgress] = useState<{ done: number; total: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const pagesRef = useRef<HTMLDivElement[]>([]);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const docRef = useRef<(() => ReportDoc) | null>(null);
 
   const weeks = useMemo(
     () => Array.from({ length: WEEKS_BACK }, (_, i) => ({ offset: i, ...weekPeriod(i) })),
@@ -71,21 +72,40 @@ export function ReportView({ board }: Props) {
   };
 
   const downloadPdf = async () => {
-    const root = rootRef.current;
-    const pages = pagesRef.current.filter(Boolean);
-    if (!root || !pages.length) return;
+    const build = docRef.current;
+    if (!build) return;
     setErr(null);
     setBusy("pdf");
     try {
-      const { downloadGlassPdf } = await import("../lib/glassReportPdf");
-      await downloadGlassPdf(root.querySelector(".gr-root") as HTMLElement, pages, reportPdfName(data), (done, total) =>
-        setPdfProgress({ done, total })
-      );
+      // Finish an edit still in progress so it is part of the document.
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      await new Promise((r) => setTimeout(r, 0));
+      const doc = build();
+      const { data: auth } = await supabase.auth.getSession();
+      const token = auth.session?.access_token;
+      if (!token) throw new Error(t("report.pdfLogin"));
+      const res = await fetch("/.netlify/functions/report-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(doc),
+      });
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(`${res.status} ${msg}`.trim());
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = doc.fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
-      setPdfProgress(null);
     }
   };
 
@@ -178,11 +198,7 @@ export function ReportView({ board }: Props) {
           ) : (
             <>
               <button onClick={downloadPdf} disabled={busy !== null} className={primaryBtn}>
-                {busy === "pdf"
-                  ? pdfProgress
-                    ? t("report.pdfProgress", { d: pdfProgress.done, n: pdfProgress.total })
-                    : t("report.generating")
-                  : t("report.downloadPdf")}
+                {busy === "pdf" ? t("report.pdfMaking") : t("report.downloadPdf")}
               </button>
               <button onClick={() => setStage("setup")} disabled={busy !== null} className={ghostBtn}>
                 {t("report.close")}
@@ -205,9 +221,9 @@ export function ReportView({ board }: Props) {
       </div>
 
       {stage === "editing" && (
-        <div ref={rootRef} className="space-y-2">
+        <div className="space-y-2">
           <div className="text-[11px] text-[#8A8A8A] text-center">{t("report.editHint")}</div>
-          <GlassReport board={board} data={data} periodText={periodText} pagesRef={pagesRef} />
+          <GlassReport board={board} data={data} periodText={periodText} docRef={docRef} />
         </div>
       )}
     </div>

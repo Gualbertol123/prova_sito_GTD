@@ -3,12 +3,16 @@ import type { Board, Priority, Project, Status, Subtask, Task } from "../lib/typ
 import type { PlannerColumn, ReportData } from "../lib/reportData";
 import { statusLabel, useT } from "../lib/i18n";
 import {
+  PRIORITY_COLOR,
+  STATUS_COLOR,
+  SECTION_COLOR,
   buildBlocks,
   coverStats,
   type Block,
+  reportPdfName,
   type CoverStats,
-  type SectionKey,
 } from "../lib/glassReportModel";
+import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
 
 // -----------------------------------------------------------------------------
 // The Liquid Glass weekly report — light mode, A4 pages, written in HTML.
@@ -29,26 +33,6 @@ const FOOT = 72; // space kept for the footer
 const CONTENT_W = PAGE_W - PAD_X * 2;
 const CONTENT_H = PAGE_H - HEAD - FOOT;
 const GAP = 14;
-
-const PRIORITY_COLOR: Record<Priority, string> = {
-  P1: "#FF3B30",
-  P2: "#FF9500",
-  P3: "#007AFF",
-  P4: "#8E8E93",
-};
-const STATUS_COLOR: Partial<Record<Status, string>> = {
-  BACKLOG: "#8E8E93",
-  NEXT: "#007AFF",
-  "IN PROGRESS": "#AF52DE",
-  WAITING: "#FF9500",
-};
-const SECTION_COLOR: Record<SectionKey, string> = {
-  done: "#34C759",
-  next: "#007AFF",
-  projects: "#5856D6",
-  planner: "#AF52DE",
-  retro: "#FF2D55",
-};
 
 // ---- Editable text ------------------------------------------------------------
 
@@ -84,6 +68,7 @@ function Ed({
       // browser over what contentEditable put in the DOM.
       key={text}
       className={`gr-ed ${className}`}
+      data-ed-id={id}
       contentEditable={edit.enabled}
       suppressContentEditableWarning
       spellCheck={false}
@@ -344,7 +329,6 @@ function PageChrome({
   total,
   boardName,
   periodText,
-  pageRef,
   landscape = false,
   edit,
 }: {
@@ -353,7 +337,6 @@ function PageChrome({
   total: number;
   boardName: string;
   periodText: string;
-  pageRef: (el: HTMLDivElement | null) => void;
   landscape?: boolean;
   edit: EditCtx;
 }) {
@@ -361,7 +344,6 @@ function PageChrome({
   return (
     <div
       className={`gr-page gr-bg-${index % 4} ${landscape ? "gr-landscape" : ""}`}
-      ref={pageRef}
       style={{ width: landscape ? PAGE_H : PAGE_W, height: landscape ? PAGE_W : PAGE_H }}
     >
       <div className="gr-blob gr-blob-a" />
@@ -689,8 +671,8 @@ export interface GlassReportProps {
   board: Board;
   data: ReportData;
   periodText: string;
-  /** Filled with the page elements, in order, for the PDF export. */
-  pagesRef: React.MutableRefObject<HTMLDivElement[]>;
+  /** Set to a function that returns the report as data, for the server PDF. */
+  docRef: React.MutableRefObject<(() => ReportDoc) | null>;
 }
 
 // Pack measured blocks onto pages; returns block ids per page. A section
@@ -714,7 +696,7 @@ function pack(blocks: Block[], heights: Map<string, number>): string[][] {
   return pages;
 }
 
-export function GlassReport({ board, data, periodText, pagesRef }: GlassReportProps) {
+export function GlassReport({ board, data, periodText, docRef }: GlassReportProps) {
   const { lang } = useT();
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
@@ -726,6 +708,7 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
   );
   const [layout, setLayout] = useState<{ before: string[][]; after: string[][] } | null>(null);
   const measureRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const input = useMemo(() => buildBlocks(board, data, hidden), [board, data, hidden]);
   const all = useMemo(() => [...input.before, ...input.after], [input]);
@@ -785,13 +768,19 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
   const total = 1 + before.length + 1 + after.length;
   const boardName = edits["cover.board"] ?? board.boardName;
 
-  pagesRef.current = [];
-  const setPage = (i: number) => (el: HTMLDivElement | null) => {
-    if (el) pagesRef.current[i] = el;
-  };
+  docRef.current = () =>
+    buildReportDoc({
+      root: rootRef.current!,
+      board,
+      data,
+      input,
+      hidden,
+      highlights,
+      fileName: reportPdfName(data),
+    });
 
   const flow = (blocks: Block[], index: number) => (
-    <PageChrome key={`p${index}`} index={index} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(index)} edit={edit}>
+    <PageChrome key={`p${index}`} index={index} total={total} boardName={boardName} periodText={periodText} edit={edit}>
       <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: CONTENT_W, height: CONTENT_H }}>
         {blocks.map((b) => (
           <div key={b.id} className="gr-block">
@@ -803,7 +792,7 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
   );
 
   return (
-    <div className="gr-root">
+    <div className="gr-root" ref={rootRef}>
       {/* Off-screen copy used only to measure block heights. */}
       <div ref={measureRef} className="gr-measure" style={{ width: CONTENT_W }} aria-hidden>
         {all.map((b) => (
@@ -814,7 +803,7 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
       </div>
 
       <div className="gr-pages">
-        <PageChrome index={0} total={total} boardName={boardName} periodText={periodText} pageRef={setPage(0)} edit={edit}>
+        <PageChrome index={0} total={total} boardName={boardName} periodText={periodText} edit={edit}>
           <Cover
             board={board}
             data={data}
@@ -834,7 +823,6 @@ export function GlassReport({ board, data, periodText, pagesRef }: GlassReportPr
               total={total}
               boardName={boardName}
               periodText={periodText}
-              pageRef={setPage(1 + before.length)}
               landscape
               edit={edit}
             >
