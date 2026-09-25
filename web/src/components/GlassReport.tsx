@@ -13,6 +13,7 @@ import {
   type CoverStats,
 } from "../lib/glassReportModel";
 import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
+import { shortDate } from "../lib/dates";
 
 // -----------------------------------------------------------------------------
 // The Liquid Glass weekly report — light mode, A4 pages, written in HTML.
@@ -724,7 +725,7 @@ export function GlassReport({ board, data, periodText, docRef }: GlassReportProp
               const [y, m, dd] = v.split("-").map(Number);
               return new Date(y, m - 1, dd);
             })();
-      return d.toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", { day: "numeric", month: "short" });
+      return shortDate(d, lang);
     },
     [lang]
   );
@@ -776,6 +777,7 @@ export function GlassReport({ board, data, periodText, docRef }: GlassReportProp
       input,
       hidden,
       highlights,
+      edits,
       fileName: reportPdfName(data),
     });
 

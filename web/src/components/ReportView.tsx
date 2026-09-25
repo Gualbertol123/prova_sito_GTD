@@ -5,6 +5,7 @@ import { collectReport, weekPeriod, type Period } from "../lib/reportData";
 import { GlassReport } from "./GlassReport";
 import type { ReportDoc } from "../lib/reportDoc";
 import { supabase } from "../lib/supabaseClient";
+import { shortDate } from "../lib/dates";
 import "@fontsource-variable/inter";
 import "../styles/glassReport.css";
 
@@ -42,12 +43,9 @@ export function ReportView({ board }: Props) {
 
   const fmt = (iso: string, withYear = false) => {
     const [y, m, d] = iso.split("-").map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      ...(withYear ? { year: "numeric" } : {}),
-    });
+    return shortDate(new Date(y, m - 1, d), lang, withYear, true);
   };
+
   const weekLabel = (w: { offset: number; from: string; to: string }) => {
     const range = `${fmt(w.from)} – ${fmt(w.to)}`;
     if (w.offset === 0) return `${range} · ${t("report.thisWeek")}`;

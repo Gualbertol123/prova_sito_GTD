@@ -89,15 +89,20 @@ interface BuildArgs {
   input: ReportLayoutInput;
   hidden: Set<string>;
   highlights: string[];
+  /** The person's edits (id → text as typed), taken as they are. */
+  edits: Record<string, string>;
   fileName: string;
 }
 
-export function buildReportDoc({ root, board, data, input, hidden, highlights, fileName }: BuildArgs): ReportDoc {
+export function buildReportDoc({ root, board, data, input, hidden, highlights, edits, fileName }: BuildArgs): ReportDoc {
   const pages = root.querySelector(".gr-pages") ?? root;
-  // The text as it reads on the pages right now (defaults and edits alike).
+  // An edited text as the person typed it; otherwise the text the page shows.
+  // textContent (not innerText) so nothing depends on this device's layout or
+  // styles — the server applies its own (e.g. uppercase eyebrows).
   const txt = (id: string, fallback = ""): string => {
+    if (id in edits) return edits[id];
     const el = pages.querySelector<HTMLElement>(`[data-ed-id="${CSS.escape(id)}"]`);
-    return el ? el.innerText.replace(/\n+$/, "") : fallback;
+    return el ? (el.textContent ?? "").replace(/\n+$/, "") : fallback;
   };
 
   const sections = (blocks: Block[]): DocSection[] => {

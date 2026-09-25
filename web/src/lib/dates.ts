@@ -60,3 +60,15 @@ const MONTHS_IT = [
 export function monthLabel(d: Date): string {
   return `${MONTHS_IT[d.getMonth()]} ${d.getFullYear()}`;
 }
+
+// Short dates with fixed month names ("21 set", "21 Sep"), the same on every
+// device: toLocaleDateString depends on each browser's locale data.
+const MONTHS_SHORT = {
+  it: ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"],
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+} as const;
+
+export function shortDate(d: Date, lang: "it" | "en", withYear = false, twoDigitDay = false): string {
+  const day = twoDigitDay ? String(d.getDate()).padStart(2, "0") : String(d.getDate());
+  return `${day} ${MONTHS_SHORT[lang][d.getMonth()]}${withYear ? ` ${d.getFullYear()}` : ""}`;
+}
