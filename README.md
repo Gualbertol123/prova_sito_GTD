@@ -203,7 +203,7 @@ prova_sito_GTD/
 │   └── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
-    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, jspdf, modern-screenshot, @fontsource-variable/inter
+    ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, jspdf (brings html2canvas), @fontsource-variable/inter
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_TEAM_EMAIL
     ├── public/robots.txt         ← Disallow: / (noindex)
@@ -310,19 +310,27 @@ appears anywhere.
   built from translucent fills, a bright rim, a specular sheen and soft
   shadows, in Apple's light system palette. It deliberately does not depend on
   `backdrop-filter`, so the PDF matches the screen. Type is Inter, self-hosted
-  through `@fontsource-variable/inter`, because the capture cannot fetch
-  Google Fonts under the site's Content Security Policy.
+  through `@fontsource-variable/inter`.
 
 ### PDF
 
 Glass (translucency, gradients, gradient type) has no PDF equivalent, so each
-page is captured with `modern-screenshot` at 240 dpi and placed on an A4 page
-with jsPDF — the PDF looks exactly like the screen. On top of each picture
-every word is written again as **invisible text** at the same position, so the
-PDF can still be searched and its text selected and copied (Latin-1 only; the
-✓ and · symbols are left out of that layer). Editing highlights, the × buttons
-and page shadows are switched off while capturing. A five-page report is
-about 1.5 MB. Everything here loads on click only.
+page becomes a 240 dpi picture on an A4 page (jsPDF), in two passes that both
+use the page **exactly as it is laid out on screen** — nothing is laid out
+again, so text cannot wrap differently and cards cannot be squashed, whatever
+the browser or its fonts:
+
+1. **Boxes.** `html2canvas` paints the page with its text switched off. For
+   the capture, backdrop blur and inset rim shadows are turned off (the
+   capture cannot draw them), and the glass sheen is part of each card's
+   background so its corners stay rounded.
+2. **Words.** Every word is read from the live page (position, font, colour,
+   letter spacing, gradient) and painted onto the picture at that exact place.
+
+On top of each picture every word is written again as **invisible text**, so
+the PDF can still be searched and its text selected and copied (Latin-1 only;
+✓ and · are left out of that layer). Editing highlights and the × buttons are
+not captured. Everything here loads on click only.
 
 ### Word (classic template)
 

@@ -230,7 +230,7 @@ function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Bloc
       <HideButton onHide={onHide && (() => onHide(block.id))} />
       <div className="gr-project-head">
         <Ed tag="h3" id={`${block.id}.name`} value={p.name || t("gr.untitled")} edit={edit} className="gr-card-title" />
-        <Ed id={`${block.id}.pct`} className="gr-big-pct" value={`${Math.round(share * 100)}%`} edit={edit} />
+        <Ed id={`${block.id}.pct`} className="gr-big-pct gr-gradtext" value={`${Math.round(share * 100)}%`} edit={edit} />
       </div>
       <div className="gr-progress-row">
         <Bar value={share} color="linear-gradient(90deg,#5856D6,#AF52DE)" />
@@ -621,7 +621,7 @@ function Cover({
 
       <div className="gr-cover-title-wrap">
         <Ed tag="div" id="cover.eyebrow" value={t("gr.cover.eyebrow")} edit={edit} className="gr-eyebrow gr-eyebrow-cover" />
-        <Ed tag="h1" id="cover.title" value={t("gr.cover.title")} edit={edit} className="gr-h1" />
+        <Ed tag="h1" id="cover.title" value={t("gr.cover.title")} edit={edit} className="gr-h1 gr-gradtext" />
         <Ed tag="p" id="cover.subtitle" value={t("gr.cover.subtitle")} edit={edit} className="gr-lede" multiline />
       </div>
 
