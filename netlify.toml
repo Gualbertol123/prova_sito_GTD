@@ -31,8 +31,20 @@
   [headers.values]
     Cache-Control = "no-store"
 
-# Keep the whole site out of search engines.
+# Keep the whole site out of search engines, and apply browser security headers
+# to every response: HTTPS-only (HSTS), no framing (clickjacking), no MIME
+# sniffing, no referrer leaks to third parties, and a Content Security Policy
+# that only allows this site's own scripts, Supabase (REST + realtime) and
+# Google Fonts. img-src allows https: because the logo may be an external link;
+# data:/blob: fonts, images and workers are used by the in-browser report editor.
 [[headers]]
   for = "/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow, noarchive, nosnippet"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; worker-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
