@@ -2,14 +2,15 @@
 -- TEAM GTD — Supabase schema (FRESH INSTALL)
 --
 -- For a brand-new, empty Supabase project only. An existing project with data
--- is upgraded with the migration-0XX files instead (see README.md).
+-- is upgraded with the migration-0XX files instead (see README.md §11); this
+-- script refuses to run where the board tables already exist.
 --
 -- Before running this:
 --   1. Authentication → Sign In / Providers: turn OFF "Allow new users to
 --      sign up".
 --   2. Authentication → Users → Add user → Create new user: the shared team
 --      e-mail + a strong password, tick "Auto Confirm User".
---   3. Put that e-mail on the LAST line of this file.
+--   3. Put that e-mail, and a Tracking password, on the LAST lines of this file.
 -- Then: SQL Editor → New query → paste all of this → Run.
 --
 -- Result: only the team account can read or write anything; every password
@@ -17,6 +18,13 @@
 -- ============================================================================
 
 begin;
+
+do $$
+begin
+  if to_regclass('public.board_meta') is not null or to_regclass('public.tasks') is not null then
+    raise exception 'This project already has the board tables. schema.sql is for an empty project only; upgrade with the migration files (README §11).';
+  end if;
+end $$;
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -26,7 +34,7 @@ revoke all on schema private from public, anon, authenticated;
 -- ---- Tables ----------------------------------------------------------------
 
 -- Single-row table holding board name, team members and app settings.
-create table if not exists public.board_meta (
+create table public.board_meta (
   id              text primary key,
   board_name      text  not null default 'TEAM GTD FINALE',
   members         text[] not null default '{}',
@@ -38,7 +46,7 @@ create table if not exists public.board_meta (
 );
 
 -- One row per task.
-create table if not exists public.tasks (
+create table public.tasks (
   id             text primary key,
   title          text   not null default '',
   description    text   not null default '',   -- app field "desc"
@@ -57,7 +65,7 @@ create table if not exists public.tasks (
 );
 
 -- One row per team member per day — the Daily Reflection.
-create table if not exists public.reflections (
+create table public.reflections (
   id          text primary key,   -- "<date>::<member>"
   member      text not null,
   date        text not null,      -- yyyy-mm-dd
@@ -68,11 +76,11 @@ create table if not exists public.reflections (
   updated_at  bigint not null default 0,
   created_at  bigint not null default 0
 );
-create index if not exists reflections_date_idx on public.reflections (date);
+create index reflections_date_idx on public.reflections (date);
 
 -- Per-member Reflection password, as a bcrypt hash. Never readable from the
 -- browser; checked and changed only through the functions further down.
-create table if not exists public.reflection_access (
+create table public.reflection_access (
   member          text primary key,
   updated_at      bigint not null default 0,
   password_hash   text not null,
@@ -81,36 +89,35 @@ create table if not exists public.reflection_access (
 );
 
 -- One row per project — each project is a checklist of items (like subtasks).
-create table if not exists public.projects (
+create table public.projects (
   id          text primary key,
   name        text  not null default '',
   items       jsonb not null default '[]'::jsonb,
   created_at  bigint not null default 0,
   updated_at  bigint not null default 0
 );
-create index if not exists projects_created_idx on public.projects (created_at);
+create index projects_created_idx on public.projects (created_at);
 
 -- One row per anonymous improvement suggestion (no author column, by design).
-create table if not exists public.suggestions (
+create table public.suggestions (
   id          text primary key,
   body        text   not null default '',
   created_at  bigint not null default 0
 );
-create index if not exists suggestions_created_idx on public.suggestions (created_at);
+create index suggestions_created_idx on public.suggestions (created_at);
 
 -- One row per personal note, tagged with the member who wrote it.
-create table if not exists public.personal_notes (
+create table public.personal_notes (
   id          text primary key,
   member      text   not null default '',
   body        text   not null default '',
   created_at  bigint not null default 0,
   updated_at  bigint not null default 0
 );
-create index if not exists personal_notes_member_idx
-  on public.personal_notes (member, updated_at desc);
+create index personal_notes_member_idx on public.personal_notes (member, updated_at desc);
 
 -- One row per weekly-review item.
-create table if not exists public.weekly (
+create table public.weekly (
   id          text primary key,
   bucket      text   not null,                  -- well | learnings | improve | blockers | focus
   body        text   not null default '',       -- the item text
@@ -118,7 +125,7 @@ create table if not exists public.weekly (
 );
 
 -- Server-only secrets (the Tracking tab password), as bcrypt hashes.
-create table if not exists private.app_secrets (
+create table private.app_secrets (
   name            text primary key,
   password_hash   text not null,
   failed_attempts integer not null default 0,
@@ -128,13 +135,14 @@ create table if not exists private.app_secrets (
 revoke all on table private.app_secrets from public, anon, authenticated;
 
 -- The Supabase Auth user id(s) allowed to use the board.
-create table if not exists private.team_accounts (
+create table private.team_accounts (
   user_id   uuid primary key references auth.users (id) on delete cascade,
   added_at  timestamptz not null default now()
 );
 revoke all on table private.team_accounts from public, anon, authenticated;
 
 -- ---- Team check ------------------------------------------------------------
+-- True when the caller is logged in as a team account with a live session.
 
 create or replace function public.is_team_member()
 returns boolean
@@ -144,7 +152,11 @@ security definer
 set search_path = ''
 as $$
   select exists (
-    select 1 from private.team_accounts where user_id = auth.uid()
+    select 1
+      from private.team_accounts t
+      join auth.sessions s on s.user_id = t.user_id
+     where t.user_id = auth.uid()
+       and s.id = nullif(auth.jwt() ->> 'session_id', '')::uuid
   );
 $$;
 revoke all on function public.is_team_member() from public, anon;
@@ -152,43 +164,56 @@ grant execute on function public.is_team_member() to authenticated;
 
 -- ---- Access (Row Level Security) -------------------------------------------
 -- Only a logged-in team account can read or write. The public (anon) key that
--- ships in the website gets nothing.
+-- ships in the website gets nothing. private.lock_table() applies the rule;
+-- run it for any table you add later.
 
-alter table public.board_meta        enable row level security;
-alter table public.tasks             enable row level security;
-alter table public.weekly            enable row level security;
-alter table public.reflections       enable row level security;
-alter table public.projects          enable row level security;
-alter table public.suggestions       enable row level security;
-alter table public.personal_notes    enable row level security;
-alter table public.reflection_access enable row level security;  -- no policy: no browser access
+create or replace function private.lock_table(p_table text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  p record;
+begin
+  if to_regclass('public.' || quote_ident(p_table)) is null then
+    return;
+  end if;
+  execute format('alter table public.%I enable row level security', p_table);
+  for p in select policyname from pg_policies where schemaname = 'public' and tablename = p_table loop
+    execute format('drop policy %I on public.%I', p.policyname, p_table);
+  end loop;
+  execute format('revoke all on table public.%I from anon', p_table);
+  -- TRUNCATE ignores row-level security; nobody from the browser needs it.
+  execute format('revoke truncate, references, trigger on table public.%I from authenticated', p_table);
 
-drop policy if exists "team only board_meta"     on public.board_meta;
-drop policy if exists "team only tasks"          on public.tasks;
-drop policy if exists "team only weekly"         on public.weekly;
-drop policy if exists "team only reflections"    on public.reflections;
-drop policy if exists "team only projects"       on public.projects;
-drop policy if exists "team only suggestions"    on public.suggestions;
-drop policy if exists "team only personal_notes" on public.personal_notes;
+  if p_table = 'reflection_access' then
+    execute format('revoke all on table public.%I from authenticated', p_table);
+    if exists (select 1 from pg_publication_tables
+                where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = p_table) then
+      execute format('alter publication supabase_realtime drop table public.%I', p_table);
+    end if;
+    return;
+  end if;
 
-create policy "team only board_meta" on public.board_meta for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only tasks" on public.tasks for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only weekly" on public.weekly for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only reflections" on public.reflections for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only projects" on public.projects for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only suggestions" on public.suggestions for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
-create policy "team only personal_notes" on public.personal_notes for all to authenticated
-  using ((select public.is_team_member())) with check ((select public.is_team_member()));
+  execute format('grant select, insert, update, delete on table public.%I to authenticated', p_table);
+  execute format(
+    'create policy %I on public.%I for all to authenticated '
+    'using ((select public.is_team_member())) with check ((select public.is_team_member()))',
+    'team only ' || p_table, p_table);
+end;
+$$;
+revoke all on function private.lock_table(text) from public, anon, authenticated;
 
-revoke all on table public.board_meta, public.tasks, public.weekly, public.reflections,
-  public.projects, public.suggestions, public.personal_notes from anon;
-revoke all on table public.reflection_access from anon, authenticated;
+select private.lock_table(t) from unnest(array[
+  'board_meta', 'tasks', 'weekly', 'reflections', 'projects',
+  'suggestions', 'personal_notes', 'reflection_access'
+]) as t;
+
+alter default privileges for role postgres in schema public revoke all on tables    from anon;
+alter default privileges for role postgres in schema public revoke all on sequences from anon;
+alter default privileges for role postgres in schema public revoke all on functions from anon;
+revoke all on all sequences in schema public from anon;
 
 -- ---- Password checks the website calls ------------------------------------
 -- Team accounts only; 5 wrong guesses in a row lock that password for 5
@@ -257,7 +282,7 @@ as $$
 declare
   res text;
 begin
-  if p_new is null or length(p_new) < 6 or length(p_new) > 200 then
+  if p_new is null or length(p_new) < 6 or octet_length(p_new) > 72 then
     return 'invalid';
   end if;
   -- Changing needs the current password, checked (and throttled) the same way
@@ -339,41 +364,61 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  uid uuid;
 begin
-  delete from private.team_accounts
-   where user_id in (select id from auth.users where lower(email) = lower(trim(p_email)));
+  select t.user_id into uid
+    from private.team_accounts t join auth.users u on u.id = t.user_id
+   where lower(u.email) = lower(trim(p_email));
+  if uid is null then
+    raise exception 'No team account with e-mail %.', p_email;
+  end if;
+  if (select count(*) from private.team_accounts) = 1 then
+    raise exception 'That is the last team account: removing it would lock everyone out. Add another one first.';
+  end if;
+  delete from private.team_accounts where user_id = uid;
+  delete from auth.sessions where user_id = uid;
   return 'Team account disabled: ' || p_email;
 end;
 $$;
 
-create or replace function private.admin_set_team_password(p_new text, p_sign_out_everyone boolean default true)
+create or replace function private.admin_set_team_password(
+  p_new text, p_sign_out_everyone boolean default true, p_email text default null
+)
 returns text
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  n integer;
+  uid uuid;
 begin
-  if p_new is null or length(p_new) < 8 then
-    raise exception 'Use at least 8 characters (12 or more recommended).';
+  if p_new is null or length(p_new) < 12 or octet_length(p_new) > 72 then
+    raise exception 'Use 12 to 72 characters.';
+  end if;
+  if p_email is null then
+    if (select count(*) from private.team_accounts) > 1 then
+      raise exception 'There are several team accounts; name one: select private.admin_set_team_password(''new password'', true, ''e-mail'');';
+    end if;
+    select user_id into uid from private.team_accounts;
+  else
+    select t.user_id into uid
+      from private.team_accounts t join auth.users u on u.id = t.user_id
+     where lower(u.email) = lower(trim(p_email));
+  end if;
+  if uid is null then
+    raise exception 'No such team account. See: select u.email from private.team_accounts t join auth.users u on u.id = t.user_id;';
   end if;
   update auth.users
      set encrypted_password = extensions.crypt(p_new, extensions.gen_salt('bf', 10)),
          updated_at         = now()
-   where id in (select user_id from private.team_accounts);
-  get diagnostics n = row_count;
-  if n = 0 then
-    raise exception 'No team account found. Run private.admin_add_team_account(''e-mail'') first.';
-  end if;
+   where id = uid;
   if p_sign_out_everyone then
-    delete from auth.refresh_tokens
-     where user_id in (select user_id::text from private.team_accounts);
-    delete from auth.sessions
-     where user_id in (select user_id from private.team_accounts);
+    delete from auth.refresh_tokens where user_id = uid::text;
+    delete from auth.sessions where user_id = uid;
   end if;
   return 'Team password changed'
-         || case when p_sign_out_everyone then '; every device must log in again (within 1 hour at most).' else '.' end;
+         || case when p_sign_out_everyone then '; every device must log in again.' else '.' end;
 end;
 $$;
 
@@ -384,8 +429,8 @@ security definer
 set search_path = ''
 as $$
 begin
-  if p_new is null or length(p_new) < 1 then
-    raise exception 'Give a password.';
+  if p_new is null or length(p_new) < 1 or octet_length(p_new) > 72 then
+    raise exception 'Give a password of up to 72 characters.';
   end if;
   insert into public.reflection_access (member, password_hash, failed_attempts, locked_until, updated_at)
   values (p_member, extensions.crypt(p_new, extensions.gen_salt('bf', 10)), 0, null,
@@ -406,8 +451,8 @@ security definer
 set search_path = ''
 as $$
 begin
-  if p_new is null or length(p_new) < 1 then
-    raise exception 'Give a password.';
+  if p_new is null or length(p_new) < 1 or octet_length(p_new) > 72 then
+    raise exception 'Give a password of up to 72 characters.';
   end if;
   insert into private.app_secrets (name, password_hash, failed_attempts, locked_until, updated_at)
   values ('tracking', extensions.crypt(p_new, extensions.gen_salt('bf', 10)), 0, null, now())
@@ -420,31 +465,19 @@ begin
 end;
 $$;
 
-revoke all on function private.admin_add_team_account(text)                from public, anon, authenticated;
-revoke all on function private.admin_remove_team_account(text)             from public, anon, authenticated;
-revoke all on function private.admin_set_team_password(text, boolean)      from public, anon, authenticated;
-revoke all on function private.admin_set_reflection_password(text, text)   from public, anon, authenticated;
-revoke all on function private.admin_set_tracking_password(text)           from public, anon, authenticated;
+revoke all on function private.admin_add_team_account(text)                  from public, anon, authenticated;
+revoke all on function private.admin_remove_team_account(text)               from public, anon, authenticated;
+revoke all on function private.admin_set_team_password(text, boolean, text)  from public, anon, authenticated;
+revoke all on function private.admin_set_reflection_password(text, text)     from public, anon, authenticated;
+revoke all on function private.admin_set_tracking_password(text)             from public, anon, authenticated;
 
 -- ---- Realtime --------------------------------------------------------------
 -- Change events for the board tables (they respect the policies above).
 -- reflection_access is deliberately NOT published.
 
-do $$
-declare
-  t text;
-begin
-  foreach t in array array[
-    'board_meta', 'tasks', 'weekly', 'reflections', 'projects', 'suggestions', 'personal_notes'
-  ] loop
-    if not exists (
-      select 1 from pg_publication_tables
-       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
-    ) then
-      execute format('alter publication supabase_realtime add table public.%I', t);
-    end if;
-  end loop;
-end $$;
+alter publication supabase_realtime add table
+  public.board_meta, public.tasks, public.weekly, public.reflections,
+  public.projects, public.suggestions, public.personal_notes;
 
 -- ---- The team account -------------------------------------------------------
 -- >>> Replace the e-mail below with the team user you created. <<<

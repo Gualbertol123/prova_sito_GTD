@@ -309,6 +309,9 @@ export async function fetchBoard(): Promise<Board> {
   ]);
 
   if (meta.error) throw meta.error;
+  // seedIfEmpty has run by now, so a missing row means this session cannot
+  // read the board (e.g. its access was just revoked) — never show seed data.
+  if (!meta.data) throw new Error("Board not readable with this login.");
   if (tasks.error) throw tasks.error;
   if (weekly.error) throw weekly.error;
 

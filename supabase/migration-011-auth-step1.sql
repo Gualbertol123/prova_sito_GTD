@@ -23,6 +23,15 @@
 
 begin;
 
+-- Already done? After step 2 this script must not run again (it would bring
+-- back older versions of the functions); step 2 is the one to re-run.
+do $$
+begin
+  if exists (select 1 from pg_policies where schemaname = 'public' and policyname = 'team only board_meta') then
+    raise exception 'Step 2 (migration-012) has already run on this project, so this step 1 script is not needed. Re-run migration-012 instead if you want to re-apply the rules.';
+  end if;
+end $$;
+
 create extension if not exists pgcrypto with schema extensions;
 
 create schema if not exists private;

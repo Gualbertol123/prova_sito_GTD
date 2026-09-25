@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { supabase, SESSION_STORAGE_KEY } from "../lib/supabaseClient";
 import { isTeamEmailConfigured } from "../lib/supabaseConfig";
 import { signInTeam, signOutDevice, outcomeKey, checkSession, AUTH_CHECK_EVENT } from "../lib/auth";
 import { readAuthExp, clearLoginState } from "../lib/prefs";
@@ -17,6 +17,21 @@ const MAX_TIMER_MS = 2_000_000_000;
 // How often an open tab re-checks that its session is still alive (a password
 // reset by an admin revokes it; supabase-js does not always announce that).
 const SESSION_CHECK_MS = 30_000;
+// Give up waiting for Supabase at startup after this long (then decide from
+// what is stored on the device) rather than showing a blank screen.
+const STARTUP_TIMEOUT_MS = 8_000;
+
+function hasStoredSession(): boolean {
+  try {
+    return !!localStorage.getItem(SESSION_STORAGE_KEY);
+  } catch {
+    return false;
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([p, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+}
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { t } = useT();
@@ -32,9 +47,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const exp = readAuthExp();
+      let exp = readAuthExp();
+      if (exp === null && hasStoredSession()) {
+        // Another tab may be half-way through logging in (session saved,
+        // login time not yet): give it a moment instead of ending its session.
+        await new Promise((r) => setTimeout(r, 3000));
+        exp = readAuthExp();
+      }
       const within = exp !== null && exp > Date.now();
-      const session = await checkSession({ team: within });
+      const session = await withTimeout(checkSession({ team: within }), STARTUP_TIMEOUT_MS, "unknown" as const);
       if (!alive) return;
       if (within && session !== "gone") {
         // "unknown" (offline): let the board show its own connection state;
@@ -81,6 +102,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
     const check = async () => {
       if (stopped) return;
+      // A laptop that slept past the login duration: its timer did not fire.
+      const exp = readAuthExp();
+      if (exp === null || exp <= Date.now()) return void end();
       if ((await checkSession({ team: true })) === "gone") await end();
     };
     const onVisible = () => {

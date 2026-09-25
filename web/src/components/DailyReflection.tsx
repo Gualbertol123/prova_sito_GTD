@@ -182,7 +182,7 @@ function ReflectionLogin({
   // Checked by the database (reflection_login); passwords are stored there
   // as hashes and never sent to the browser.
   const submit = async () => {
-    if (!user || busy) return;
+    if (!user || !pwd || busy) return;
     setBusy(true);
     setErr(null);
     const out = await reflectionLogin(user, pwd);
@@ -248,7 +248,7 @@ function ReflectionLogin({
       </div>
       <button
         onClick={submit}
-        disabled={busy}
+        disabled={busy || !pwd}
         className="mt-4 w-full h-10 rounded-full bg-[#0A1931] text-[#C9A96E] text-[13px] font-semibold disabled:opacity-60"
       >
         {busy ? t("auth.checking") : t("reflAuth.enter")}

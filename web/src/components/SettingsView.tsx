@@ -168,8 +168,8 @@ function TeamPasswordForm({ input, saveBtn }: { input: string; saveBtn: string }
   const [msg, setMsg] = useState<{ ok: boolean; key: string; detail?: string } | null>(null);
 
   const submit = async () => {
-    if (busy) return;
-    if (np.length < 8) return setMsg({ ok: false, key: "settings.pwdTooShort" });
+    if (busy || !cur || !np || !np2) return;
+    if (np.length < 12) return setMsg({ ok: false, key: "settings.pwdTooShort" });
     if (np !== np2) return setMsg({ ok: false, key: "settings.pwdMismatch" });
     setBusy(true);
     setMsg(null);

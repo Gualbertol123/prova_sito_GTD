@@ -484,10 +484,11 @@ Because everything flows through the `Op` union, most changes follow one path:
   `send(op)`.
 - **Add a tab:** add the id to `TabId`/`TABS` in `constants.ts` → add `tabs.<id>`
   to both languages in `i18n.tsx` → render it in `App.tsx`.
-- **Add a table:** create it in `schema.sql` + a migration **with the same
-  team-only policy as the others** (`for all to authenticated using ((select
-  public.is_team_member())) with check (...)`, and `revoke all ... from anon`) —
-  a new table with an open policy would be readable by anyone — fetch it tolerantly in
+- **Add a table:** create it in `schema.sql` + a migration, and end the
+  migration with `select private.lock_table('<table>');` — that gives it the
+  same team-only policy and grants as the others (new tables are closed to the
+  anon key by default, but a table without that call is not usable by the team
+  either) — fetch it tolerantly in
   `db.ts` `fetchBoard`, add a realtime listener in `useBoard.ts`, and default it
   to empty in `localReducer.ts`.
 - **Translations:** every user-facing string goes through `t('key')`; keep the IT
@@ -600,19 +601,22 @@ React mounts so the first frame is already the right skin.
 - **One shared team account in Supabase Auth.** The login screen sends the
   password to Supabase Auth together with the team e-mail (`VITE_TEAM_EMAIL`);
   the browser never downloads any password. Supabase stores it as a bcrypt hash.
-- **The database only answers to that account.** Every table has one policy:
-  `to authenticated using ((select public.is_team_member()))`, and `anon` has
-  no table rights at all. `is_team_member()` checks the caller against
-  `private.team_accounts`, so even an account created by mistake gets nothing.
-  The anon key in the site's code is therefore harmless on its own.
+- **The database only answers to that account.** Every table in `public` has
+  one policy: `to authenticated using ((select public.is_team_member()))`, and
+  `anon` has no table rights at all (new tables start closed too).
+  `is_team_member()` checks the caller against `private.team_accounts` **and**
+  checks that the login session still exists, so an account created by mistake
+  gets nothing, and a logged-out or reset session is refused at once. The anon
+  key in the site's code is therefore harmless on its own.
 - **Reflection and Tracking passwords are bcrypt hashes** checked by database
   functions (`reflection_login`, `reflection_change_password`,
   `tracking_login`), callable only by the logged-in team account. Five wrong
   tries in a row lock that password for 5 minutes. None of them is in the code.
 - **Sessions.** A device stays logged in for Settings → *Login duration* days
   (the Supabase session is kept in `localStorage`, refreshed automatically);
-  then it must log in again. *Log out this device* ends it at once; changing
-  the team password in Settings logs every other device out.
+  then it must log in again. *Log out this device* ends it at once (and forgets
+  the Reflection logins on that device); changing the team password in Settings
+  logs every other device out within about 30 seconds.
 - **Transport and browser.** Everything is HTTPS; `netlify.toml` sends HSTS, a
   strict Content Security Policy, `X-Frame-Options: DENY`, `nosniff`,
   `no-referrer` and a locked-down `Permissions-Policy`.
@@ -622,13 +626,25 @@ Anyone with the team password can read every reflection and personal note
 through the API; the per-member Reflection password keeps them apart in the
 interface only. If that matters, move to one Supabase Auth user per member.
 
-### Supabase settings to keep
+### Supabase settings
 
+Keep:
 - **Authentication → Sign In / Providers → "Allow new users to sign up": OFF.**
-- **Authentication → Providers → Email → Minimum password length**: 12 is a
-  good value (the app asks for at least 8).
+- **Email → Minimum password length: 12** (the app also asks for 12).
+- **"Require current password when updating"** may be turned on — the app
+  sends it.
+- The team e-mail must be a **mailbox only admins can read**: anyone who can
+  read it can log in through a recovery / magic-link e-mail.
 - Keep the **service_role** key out of the site and out of Git — the site only
   ever needs the anon key.
+
+Leave OFF (the app does not support them and nobody could log in): **CAPTCHA**
+(Attack Protection), **MFA** on the team user, **single session per user**.
+
+The Security Advisor will warn that `is_team_member`, `reflection_login`,
+`reflection_change_password` and `tracking_login` are SECURITY DEFINER
+functions callable by `authenticated`; that is intended — each one checks the
+team login itself.
 
 ### Upgrading a live project (done once, in this order)
 
@@ -653,12 +669,16 @@ Table Editor → each table → **Export → CSV** (works on the free plan).
    Reflection tab (everyone's current password still works) and Tracking
    (still `Matusalemme` until you change it in step 7).
 6. **SQL Editor**: run `supabase/migration-012-auth-step2-lockdown.sql`. From
-   now on the database is closed to everyone but the team account. Other open
-   tabs need a reload and a login.
-7. **Change the passwords that were exposed** (SQL Editor):
+   now on **every table** is closed to everyone but the team account — it
+   lists (as warnings) any extra table it closed, such as the old app's
+   `boards` table. Any old copy of the site still online (e.g. a GitHub Pages
+   copy of the original app) stops working, as it should. Other open tabs
+   need a reload and a login.
+7. **Change the passwords that were exposed** — all of them were readable
+   before this upgrade:
    `select private.admin_set_tracking_password('new tracking password');`
-   and ask everyone still on the Reflection password `password` to change it
-   in the Reflection tab (or reset it for them, below).
+   and have **every member** change their Reflection password in the
+   Reflection tab (or reset it for them, below).
 
 If step 5 fails, nothing is lost: the database is still open as before; fix
 the cause (see the message on the login screen) before running step 6.
@@ -670,15 +690,22 @@ only someone signed in to the Supabase dashboard can run them.
 
 | To… | Run |
 | --- | --- |
-| Reset the **team** password (and log every device out) | `select private.admin_set_team_password('new password');` |
+| Reset the **team** password (12–72 characters; logs every device out) | `select private.admin_set_team_password('new password');` |
 | …without logging devices out | `select private.admin_set_team_password('new password', false);` |
+| …when there is more than one team account | `select private.admin_set_team_password('new password', true, 'e-mail');` |
 | Reset a member's **Reflection** password (also unlocks it) | `select private.admin_set_reflection_password('Name', 'new password');` |
 | Put a member back on the initial password | `select private.admin_set_reflection_password('Name', 'password');` |
 | Set the **Tracking** password (also unlocks it) | `select private.admin_set_tracking_password('new password');` |
 | Allow another Auth user to use the board | `select private.admin_add_team_account('e-mail');` |
-| Stop an Auth user from using the board | `select private.admin_remove_team_account('e-mail');` |
+| Stop an Auth user from using the board (not the last one) | `select private.admin_remove_team_account('e-mail');` |
+| Close a table you added | `select private.lock_table('table_name');` |
 
-The team password can also be changed from the dashboard (Authentication →
-Users → the team user) or by a logged-in teammate in Settings. Stored
-passwords cannot be read back by anyone — only replaced.
+A logged-in teammate can also change the team password in Settings (the
+current one is required). Stored passwords cannot be read back by anyone —
+only replaced.
+
+**Order matters only once:** 011 refuses to run after 012 (re-run 012
+instead; it is safe to repeat), and `schema.sql` refuses to run on a project
+that already has the board tables. The older migrations 004–010 re-close their
+table automatically if run after 012.
 

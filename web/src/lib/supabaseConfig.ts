@@ -26,7 +26,7 @@ export const SUPABASE_ANON_KEY: string =
   env.VITE_SUPABASE_ANON_KEY ?? "PASTE_ANON_PUBLIC_KEY_HERE";
 
 export const TEAM_EMAIL: string =
-  env.VITE_TEAM_EMAIL ?? "PASTE_TEAM_EMAIL_HERE";
+  (env.VITE_TEAM_EMAIL ?? "PASTE_TEAM_EMAIL_HERE").trim();
 
 export const isConfigured =
   !SUPABASE_URL.startsWith("PASTE_") && !SUPABASE_ANON_KEY.startsWith("PASTE_");

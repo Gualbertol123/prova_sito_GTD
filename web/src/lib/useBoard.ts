@@ -76,7 +76,9 @@ export function useBoard(): UseBoard {
 
     (async () => {
       try {
-        await seedIfEmpty();
+        // Seed only with a live session (never with the bare public key).
+        const { data } = await supabase.auth.getSession();
+        if (data.session) await seedIfEmpty();
         if (!cancelled) reload();
       } catch (e) {
         if (!cancelled) setError(errMsg(e));

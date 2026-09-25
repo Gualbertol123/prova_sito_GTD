@@ -27,3 +27,12 @@ create policy "anon all personal_notes" on public.personal_notes
   for all to anon, authenticated using (true) with check (true);
 
 alter publication supabase_realtime add table public.personal_notes;
+
+-- If the real-login lockdown (migration 012) has already run on this project,
+-- close this table again straight away (same transaction, so it is never open).
+do $$
+begin
+  if to_regprocedure('private.lock_table(text)') is not null then
+    perform private.lock_table('personal_notes');
+  end if;
+end $$;

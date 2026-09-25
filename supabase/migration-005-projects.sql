@@ -20,3 +20,12 @@ create policy "anon all projects" on public.projects
   for all to anon, authenticated using (true) with check (true);
 
 alter publication supabase_realtime add table public.projects;
+
+-- If the real-login lockdown (migration 012) has already run on this project,
+-- close this table again straight away (same transaction, so it is never open).
+do $$
+begin
+  if to_regprocedure('private.lock_table(text)') is not null then
+    perform private.lock_table('projects');
+  end if;
+end $$;

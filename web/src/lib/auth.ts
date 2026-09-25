@@ -22,6 +22,7 @@ export type AuthResult =
   | "rateLimited"
   | "notTeam"
   | "notUpgraded"
+  | "unsupported"
   | "failed";
 
 export interface AuthOutcome {
@@ -42,6 +43,10 @@ function isMissingFunction(e: { code?: string; message?: string } | null): boole
 
 function authFailure(e: { status?: number; code?: string; message?: string }): AuthOutcome {
   if (e.status === 429 || e.code === "over_request_rate_limit") return { result: "rateLimited" };
+  // Dashboard options the app does not support (README §11 lists them).
+  if (e.code === "captcha_failed" || e.code === "insufficient_aal" || e.code === "email_not_confirmed") {
+    return { result: "unsupported", detail: e.message };
+  }
   if (e.code === "invalid_credentials" || (!e.code && /invalid login credentials/i.test(e.message ?? ""))) {
     return { result: "wrong" };
   }
@@ -106,9 +111,12 @@ export async function changeTeamPassword(current: string, next: string): Promise
     const check = await supabase.auth.signInWithPassword({ email: TEAM_EMAIL, password: current });
     if (check.error) return authFailure(check.error);
 
-    const upd = await supabase.auth.updateUser({ password: next });
+    // current_password satisfies Supabase's optional "Require current
+    // password when updating" setting; it is ignored when that is off.
+    const upd = await supabase.auth.updateUser({ password: next, current_password: current });
     if (upd.error) {
       if (upd.error.status === 429) return { result: "rateLimited" };
+      if (upd.error.code === "current_password_mismatch") return { result: "wrong" };
       if (upd.error.status === 422 || /password/i.test(upd.error.message)) {
         return { result: "invalid", detail: upd.error.message };
       }
