@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Board } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { collectReport, weekPeriod, type Period } from "../lib/reportData";
@@ -6,6 +6,7 @@ import { GlassReport } from "./GlassReport";
 import type { ReportDoc } from "../lib/reportDoc";
 import { supabase } from "../lib/supabaseClient";
 import { shortDate } from "../lib/dates";
+import { clearReportDraft, purgeReportDrafts, readReportDraft } from "../lib/prefs";
 import "@fontsource-variable/inter";
 import "../styles/glassReport.css";
 
@@ -29,7 +30,25 @@ export function ReportView({ board }: Props) {
   const { t, lang } = useT();
   const [period, setPeriod] = useState<Period>(() => weekPeriod(0));
   const [custom, setCustom] = useState(false);
-  const [stage, setStage] = useState<Stage>("setup");
+  const draftKey = `${period.from}_${period.to}`;
+  // Coming back to the tab with a saved draft for this week reopens it.
+  const [stage, setStage] = useState<Stage>(() => {
+    purgeReportDrafts();
+    const p = weekPeriod(0);
+    return readReportDraft(`${p.from}_${p.to}`) ? "editing" : "setup";
+  });
+  const [hasDraft, setHasDraft] = useState(false);
+  const [resetN, setResetN] = useState(0);
+  useEffect(() => setHasDraft(!!readReportDraft(draftKey)), [draftKey]);
+  const onDraftChange = useCallback((v: boolean) => setHasDraft(v), []);
+
+  // Throw away this week's changes and start again from the board.
+  const resetReport = () => {
+    if (!window.confirm(t("report.resetConfirm"))) return;
+    clearReportDraft(draftKey);
+    setHasDraft(false);
+    setResetN((n) => n + 1);
+  };
   const [busy, setBusy] = useState<null | "docx" | "pdf">(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -203,7 +222,21 @@ export function ReportView({ board }: Props) {
               </button>
             </>
           )}
+          {(stage === "editing" || hasDraft) && (
+            <button
+              onClick={resetReport}
+              disabled={busy !== null || !hasDraft}
+              className={`${ghostBtn} text-[#DC2626] border-[#FECACA] hover:border-[#DC2626]`}
+              title={t("report.resetHint")}
+            >
+              ↺ {t("report.reset")}
+            </button>
+          )}
         </div>
+
+        {hasDraft && (
+          <div className="text-[11px] text-[#065F46]">✓ {t("report.draftSaved")}</div>
+        )}
 
         <div className="text-[12px] text-[#6B6B6B]">
           {data.totalTasks === 0 && data.totalSubtasks === 0
@@ -221,7 +254,15 @@ export function ReportView({ board }: Props) {
       {stage === "editing" && (
         <div className="space-y-2">
           <div className="text-[11px] text-[#8A8A8A] text-center">{t("report.editHint")}</div>
-          <GlassReport board={board} data={data} periodText={periodText} docRef={docRef} />
+          <GlassReport
+            key={`${draftKey}#${resetN}`}
+            board={board}
+            data={data}
+            periodText={periodText}
+            docRef={docRef}
+            draftKey={draftKey}
+            onDraftChange={onDraftChange}
+          />
         </div>
       )}
     </div>

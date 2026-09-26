@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Board, Priority, Project, Status, Subtask, Task } from "../lib/types";
 import type { PlannerColumn, ReportData } from "../lib/reportData";
 import { statusLabel, useT } from "../lib/i18n";
@@ -14,6 +14,7 @@ import {
 } from "../lib/glassReportModel";
 import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
 import { shortDate } from "../lib/dates";
+import { readReportDraft, writeReportDraft } from "../lib/prefs";
 
 // -----------------------------------------------------------------------------
 // The Liquid Glass weekly report — light mode, A4 pages, written in HTML.
@@ -674,6 +675,10 @@ export interface GlassReportProps {
   periodText: string;
   /** Set to a function that returns the report as data, for the server PDF. */
   docRef: React.MutableRefObject<(() => ReportDoc) | null>;
+  /** Which week's draft to load and keep (lib/prefs.ts, kept 7 days). */
+  draftKey: string;
+  /** Told whether this week's report has saved changes. */
+  onDraftChange?: (hasDraft: boolean) => void;
 }
 
 // Pack measured blocks onto pages; returns block ids per page. A section
@@ -697,15 +702,44 @@ function pack(blocks: Block[], heights: Map<string, number>): string[][] {
   return pages;
 }
 
-export function GlassReport({ board, data, periodText, docRef }: GlassReportProps) {
+export function GlassReport({ board, data, periodText, docRef, draftKey, onDraftChange }: GlassReportProps) {
   const { lang } = useT();
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
-  const [highlights, setHighlights] = useState<string[]>(() =>
-    [...data.done]
-      .sort((a, b) => a.task.priority.localeCompare(b.task.priority))
-      .slice(0, 4)
-      .map((r) => r.task.id)
+  // Start from this week's saved draft, if there is one.
+  const [draft] = useState(() => readReportDraft(draftKey));
+  const [edits, setEdits] = useState<Record<string, string>>(() => draft?.edits ?? {});
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set(draft?.hidden ?? []));
+  const [highlights, setHighlights] = useState<string[]>(
+    () =>
+      draft?.highlights ??
+      [...data.done]
+        .sort((a, b) => a.task.priority.localeCompare(b.task.priority))
+        .slice(0, 4)
+        .map((r) => r.task.id)
+  );
+
+  // Every change is written for this week straight away (inside the change
+  // itself, so leaving the tab right after an edit cannot lose it).
+  const latest = useRef({ edits, hidden, highlights });
+  latest.current = { edits, hidden, highlights };
+  const save = useCallback(
+    (next: Partial<{ edits: Record<string, string>; hidden: Set<string>; highlights: string[] }>) => {
+      const cur = { ...latest.current, ...next };
+      latest.current = cur;
+      writeReportDraft(draftKey, { edits: cur.edits, hidden: [...cur.hidden], highlights: cur.highlights });
+      onDraftChange?.(true);
+    },
+    [draftKey, onDraftChange]
+  );
+  useEffect(() => {
+    onDraftChange?.(!!draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const chooseHighlights = useCallback(
+    (ids: string[]) => {
+      setHighlights(ids);
+      save({ highlights: ids });
+    },
+    [save]
   );
   const [layout, setLayout] = useState<{ before: string[][]; after: string[][] } | null>(null);
   const measureRef = useRef<HTMLDivElement>(null);
@@ -734,12 +768,23 @@ export function GlassReport({ board, data, periodText, docRef }: GlassReportProp
     () => ({
       enabled: true,
       get: (id) => edits[id],
-      set: (id, text) => setEdits((e) => ({ ...e, [id]: text })),
+      set: (id, text) => {
+        const next = { ...latest.current.edits, [id]: text };
+        setEdits(next);
+        save({ edits: next });
+      },
     }),
-    [edits]
+    [edits, save]
   );
   const measureEdit: EditCtx = useMemo(() => ({ ...edit, enabled: false }), [edit]);
-  const hide = useCallback((id: string) => setHidden((h) => new Set(h).add(id)), []);
+  const hide = useCallback(
+    (id: string) => {
+      const next = new Set(latest.current.hidden).add(id);
+      setHidden(next);
+      save({ hidden: next });
+    },
+    [save]
+  );
 
   // Measure every block at page width and pack each run onto pages.
   useLayoutEffect(() => {
@@ -813,7 +858,7 @@ export function GlassReport({ board, data, periodText, docRef }: GlassReportProp
             periodText={periodText}
             edit={edit}
             highlights={highlights}
-            setHighlights={setHighlights}
+            setHighlights={chooseHighlights}
           />
         </PageChrome>
         {layout && (

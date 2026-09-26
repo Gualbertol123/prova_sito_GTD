@@ -82,6 +82,8 @@ export function writeAuth(exp: number): void {
 export function clearLoginState(): void {
   removePref("auth");
   removePref("reflauth");
+  // Report drafts hold board text: they go too, so a shared device keeps none.
+  purgeReportDrafts(true);
 }
 
 // Priority-distribution collapsed state (default collapsed to save space).
@@ -159,5 +161,74 @@ function readJson<T>(key: keyof typeof KEYS, fallback: T): T {
     return JSON.parse(raw) as T;
   } catch {
     return fallback;
+  }
+}
+
+// ---- Weekly report drafts -----------------------------------------------------
+// The edits made to one week's report (texts, hidden cards, chosen highlights),
+// kept on this device so they survive leaving the REPORT tab or reloading.
+// One draft per report period; a draft expires 7 days after its last change.
+
+export interface ReportDraft {
+  edits: Record<string, string>;
+  hidden: string[];
+  highlights: string[] | null;
+  savedAt: number;
+}
+
+const DRAFT_PREFIX = "gtd-report-draft:";
+const DRAFT_TTL_MS = 7 * 86400000;
+
+function draftStorageKey(period: string): string {
+  return DRAFT_PREFIX + period;
+}
+
+export function readReportDraft(period: string): ReportDraft | null {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(period));
+    if (!raw) return null;
+    const d = JSON.parse(raw) as ReportDraft;
+    if (!d || typeof d.savedAt !== "number" || Date.now() - d.savedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(draftStorageKey(period));
+      return null;
+    }
+    return {
+      edits: d.edits && typeof d.edits === "object" ? d.edits : {},
+      hidden: Array.isArray(d.hidden) ? d.hidden : [],
+      highlights: Array.isArray(d.highlights) ? d.highlights : null,
+      savedAt: d.savedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function writeReportDraft(period: string, draft: Omit<ReportDraft, "savedAt">): void {
+  try {
+    localStorage.setItem(draftStorageKey(period), JSON.stringify({ ...draft, savedAt: Date.now() }));
+  } catch {
+    /* storage full or disabled — the report still works, just unsaved */
+  }
+}
+
+export function clearReportDraft(period: string): void {
+  try {
+    localStorage.removeItem(draftStorageKey(period));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Remove expired drafts (or every draft, e.g. when logging out). */
+export function purgeReportDrafts(all = false): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(DRAFT_PREFIX)) continue;
+      if (all) localStorage.removeItem(k);
+      else readReportDraft(k.slice(DRAFT_PREFIX.length)); // drops it if expired
+    }
+  } catch {
+    /* ignore */
   }
 }

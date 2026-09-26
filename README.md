@@ -92,6 +92,7 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-auth` | when this device's login ends `{exp}` (Settings → login duration) |
 | `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
 | `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
+| `gtd-report-draft:<period>` | that week's report edits, kept 7 days; removed on logout |
 | `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
 | `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
 
@@ -302,12 +303,17 @@ appears anywhere.
   section heading always stays with its first card and no card is split.
   Pages are laid out by block id, so hiding a card (×) just drops it and the
   rest re-packs. The planner is its own 1123 × 794 landscape page.
+- **Drafts.** Every change (texts, hidden cards, chosen highlights) is saved
+  on this device straight away, per report period (`gtd-report-draft:<from>_<to>`
+  in `localStorage`, `prefs.ts`), and kept for **7 days** after the last
+  change: leave the tab or reload and the REPORT tab reopens that week's
+  report as you left it. **Ripristina / Reset** throws the week's changes away.
+  Drafts are deleted when the device logs out of the team.
 - **Editing.** Every text on the pages is `contentEditable` — titles, labels,
   counts, dates, tile figures, headers and footers (only page numbers are
   automatic); planner items have their own × too. An edit is stored when the
   field loses focus, the blocks are measured again and re-packed — a longer
-  text simply pushes the next card to the following page. Edits live only in
-  memory while the report is open; closing the report discards them.
+  text simply pushes the next card to the following page.
 - **The look.** `styles/glassReport.css`: soft colour washes (radial
   gradients, arranged differently on each page) under white glass panels
   built from translucent fills, a bright rim, a specular sheen and soft
