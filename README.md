@@ -25,7 +25,7 @@ full file map, how to run and deploy it, and how to extend it.
 | **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: assignees, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose assignees/priority/status/due up front); search + owner/priority/Focus-P1 filters. A task can be held by **one person or several** — open the assignee pill to tick names; the first one stays the `owner` column, so filters and the weekly recap all count a shared task for everyone on it. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
 | **WEEKLY** | Weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
-| **REPORT** | Builds the weekly report as **A4 pages in Liquid Glass** (light mode) right in the tab (see §5): a cover with the week's numbers, then Done, Next, Projects, the Planner and the weekly retro. Click any text on the pages to edit it; hover a card and press × to leave it out; **Download PDF** saves exactly what is on screen. The old Intesa Sanpaolo Word template is still one click away as **Word (classic template)**. |
+| **REPORT** | Builds the weekly report as **A4 pages in Liquid Glass** (light mode) right in the tab (see §5): a cover with the week's numbers, then Done, Next, Projects, the Planner and **next week's canteen menu**. Click any text on the pages to edit it; hover a card and press × to leave it out; **Download PDF** saves exactly what is on screen. The old Intesa Sanpaolo Word template is still one click away as **Word (classic template)**. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (initial password `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can change your own password (the current one is required). Passwords are stored as **bcrypt hashes** and checked by the database (`reflection_login`); 5 wrong tries lock that name for 5 minutes; an admin resets a forgotten one from Supabase (§11). A **Diary / Notes** switch at the top of the tab, behind the same password, holds **Personal notes**: free-form notes only you see, in the `personal_notes` table (the chip carries their count, and the tab reopens on whichever half you used last). Private from outsiders, but *within the team* the privacy is in the interface only — see §11. |
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); change the shared team password (current one required; logs every other device out); login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
@@ -97,9 +97,10 @@ the **login session** (Supabase access + refresh token, never the password; key
 
 ## 3. Data model (Supabase)
 
-Seven tables in `public`, all with **RLS enabled and one policy: the logged-in
+Seven board tables in `public`, all with **RLS enabled and one policy: the logged-in
 team account only** (`is_team_member()`; the anon key alone gets nothing — §11).
-All except `reflection_access` are in the `supabase_realtime` publication. A
+All except `reflection_access` are in the `supabase_realtime` publication. An
+eighth, `canteen_menu`, is read-only for the team (below). A
 `private` schema, which the website's API cannot reach, holds the team list.
 
 **`board_meta`** — one row, `id = 'main'`, holds board-wide state:
@@ -139,6 +140,12 @@ not work any more.
 **`private.team_accounts`** — the Supabase Auth user id(s) allowed to use the
 board.
 
+**`canteen_menu`** — one row per day of the canteen's menu (REPORT → MENU):
+`day` (primary key), `venue`, `courses` (jsonb: `[{course, items: [{name,
+allergens}]}]`), `updated_at`. The team can only **read** it, and only today
+onwards (Italian time); it is filled from the SQL Editor once a month (§5).
+Not in realtime.
+
 SQL files in `supabase/`:
 
 - `schema.sql` — the **complete** schema for a fresh, empty project (all
@@ -164,6 +171,8 @@ SQL files in `supabase/`:
 - `migration-011-auth-step1.sql` — **real login, step 1 (additive).** Team
   list, bcrypt-hashed Reflection/Tracking passwords, the password functions and
   the admin tools. The old site keeps working after it. See §11.
+- `migration-015-canteen-menu.sql` — adds the `canteen_menu` table for the
+  report's MENU section (team read-only, today onwards). Safe on live data.
 - `migration-014-remove-ideas-tracking.sql` — **deletes** the data of the
   removed IDEE and TRACKING tabs: the `suggestions` table and the Tracking
   password (its hash and the two functions). Counts the rows of every other
@@ -201,7 +210,9 @@ prova_sito_GTD/
 │   ├── migration-005-projects.sql
 │   ├── migration-006-reflection-access.sql … migration-010-personal-notes.sql
 │   ├── migration-011-auth-step1.sql          ← real login, step 1 (additive)
-│   └── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
+│   ├── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
+│   └── migration-013 … migration-015-canteen-menu.sql
+├── scripts/menu_from_pdf.py      ← monthly canteen-menu PDF → SQL for public.canteen_menu (§5)
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
     ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, @react-pdf/renderer (server PDF), @fontsource-variable/inter (screen), @fontsource/inter (PDF)
@@ -286,7 +297,7 @@ REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
 | 02 Prossimi passi | the NEXT column now, with due dates and subtasks |
 | 03 Progetti | each project from the Projects tab with its checklist and % done — except projects taken off with their × (`projects.report_hidden`, shared by the whole team): they stay off **every** later report until put back from the **Progetti esclusi** view of the REPORT tab |
 | 04 Planner | always **one landscape page**: Backlog · Next · In Progress · Waiting side by side; a very full board is scaled down to fit |
-| 05 Retrospettiva | all five WEEKLY buckets (wins, learnings, to improve, blockers, focus next week) with their items; a bucket with no items is a box to write in, left out of the PDF while it stays empty |
+| 05 Mensa | **next week's canteen menu**: one card per day, Monday to Friday of the week after the report's period — dish of the day, first and main courses, sides, cold dishes, salads, fruit and dessert, with the allergen numbers as printed — under a note naming the canteen. Days already past are never shown; × leaves a day out. Without a menu for that week the section says it is not available yet |
 
 Only the Done section is period-filtered; the rest is how the board stands when
 the report is generated. Like the old Word report it is **name-free**: no owner
@@ -295,7 +306,7 @@ appears anywhere.
 ### How it is built
 
 - **Blocks and pages.** `glassReportModel.ts` turns the data into blocks (a
-  section heading, a task card, a project, a planner band, a retro bucket).
+  section heading, a task card, a project, a planner band, a day of the menu).
   `GlassReport.tsx` renders every block once off-screen at page width,
   measures it, and packs blocks onto 794 × 1123 px pages (A4 at 96 dpi); a
   section heading always stays with its first card and no card is split.
@@ -356,7 +367,30 @@ function unbundled (`external_node_modules` in `netlify.toml`).
 
 **Netlify needs** the existing `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_ANON_KEY` variables to be available to **Functions** too (the
-default "All scopes"); the function uses them to check the login.
+default "All scopes"); the functions use them to check the login.
+
+### Canteen menu — updated once a month
+
+The canteen sends its menu as a PDF (one page per week, courses down the left,
+Monday–Friday across). To update it:
+
+```bash
+pip install pymupdf
+python3 -I scripts/menu_from_pdf.py Menu.pdf     # writes menu-update.sql
+```
+
+then run `menu-update.sql` in **Supabase → SQL Editor**. **Never commit it**
+(`.gitignore` keeps `menu-update*.sql` out): this repository is public, the
+menu is not. The script reads each cell from the table's grid lines (so a dish
+that wraps over two lines stays one dish), splits off the allergen numbers and
+leaves out every day before today; the SQL **deletes every past day** already
+in the table and replaces days that are in the new PDF, so running it twice is
+harmless. Nothing to deploy: the REPORT tab reads the table on its next load.
+
+The menu lives in `public.canteen_menu` (migration 015), one row per day.
+Only the team account can read it and nobody can write it from the website;
+its rule only returns today and later (Italian time), so a past day never
+reaches the browser even before the next update deletes it.
 
 ### Word (classic template)
 

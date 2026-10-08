@@ -72,3 +72,15 @@ export function shortDate(d: Date, lang: "it" | "en", withYear = false, twoDigit
   const day = twoDigitDay ? String(d.getDate()).padStart(2, "0") : String(d.getDate());
   return `${day} ${MONTHS_SHORT[lang][d.getMonth()]}${withYear ? ` ${d.getFullYear()}` : ""}`;
 }
+
+// "Lunedì 12 ott" / "Monday 12 Oct" for an ISO date, with fixed names (as above).
+const WEEKDAYS = {
+  it: ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"],
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+} as const;
+
+export function weekdayDate(iso: string, lang: "it" | "en"): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${WEEKDAYS[lang][date.getDay()]} ${shortDate(date, lang)}`;
+}

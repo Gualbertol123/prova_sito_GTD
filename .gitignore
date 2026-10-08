@@ -29,3 +29,6 @@ npm-debug.log*
 # Generated at build time (fonts for the server-side PDF)
 web/netlify/lib/fonts.generated.mjs
 web/netlify/lib/fonts.generated.d.mts
+
+# The monthly canteen-menu SQL (scripts/menu_from_pdf.py): not for a public repo
+menu-update*.sql

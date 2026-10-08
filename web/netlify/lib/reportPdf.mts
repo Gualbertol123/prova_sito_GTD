@@ -9,7 +9,8 @@
 //
 // Pages: the cover; the Done / Next / Projects sections flowing over portrait
 // pages (a card is never split, a heading never ends a page); the planner on
-// one landscape page; then the retro. Page numbers are automatic.
+// one landscape page; then the canteen menu of the week ahead. Page numbers
+// are automatic.
 // -----------------------------------------------------------------------------
 
 import React from "react";
@@ -359,6 +360,13 @@ function Meta({ text }: { text: string }) {
 // ---- Cards -----------------------------------------------------------------------------
 
 function Card({ card }: { card: DocCard }) {
+  if (card.kind === "note") {
+    return h(
+      Glass,
+      { style: { marginTop: GAP } },
+      h(Text, { style: { paddingVertical: 8.25, paddingHorizontal: 13.5, fontSize: 8.6, lineHeight: 1.45, color: INK3 } }, card.text)
+    );
+  }
   if (card.kind === "empty") {
     return h(
       Glass,
@@ -393,18 +401,33 @@ function Card({ card }: { card: DocCard }) {
       h(Progress, { key: "p", ...card.progress }),
       h(Subs, { key: "s", items: card.items, more: card.more, twoCols: true })
     );
-  } else if (card.kind === "retro") {
+  } else if (card.kind === "menuDay") {
     body.push(
-      h(Text, { key: "l", style: { fontSize: 8.25, fontWeight: 700, letterSpacing: 0.75, color: card.accent } }, card.label.toUpperCase()),
+      h(Text, { key: "t", style: { fontSize: 12.75, lineHeight: 1.3, fontWeight: 600, color: INK } }, card.title),
       h(
         View,
-        { key: "b", style: { marginTop: 7.5 } },
-        ...card.items.map((it, i) =>
+        { key: "c", style: { flexDirection: "row", marginTop: 7.5 } },
+        ...card.columns.map((courses, ci) =>
           h(
             View,
-            { key: i, style: { flexDirection: "row", marginBottom: 4 } },
-            h(Text, { style: { width: 10, fontSize: 9.75, color: INK3 } }, "•"),
-            h(Text, { style: { flex: 1, fontSize: 9.75, lineHeight: 1.45, color: INK2 } }, it)
+            { key: ci, style: { width: "50%", paddingRight: ci === 0 ? 8.25 : 0, paddingLeft: ci === 0 ? 0 : 8.25 } },
+            ...courses.map((c, i) =>
+              h(
+                View,
+                { key: i, style: { marginTop: i === 0 ? 0 : 7.5 } },
+                h(Text, { style: { fontSize: 7.5, fontWeight: 700, letterSpacing: 0.7, color: card.accent } }, c.label.toUpperCase()),
+                ...c.items.map((d, j) =>
+                  h(
+                    Text,
+                    { key: j, style: { marginTop: j === 0 ? 3.75 : 2.25, fontSize: 9, lineHeight: 1.38, color: INK2 } },
+                    d.text,
+                    d.allergens
+                      ? h(Text, { style: { fontSize: 7.1, fontWeight: 600, color: INK3 } }, `  ${d.allergens}`)
+                      : null
+                  )
+                )
+              )
+            )
           )
         )
       )
