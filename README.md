@@ -28,8 +28,6 @@ full file map, how to run and deploy it, and how to extend it.
 | **REPORT** | Builds the weekly report as **A4 pages in Liquid Glass** (light mode) right in the tab (see §5): a cover with the week's numbers, then Done, Next, Projects, the Planner and the weekly retro. Click any text on the pages to edit it; hover a card and press × to leave it out; **Download PDF** saves exactly what is on screen. The old Intesa Sanpaolo Word template is still one click away as **Word (classic template)**. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
 | **REFLECTION** | **Personal**, behind a per-user password (initial password `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can change your own password (the current one is required). Passwords are stored as **bcrypt hashes** and checked by the database (`reflection_login`); 5 wrong tries lock that name for 5 minutes; an admin resets a forgotten one from Supabase (§11). A **Diary / Notes** switch at the top of the tab, behind the same password, holds **Personal notes**: free-form notes only you see, in the `personal_notes` table (the chip carries their count, and the tab reopens on whichever half you used last). Private from outsiders, but *within the team* the privacy is in the interface only — see §11. |
-| **TRACKING 🔒** | Password-gated per-member workload monitor (active tasks, P1 count, Ok/High/Overloaded), **plus a central review of everyone's Daily Reflections** (filter by member). Its password is a bcrypt hash in the database, checked by `tracking_login`; set it from Supabase (§11). |
-| **IDEAS** | Anonymous suggestions for improving the site. Nothing identifying is stored — the row is only `{id, body, created_at}`, and the composer ignores the "You" identity the rest of the app uses. The browser that posted an idea keeps its ids in `localStorage` so it can delete its own; that list never leaves the device, and nobody can delete anyone else's. |
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); change the shared team password (current one required; logs every other device out); login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
 
 Header extras: editable board title + subtitle (double-click), a **"You"**
@@ -171,6 +169,9 @@ SQL files in `supabase/`:
 - `migration-011-auth-step1.sql` — **real login, step 1 (additive).** Team
   list, bcrypt-hashed Reflection/Tracking passwords, the password functions and
   the admin tools. The old site keeps working after it. See §11.
+- `migration-013-report-projects.sql` — adds `projects.report_hidden`: a
+  project taken off the weekly report with its × stays off every later report
+  until put back from REPORT → **Progetti esclusi**.
 - `migration-012-auth-step2-lockdown.sql` — **real login, step 2.** Closes all
   tables to the anon key, hides `reflection_access`, deletes the clear-text
   password columns. Run only after the new site is live and you have logged in
@@ -286,7 +287,7 @@ REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
 | Cover | board name and period, an editable headline and subtitle, tiles for completed tasks, closed subtasks, in progress, next and waiting, an **In evidenza** list whose tasks you pick with **Scegli attività** (up to 8, from the completed, in-progress, next and waiting tasks; left out of the PDF when empty), and an editable **In sintesi** paragraph |
 | 01 Completate | every task that entered DONE inside the period, with priority, completion date, its subtasks and a progress bar |
 | 02 Prossimi passi | the NEXT column now, with due dates and subtasks |
-| 03 Progetti | each project from the Projects tab with its checklist and % done |
+| 03 Progetti | each project from the Projects tab with its checklist and % done — except projects taken off with their × (`projects.report_hidden`, shared by the whole team): they stay off **every** later report until put back from the **Progetti esclusi** view of the REPORT tab |
 | 04 Planner | always **one landscape page**: Backlog · Next · In Progress · Waiting side by side; a very full board is scaled down to fit |
 | 05 Retrospettiva | all five WEEKLY buckets (wins, learnings, to improve, blockers, focus next week) with their items; a bucket with no items is a box to write in, left out of the PDF while it stays empty |
 

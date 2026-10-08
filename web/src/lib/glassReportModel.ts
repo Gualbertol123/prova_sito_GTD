@@ -109,7 +109,10 @@ export function buildBlocks(board: Board, data: ReportData, hidden: Set<string>)
     ),
     ...section(
       "projects",
-      data.projects.map((p) => ({ kind: "project" as const, id: `proj.${p.id}`, project: p }))
+      // Projects left out of the report (× on the card) stay out of every report.
+      data.projects
+        .filter((p) => !p.reportHidden)
+        .map((p) => ({ kind: "project" as const, id: `proj.${p.id}`, project: p }))
     ),
   ];
   n += 1;

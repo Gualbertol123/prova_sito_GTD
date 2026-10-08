@@ -141,6 +141,8 @@ interface BlockProps {
   edit: EditCtx;
   fmtDate: (msOrIso: number | string) => string;
   onHide?: (id: string) => void;
+  /** Leave a project out of this and every later report. */
+  onExcludeProject?: (projectId: string) => void;
 }
 
 function Subtasks({ id, task, edit, limit = 8 }: { id: string; task: Task; edit: EditCtx; limit?: number }) {
@@ -205,7 +207,7 @@ function TaskCard({ block, edit, fmtDate, onHide }: BlockProps & { block: Extrac
   );
 }
 
-function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Block, { kind: "project" }> }) {
+function ProjectCard({ block, edit, onExcludeProject }: BlockProps & { block: Extract<Block, { kind: "project" }> }) {
   const { t } = useT();
   const p: Project = block.project;
   const done = p.items.filter((i) => i.done).length;
@@ -214,7 +216,7 @@ function ProjectCard({ block, edit, onHide }: BlockProps & { block: Extract<Bloc
   return (
     <div className="gr-glass gr-card">
       <span className="gr-accent" style={{ background: SECTION_COLOR.projects }} />
-      <HideButton onHide={onHide && (() => onHide(block.id))} />
+      <HideButton onHide={onExcludeProject && (() => onExcludeProject(p.id))} />
       <div className="gr-project-head">
         <Ed tag="h3" id={`${block.id}.name`} value={p.name || t("gr.untitled")} edit={edit} className="gr-card-title" />
         <Ed id={`${block.id}.pct`} className="gr-big-pct gr-gradtext" value={`${Math.round(share * 100)}%`} edit={edit} />
@@ -679,6 +681,8 @@ export interface GlassReportProps {
   draftKey: string;
   /** Told whether this week's report has saved changes. */
   onDraftChange?: (hasDraft: boolean) => void;
+  /** × on a project card: leave it out of this and every later report. */
+  onExcludeProject?: (projectId: string) => void;
 }
 
 // Pack measured blocks onto pages; returns block ids per page. A section
@@ -702,7 +706,15 @@ function pack(blocks: Block[], heights: Map<string, number>): string[][] {
   return pages;
 }
 
-export function GlassReport({ board, data, periodText, docRef, draftKey, onDraftChange }: GlassReportProps) {
+export function GlassReport({
+  board,
+  data,
+  periodText,
+  docRef,
+  draftKey,
+  onDraftChange,
+  onExcludeProject,
+}: GlassReportProps) {
   const { lang } = useT();
   // Start from this week's saved draft, if there is one.
   const [draft] = useState(() => readReportDraft(draftKey));
@@ -831,7 +843,7 @@ export function GlassReport({ board, data, periodText, docRef, draftKey, onDraft
       <div className="gr-content" style={{ left: PAD_X, top: HEAD, width: CONTENT_W, height: CONTENT_H }}>
         {blocks.map((b) => (
           <div key={b.id} className="gr-block">
-            <BlockView block={b} edit={edit} fmtDate={fmtDate} onHide={hide} />
+            <BlockView block={b} edit={edit} fmtDate={fmtDate} onHide={hide} onExcludeProject={onExcludeProject} />
           </div>
         ))}
       </div>

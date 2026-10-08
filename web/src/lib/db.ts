@@ -146,6 +146,7 @@ interface ProjectRow {
   items: Task["subtasks"];
   created_at: number;
   updated_at: number;
+  report_hidden?: boolean | null; // migration 013
 }
 
 function rowToProject(r: ProjectRow): Project {
@@ -155,6 +156,7 @@ function rowToProject(r: ProjectRow): Project {
     items: Array.isArray(r.items) ? r.items : [],
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    reportHidden: !!r.report_hidden,
   };
 }
 
@@ -549,6 +551,11 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
     }
     case "projectDelete":
       await must(supabase.from("projects").delete().eq("id", op.id));
+      break;
+    case "projectReportHidden":
+      await must(
+        supabase.from("projects").update({ report_hidden: op.hidden, updated_at: Date.now() }).eq("id", op.id)
+      );
       break;
     case "suggestionAdd":
       await must(

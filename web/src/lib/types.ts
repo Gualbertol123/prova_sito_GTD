@@ -75,6 +75,8 @@ export interface Project {
   items: Subtask[];
   createdAt?: number;
   updatedAt?: number;
+  /** Left out of the weekly report (from now on, until put back). */
+  reportHidden?: boolean;
 }
 
 // An anonymous suggestion for improving the site. No author is stored anywhere
@@ -149,6 +151,7 @@ export type Op =
   | { type: "projectAdd"; project: Project }
   | { type: "projectUpdate"; id: string; patch: Partial<Project> }
   | { type: "projectDelete"; id: string }
+  | { type: "projectReportHidden"; id: string; hidden: boolean }
   | { type: "suggestionAdd"; suggestion: Suggestion }
   | { type: "suggestionDelete"; id: string }
   | { type: "noteAdd"; note: PersonalNote }

@@ -137,6 +137,9 @@ export function applyOpLocal(board: Board, op: Op): Board {
         p.id === op.id ? { ...p, ...op.patch, updatedAt: now } : p
       );
       break;
+    case "projectReportHidden":
+      b.projects = b.projects.map((p) => (p.id === op.id ? { ...p, reportHidden: op.hidden } : p));
+      break;
     case "projectDelete":
       b.projects = b.projects.filter((p) => p.id !== op.id);
       break;

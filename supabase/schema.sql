@@ -94,7 +94,8 @@ create table public.projects (
   name        text  not null default '',
   items       jsonb not null default '[]'::jsonb,
   created_at  bigint not null default 0,
-  updated_at  bigint not null default 0
+  updated_at  bigint not null default 0,
+  report_hidden boolean not null default false  -- left out of the weekly report
 );
 create index projects_created_idx on public.projects (created_at);
 

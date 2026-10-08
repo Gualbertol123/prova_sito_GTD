@@ -9,10 +9,8 @@ import { ProjectsView } from "./components/ProjectsView";
 import { WeeklyView } from "./components/WeeklyView";
 import { ReportView } from "./components/ReportView";
 import { CalendarView } from "./components/CalendarView";
-import { TrackingView } from "./components/TrackingView";
 import { SettingsView } from "./components/SettingsView";
 import { ProductTreeView } from "./components/ProductTreeView";
-import { SuggestionsView } from "./components/SuggestionsView";
 import { isOwnedBy } from "./lib/owners";
 import { DailyReflection } from "./components/DailyReflection";
 import { MailModal } from "./components/MailModal";
@@ -122,7 +120,7 @@ export default function App() {
         )}
         {tab === "projects" && <ProjectsView board={board} send={send} />}
         {tab === "weekly" && <WeeklyView board={board} send={send} />}
-        {tab === "report" && <ReportView board={board} />}
+        {tab === "report" && <ReportView board={board} send={send} />}
         {tab === "products" && <ProductTreeView />}
         {tab === "calendario" && (
           <div className="space-y-4">
@@ -140,8 +138,6 @@ export default function App() {
             <DailyReflection board={board} members={members} send={send} />
           </div>
         )}
-        {tab === "tracking" && <TrackingView board={board} />}
-        {tab === "suggestions" && <SuggestionsView board={board} send={send} />}
         {tab === "settings" && <SettingsView board={board} send={send} />}
       </div>
 

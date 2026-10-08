@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Board } from "../lib/types";
+import type { Board, Op } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { collectReport, weekPeriod, type Period } from "../lib/reportData";
 import { GlassReport } from "./GlassReport";
@@ -12,6 +12,7 @@ import "../styles/glassReport.css";
 
 interface Props {
   board: Board;
+  send: (op: Op, onError?: (message: string) => void) => void;
 }
 
 const WEEKS_BACK = 12;
@@ -26,7 +27,7 @@ type Stage = "setup" | "editing";
 // as they now read on the pages — to the server, which makes the PDF
 // (netlify/functions/report-pdf.mts), so it is the same on every device.
 // The old Word template is still available as a direct download.
-export function ReportView({ board }: Props) {
+export function ReportView({ board, send }: Props) {
   const { t, lang } = useT();
   const [period, setPeriod] = useState<Period>(() => weekPeriod(0));
   const [custom, setCustom] = useState(false);
@@ -41,6 +42,17 @@ export function ReportView({ board }: Props) {
   const [resetN, setResetN] = useState(0);
   useEffect(() => setHasDraft(!!readReportDraft(draftKey)), [draftKey]);
   const onDraftChange = useCallback((v: boolean) => setHasDraft(v), []);
+
+  // "Report" or the list of projects left out of the report.
+  const [view, setView] = useState<"report" | "excluded">("report");
+  const excluded = board.projects.filter((p) => p.reportHidden);
+  const setProjectInReport = useCallback(
+    (id: string, hidden: boolean) =>
+      send({ type: "projectReportHidden", id, hidden }, (message) =>
+        setErr(`${t("report.excludeFailed")} (${message})`)
+      ),
+    [send, t]
+  );
 
   // Throw away this week's changes and start again from the board.
   const resetReport = () => {
@@ -135,6 +147,58 @@ export function ReportView({ board }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Report | projects left out */}
+      <div className="flex gap-1.5">
+        {(["report", "excluded"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            aria-pressed={view === v}
+            className={`h-9 px-4 rounded-full text-[11px] font-semibold uppercase tracking-wide border ${
+              view === v ? "bg-[#0A1931] text-[#C9A96E] border-[#0A1931]" : "bg-white text-[#0A1931] border-[#E8E6E1]"
+            }`}
+          >
+            {v === "report" ? t("report.viewReport") : t("report.viewExcluded")}
+            {v === "excluded" && excluded.length > 0 && (
+              <span className="ml-1.5 opacity-60 tabular-nums">{excluded.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {view === "excluded" && (
+        <div className="rounded-[14px] border border-[#E8E6E1] bg-white p-4 space-y-3">
+          <p className="text-[12px] text-[#6B6B6B]">{t("report.excludedHint")}</p>
+          {err && <div className="text-[11px] text-[#DC2626]">{err}</div>}
+          {excluded.length === 0 ? (
+            <p className="text-[12px] text-[#8A8A8A]">{t("report.excludedEmpty")}</p>
+          ) : (
+            <ul className="divide-y divide-[#F0EEE9]">
+              {excluded.map((p) => {
+                const done = p.items.filter((i) => i.done).length;
+                return (
+                  <li key={p.id} className="flex items-center gap-3 py-2.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-semibold text-[#0A1931] truncate">{p.name || "—"}</div>
+                      <div className="text-[11px] text-[#8A8A8A]">
+                        {done}/{p.items.length}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setProjectInReport(p.id, false)}
+                      className="h-8 px-4 rounded-full bg-[#0A1931] text-[#C9A96E] text-[12px] font-semibold shrink-0"
+                    >
+                      ＋ {t("report.includeAgain")}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {view === "report" && (<>
       {/* Controls */}
       <div className="rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-4 space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -262,9 +326,11 @@ export function ReportView({ board }: Props) {
             docRef={docRef}
             draftKey={draftKey}
             onDraftChange={onDraftChange}
+            onExcludeProject={(id) => setProjectInReport(id, true)}
           />
         </div>
       )}
+      </>)}
     </div>
   );
 }

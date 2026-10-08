@@ -85,8 +85,6 @@ export type TabId =
   | "products"
   | "calendario"
   | "reflection"
-  | "tracking"
-  | "suggestions"
   | "settings";
 
 export const TABS: { id: TabId; label: string }[] = [
@@ -97,8 +95,6 @@ export const TABS: { id: TabId; label: string }[] = [
   { id: "products", label: "PRODOTTI" },
   { id: "calendario", label: "CALENDARIO" },
   { id: "reflection", label: "RIFLESSIONE" },
-  { id: "tracking", label: "TRACKING 🔒" },
-  { id: "suggestions", label: "IDEE" },
   { id: "settings", label: "IMPOSTAZIONI" },
 ];
 
