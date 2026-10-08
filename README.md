@@ -212,7 +212,9 @@ prova_sito_GTD/
 │   ├── migration-011-auth-step1.sql          ← real login, step 1 (additive)
 │   ├── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 │   └── migration-013 … migration-015-canteen-menu.sql
-├── scripts/menu_from_pdf.py      ← monthly canteen-menu PDF → SQL for public.canteen_menu (§5)
+├── menu/                        ← the canteen menu: monthly PDF → SQL (§5, menu/README.md)
+│   ├── menu_from_pdf.py
+│   └── private/                 ← the PDF and SQL go here; never committed
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
     ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, @react-pdf/renderer (server PDF), @fontsource-variable/inter (screen), @fontsource/inter (PDF)
@@ -376,11 +378,11 @@ Monday–Friday across). To update it:
 
 ```bash
 pip install pymupdf
-python3 -I scripts/menu_from_pdf.py Menu.pdf     # writes menu-update.sql
+python3 -I menu/menu_from_pdf.py menu/private/Menu.pdf   # → menu/private/menu-update-<first day>.sql
 ```
 
-then run `menu-update.sql` in **Supabase → SQL Editor**. **Never commit it**
-(`.gitignore` keeps `menu-update*.sql` out): this repository is public, the
+then run that `.sql` file in **Supabase → SQL Editor**. Everything in
+`menu/private/` stays on your computer (`.gitignore`): this repository is public, the
 menu is not. The script reads each cell from the table's grid lines (so a dish
 that wraps over two lines stays one dish), splits off the allergen numbers and
 leaves out every day before today; the SQL **deletes every past day** already

@@ -30,5 +30,8 @@ npm-debug.log*
 web/netlify/lib/fonts.generated.mjs
 web/netlify/lib/fonts.generated.d.mts
 
-# The monthly canteen-menu SQL (scripts/menu_from_pdf.py): not for a public repo
+# The monthly canteen menu (PDF + SQL, see menu/README.md): not for a public repo
+menu/private/*
+!menu/private/.gitkeep
 menu-update*.sql
+__pycache__/

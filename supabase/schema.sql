@@ -194,7 +194,7 @@ select private.lock_table(t) from unnest(array[
 ]) as t;
 
 -- The canteen menu (REPORT → MENU): read-only for the team, and only today
--- onwards; filled monthly from the SQL Editor (scripts/menu_from_pdf.py).
+-- onwards; filled monthly from the SQL Editor (menu/menu_from_pdf.py).
 create table if not exists public.canteen_menu (
   day        date primary key,
   venue      text not null default '',

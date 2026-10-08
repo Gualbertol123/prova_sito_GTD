@@ -7,7 +7,7 @@
 -- tab shows next week's days in its MENU section.
 --   * Only the logged-in team account can read it; nobody can write to it
 --     from the website. It is filled once a month from the SQL Editor with the
---     file made by scripts/menu_from_pdf.py (never committed: the repository
+--     file made by menu/menu_from_pdf.py (never committed: the repository
 --     is public).
 --   * Past days are invisible from the website straight away (the rule below
 --     only shows today and later, Italian time) and are deleted by every

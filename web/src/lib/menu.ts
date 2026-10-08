@@ -5,7 +5,7 @@ import { toISODate } from "./dates";
 // -----------------------------------------------------------------------------
 // The canteen menu, for the report's MENU section.
 //
-// The menu comes as a monthly PDF; scripts/menu_from_pdf.py turns it into SQL
+// The menu comes as a monthly PDF; menu/menu_from_pdf.py turns it into SQL
 // that is run in Supabase, into public.canteen_menu (migration 015). Only the
 // logged-in team can read that table (fetchMenu in db.ts), nobody can write
 // it from the website, and its rule only lets today and later through: a past

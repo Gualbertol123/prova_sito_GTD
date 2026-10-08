@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Turn the canteen's monthly menu PDF into the SQL that loads it into Supabase.
 
-    python3 -I scripts/menu_from_pdf.py Menu.pdf [--today YYYY-MM-DD] [--out menu-update.sql]
+    python3 -I menu/menu_from_pdf.py menu/private/Menu.pdf [--today YYYY-MM-DD] [--out FILE]
 
-Then run the .sql file in Supabase -> SQL Editor (after migration 015). Do NOT
-commit it: the repository is public, the menu is not.
+Writes menu/private/menu-update-<first day>.sql; run it in Supabase -> SQL
+Editor (after migration 015). menu/private/ is never committed (.gitignore):
+the repository is public, the menu is not. See menu/README.md.
 
 Each PDF page is one week: a grid with the courses down the left and
 Monday-Friday across. The cells are read from the grid lines, so a dish that
@@ -23,6 +24,9 @@ import sys
 
 import pymupdf
 
+# Where the monthly PDF and the SQL go: ignored by git.
+PRIVATE = pathlib.Path(__file__).resolve().parent / "private"
+
 
 # Course label in the PDF (lower case, spaces squeezed) -> key used by the site.
 COURSES = {
@@ -39,6 +43,11 @@ COURSES = {
     "dessert": "dessert",
 }
 
+# Words a wrapped dish name can stop on before its next line.
+UNFINISHED = re.compile(
+    r"\b(?:a|al|allo|alla|alle|ai|agli|all[’']|con|e|ed|di|del|dello|della|delle|dei|degli|in|da|su|sul|sulla|per|tra|fra)$",
+    re.IGNORECASE,
+)
 ALLERGENS = re.compile(r"\s*((?:\d+\s*-+\s*)*\d+)\s*-?\s*$")
 
 
@@ -79,11 +88,19 @@ def squeeze(s):
 
 
 def dishes(lines):
-    """Join wrapped lines into dishes: a new dish starts with a capital letter."""
+    """Join wrapped lines into dishes.
+
+    A new dish starts with a capital letter, unless the line before is clearly
+    unfinished: no allergen numbers yet and ending in a word like "alla", "con"
+    or "e", or in a comma ("Risotto alla" / "Milanese 7" is one dish).
+    """
     items = []
     for line in lines:
         line = squeeze(line)
-        starts_new = bool(re.match(r"[A-ZÀ-Ý]", line))
+        unfinished = bool(items) and not ALLERGENS.search(items[-1]) and bool(
+            UNFINISHED.search(items[-1]) or items[-1].endswith(",")
+        )
+        starts_new = bool(re.match(r"[A-ZÀ-Ý]", line)) and not unfinished
         if items and not starts_new:
             sep = "" if items[-1].endswith("-") and line[:1].isdigit() else " "
             items[-1] = items[-1] + sep + line
@@ -138,7 +155,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pdf")
     ap.add_argument("--today", default=dt.date.today().isoformat())
-    ap.add_argument("--out", default="menu-update.sql")
+    ap.add_argument("--out", help="default: menu/private/menu-update-<first day>.sql")
     a = ap.parse_args()
 
     doc = pymupdf.open(a.pdf)
@@ -148,12 +165,14 @@ def main():
     if not days:
         raise SystemExit("No day from --today on in this PDF: nothing to load.")
 
+    out = pathlib.Path(a.out) if a.out else PRIVATE / f"menu-update-{days[0]['date']}.sql"
+    out.parent.mkdir(parents=True, exist_ok=True)
     rows = ",\n".join(
         "  (%s, %s, %s::jsonb)" % (sql_text(d["date"]), sql_text(venue), sql_text(json.dumps(d["courses"], ensure_ascii=False)))
         for d in days
     )
     sql = f"""-- Canteen menu {days[0]['date']} -> {days[-1]['date']} ({len(days)} days), from {pathlib.Path(a.pdf).name}.
--- Run in Supabase -> SQL Editor. Made by scripts/menu_from_pdf.py; do not commit.
+-- Run in Supabase -> SQL Editor. Made by menu/menu_from_pdf.py; do not commit.
 begin;
 
 -- The past menu goes.
@@ -168,8 +187,8 @@ commit;
 
 select min(day) as first_day, max(day) as last_day, count(*) as days from public.canteen_menu;
 """
-    pathlib.Path(a.out).write_text(sql)
-    print(f"{a.out}: {len(days)} days, {days[0]['date']} -> {days[-1]['date']}", file=sys.stderr)
+    out.write_text(sql)
+    print(f"{out}: {len(days)} days, {days[0]['date']} -> {days[-1]['date']}", file=sys.stderr)
 
 
 if __name__ == "__main__":
