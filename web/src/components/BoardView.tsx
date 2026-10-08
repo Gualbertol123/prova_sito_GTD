@@ -8,6 +8,7 @@ import { QuickAdd } from "./QuickAdd";
 import { MembersBar } from "./MembersBar";
 import { PriorityDistribution } from "./PriorityDistribution";
 import { ListView } from "./ListView";
+import { MenuBar } from "./MenuBar";
 import {
   readHidden,
   writeHidden,
@@ -551,6 +552,9 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
               </div>
             )}
           </div>
+
+          {/* The canteen menu — today and the next days (lib/menu.ts) */}
+          <MenuBar />
         </>
       )}
     </div>

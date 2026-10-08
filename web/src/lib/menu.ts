@@ -61,7 +61,13 @@ export function menuWeek(menu: Menu | null, period: Period, today: string = toIS
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** The menu file, loaded only when the REPORT tab needs it; null if it cannot be loaded. */
+/** Every menu day from `today` on, in date order. */
+export function upcomingMenu(menu: Menu | null, today: string = toISODate(new Date())): MenuDay[] {
+  if (!menu) return [];
+  return menu.days.filter((d) => d.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The menu file, loaded only when a view needs it; null if it cannot be loaded. */
 export async function loadMenu(): Promise<Menu | null> {
   try {
     const mod = await import("../data/menu.json");
