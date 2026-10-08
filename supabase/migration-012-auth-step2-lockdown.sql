@@ -118,8 +118,6 @@ begin
      where n.nspname = 'public' and c.relkind in ('r', 'p')
      order by c.relname
   loop
-    -- The canteen menu (migration 015) has its own, stricter read-only rule.
-    continue when t.relname = 'canteen_menu';
     perform private.lock_table(t.relname);
     if t.relname not in ('board_meta', 'tasks', 'weekly', 'reflections', 'projects',
                          'suggestions', 'personal_notes', 'reflection_access') then

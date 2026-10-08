@@ -97,10 +97,9 @@ the **login session** (Supabase access + refresh token, never the password; key
 
 ## 3. Data model (Supabase)
 
-Seven board tables in `public`, all with **RLS enabled and one policy: the logged-in
+Seven tables in `public`, all with **RLS enabled and one policy: the logged-in
 team account only** (`is_team_member()`; the anon key alone gets nothing — §11).
-All except `reflection_access` are in the `supabase_realtime` publication. An
-eighth, `canteen_menu`, is read-only for the team (below). A
+All except `reflection_access` are in the `supabase_realtime` publication. A
 `private` schema, which the website's API cannot reach, holds the team list.
 
 **`board_meta`** — one row, `id = 'main'`, holds board-wide state:
@@ -140,12 +139,6 @@ not work any more.
 **`private.team_accounts`** — the Supabase Auth user id(s) allowed to use the
 board.
 
-**`canteen_menu`** — one row per day of the canteen's menu (REPORT → MENU):
-`day` (primary key), `venue`, `courses` (jsonb: `[{course, items: [{name,
-allergens}]}]`), `updated_at`. The team can only **read** it, and only today
-onwards (Italian time); it is filled from the SQL Editor once a month (§5).
-Not in realtime.
-
 SQL files in `supabase/`:
 
 - `schema.sql` — the **complete** schema for a fresh, empty project (all
@@ -171,8 +164,6 @@ SQL files in `supabase/`:
 - `migration-011-auth-step1.sql` — **real login, step 1 (additive).** Team
   list, bcrypt-hashed Reflection/Tracking passwords, the password functions and
   the admin tools. The old site keeps working after it. See §11.
-- `migration-015-canteen-menu.sql` — adds the `canteen_menu` table for the
-  report's MENU section (team read-only, today onwards). Safe on live data.
 - `migration-014-remove-ideas-tracking.sql` — **deletes** the data of the
   removed IDEE and TRACKING tabs: the `suggestions` table and the Tracking
   password (its hash and the two functions). Counts the rows of every other
@@ -211,10 +202,10 @@ prova_sito_GTD/
 │   ├── migration-006-reflection-access.sql … migration-010-personal-notes.sql
 │   ├── migration-011-auth-step1.sql          ← real login, step 1 (additive)
 │   ├── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
-│   └── migration-013 … migration-015-canteen-menu.sql
-├── menu/                        ← the canteen menu: monthly PDF → SQL (§5, menu/README.md)
+│   └── migration-013-report-projects.sql · migration-014-remove-ideas-tracking.sql
+├── menu/                        ← the canteen menu: monthly PDF → web/src/data/menu.json (§5)
 │   ├── menu_from_pdf.py
-│   └── private/                 ← the PDF and SQL go here; never committed
+│   └── README.md
 └── web/                          ← the entire frontend (Vite root)
     ├── index.html                ← HTML shell (fonts, noindex meta, #root)
     ├── package.json              ← deps: react, react-dom, @supabase/supabase-js, fflate, @react-pdf/renderer (server PDF), @fontsource-variable/inter (screen), @fontsource/inter (PDF)
@@ -369,7 +360,7 @@ function unbundled (`external_node_modules` in `netlify.toml`).
 
 **Netlify needs** the existing `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_ANON_KEY` variables to be available to **Functions** too (the
-default "All scopes"); the functions use them to check the login.
+default "All scopes"); the function uses them to check the login.
 
 ### Canteen menu — updated once a month
 
@@ -378,21 +369,17 @@ Monday–Friday across). To update it:
 
 ```bash
 pip install pymupdf
-python3 -I menu/menu_from_pdf.py menu/private/Menu.pdf   # → menu/private/menu-update-<first day>.sql
+python3 -I menu/menu_from_pdf.py Menu.pdf     # updates web/src/data/menu.json
 ```
 
-then run that `.sql` file in **Supabase → SQL Editor**. Everything in
-`menu/private/` stays on your computer (`.gitignore`): this repository is public, the
-menu is not. The script reads each cell from the table's grid lines (so a dish
-that wraps over two lines stays one dish), splits off the allergen numbers and
-leaves out every day before today; the SQL **deletes every past day** already
-in the table and replaces days that are in the new PDF, so running it twice is
-harmless. Nothing to deploy: the REPORT tab reads the table on its next load.
-
-The menu lives in `public.canteen_menu` (migration 015), one row per day.
-Only the team account can read it and nobody can write it from the website;
-its rule only returns today and later (Italian time), so a past day never
-reaches the browser even before the next update deletes it.
+then commit `web/src/data/menu.json` and deploy. The script reads each cell
+from the table's grid lines (so a dish that wraps over two lines stays one
+dish, even when the next line starts with a capital, as in "alla / Milanese"),
+splits off the allergen numbers, **drops every day before today** (from the
+PDF and from what the file already holds) and replaces the days that are in
+the new PDF, so running it twice is harmless. The REPORT tab loads the file
+only when it opens, and shows the days of the week ahead from today on. The
+menu is not confidential, so it is fine that it is in this public repository.
 
 ### Word (classic template)
 

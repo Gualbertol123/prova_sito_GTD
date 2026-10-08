@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-"""Turn the canteen's monthly menu PDF into the SQL that loads it into Supabase.
+"""Turn the canteen's monthly menu PDF into web/src/data/menu.json.
 
-    python3 -I menu/menu_from_pdf.py menu/private/Menu.pdf [--today YYYY-MM-DD] [--out FILE]
-
-Writes menu/private/menu-update-<first day>.sql; run it in Supabase -> SQL
-Editor (after migration 015). menu/private/ is never committed (.gitignore):
-the repository is public, the menu is not. See menu/README.md.
+    python3 -I menu/menu_from_pdf.py Menu.pdf [--today YYYY-MM-DD]
 
 Each PDF page is one week: a grid with the courses down the left and
 Monday-Friday across. The cells are read from the grid lines, so a dish that
-wraps over several lines stays one dish. Days before --today (default: today)
-are left out, and the SQL deletes every past day already in the table; days
-in the PDF replace the same days in the table, so running it twice is harmless.
+wraps over several lines stays one dish. Every day before --today (default:
+today) is dropped, from the PDF and from what menu.json already holds; days in
+the PDF replace the same days in the file, so running it twice is harmless.
+Commit the new menu.json and deploy. See menu/README.md.
 
 Needs PyMuPDF (pip install pymupdf).
 """
@@ -24,8 +21,7 @@ import sys
 
 import pymupdf
 
-# Where the monthly PDF and the SQL go: ignored by git.
-PRIVATE = pathlib.Path(__file__).resolve().parent / "private"
+OUT = pathlib.Path(__file__).resolve().parent.parent / "web" / "src" / "data" / "menu.json"
 
 
 # Course label in the PDF (lower case, spaces squeezed) -> key used by the site.
@@ -147,47 +143,29 @@ def parse_week(page):
     return days
 
 
-def sql_text(s):
-    return "'" + s.replace("'", "''") + "'"
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pdf")
     ap.add_argument("--today", default=dt.date.today().isoformat())
-    ap.add_argument("--out", help="default: menu/private/menu-update-<first day>.sql")
+    ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args()
 
+    out = pathlib.Path(a.out)
+    old = json.loads(out.read_text()) if out.exists() else {"days": []}
+    by_date = {d["date"]: d for d in old.get("days", [])}
     doc = pymupdf.open(a.pdf)
     venue = squeeze(doc[0].get_text().splitlines()[0])
-    days = [d for page in doc for d in parse_week(page) if d["courses"] and d["date"] >= a.today]
-    days.sort(key=lambda d: d["date"])
+    for page in doc:
+        for day in parse_week(page):
+            if day["courses"]:
+                by_date[day["date"]] = day
+    days = [by_date[k] for k in sorted(by_date) if k >= a.today]  # the past menu goes
     if not days:
-        raise SystemExit("No day from --today on in this PDF: nothing to load.")
-
-    out = pathlib.Path(a.out) if a.out else PRIVATE / f"menu-update-{days[0]['date']}.sql"
+        raise SystemExit("No day from --today on: nothing to write.")
+    # One day per line, so a monthly update reads well in a diff.
+    body = ",\n".join("  " + json.dumps(d, ensure_ascii=False) for d in days)
     out.parent.mkdir(parents=True, exist_ok=True)
-    rows = ",\n".join(
-        "  (%s, %s, %s::jsonb)" % (sql_text(d["date"]), sql_text(venue), sql_text(json.dumps(d["courses"], ensure_ascii=False)))
-        for d in days
-    )
-    sql = f"""-- Canteen menu {days[0]['date']} -> {days[-1]['date']} ({len(days)} days), from {pathlib.Path(a.pdf).name}.
--- Run in Supabase -> SQL Editor. Made by menu/menu_from_pdf.py; do not commit.
-begin;
-
--- The past menu goes.
-delete from public.canteen_menu where day < (now() at time zone 'Europe/Rome')::date;
-
-insert into public.canteen_menu (day, venue, courses) values
-{rows}
-on conflict (day) do update
-   set venue = excluded.venue, courses = excluded.courses, updated_at = now();
-
-commit;
-
-select min(day) as first_day, max(day) as last_day, count(*) as days from public.canteen_menu;
-"""
-    out.write_text(sql)
+    out.write_text('{\n "venue": %s,\n "days": [\n%s\n ]\n}\n' % (json.dumps(venue, ensure_ascii=False), body))
     print(f"{out}: {len(days)} days, {days[0]['date']} -> {days[-1]['date']}", file=sys.stderr)
 
 

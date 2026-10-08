@@ -7,8 +7,7 @@ import type { ReportDoc } from "../lib/reportDoc";
 import { supabase } from "../lib/supabaseClient";
 import { shortDate } from "../lib/dates";
 import { clearReportDraft, purgeReportDrafts, readReportDraft } from "../lib/prefs";
-import { menuWeek, type Menu } from "../lib/menu";
-import { fetchMenu } from "../lib/db";
+import { loadMenu, menuWeek, type Menu } from "../lib/menu";
 import "@fontsource-variable/inter";
 import "../styles/glassReport.css";
 
@@ -74,12 +73,12 @@ export function ReportView({ board, send }: Props) {
   );
   const data = useMemo(() => collectReport(board, period), [board, period]);
 
-  // The canteen menu (lib/menu.ts, read by fetchMenu). Without it the MENU section just says it
-  // is not available.
+  // The canteen menu (lib/menu.ts, src/data/menu.json). Without it the MENU
+  // section just says it is not available.
   const [menu, setMenu] = useState<Menu | null>(null);
   useEffect(() => {
     let alive = true;
-    fetchMenu().then((m) => alive && setMenu(m));
+    loadMenu().then((m) => alive && setMenu(m));
     return () => {
       alive = false;
     };

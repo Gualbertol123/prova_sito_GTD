@@ -1,6 +1,4 @@
 import { supabase } from "./supabaseClient";
-import { toISODate } from "./dates";
-import type { Menu, MenuDay } from "./menu";
 import type { Board, PersonalNote, Op, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
@@ -552,24 +550,3 @@ async function must<T extends { error: unknown }>(p: PromiseLike<T>): Promise<T>
 }
 
 export { EMPTY_WEEKLY };
-
-// ---- Canteen menu (REPORT → MENU) -------------------------------------------
-
-/** The canteen menu from today on; null when it cannot be read (e.g. migration 015 not run yet). */
-export async function fetchMenu(): Promise<Menu | null> {
-  try {
-    const { data, error } = await supabase
-      .from("canteen_menu")
-      .select("day, venue, courses")
-      .gte("day", toISODate(new Date()))
-      .order("day", { ascending: true });
-    if (error || !data) return null;
-    const rows = data as { day: string; venue: string | null; courses: MenuDay["courses"] | null }[];
-    return {
-      venue: rows.find((r) => r.venue)?.venue ?? "",
-      days: rows.map((r) => ({ date: r.day, courses: Array.isArray(r.courses) ? r.courses : [] })),
-    };
-  } catch {
-    return null;
-  }
-}

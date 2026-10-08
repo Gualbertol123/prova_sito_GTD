@@ -5,11 +5,9 @@ import { toISODate } from "./dates";
 // -----------------------------------------------------------------------------
 // The canteen menu, for the report's MENU section.
 //
-// The menu comes as a monthly PDF; menu/menu_from_pdf.py turns it into SQL
-// that is run in Supabase, into public.canteen_menu (migration 015). Only the
-// logged-in team can read that table (fetchMenu in db.ts), nobody can write
-// it from the website, and its rule only lets today and later through: a past
-// day never comes back.
+// The menu comes as a monthly PDF; menu/menu_from_pdf.py turns it into
+// src/data/menu.json (days before the update are dropped; menuWeek also skips
+// any day already past).
 // -----------------------------------------------------------------------------
 
 export type CourseKey =
@@ -61,4 +59,15 @@ export function menuWeek(menu: Menu | null, period: Period, today: string = toIS
   return menu.days
     .filter((day) => day.date >= from && day.date <= to && day.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The menu file, loaded only when the REPORT tab needs it; null if it cannot be loaded. */
+export async function loadMenu(): Promise<Menu | null> {
+  try {
+    const mod = await import("../data/menu.json");
+    const menu = (mod.default ?? mod) as Menu;
+    return Array.isArray(menu.days) ? menu : null;
+  } catch {
+    return null;
+  }
 }

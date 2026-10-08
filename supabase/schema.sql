@@ -193,22 +193,6 @@ select private.lock_table(t) from unnest(array[
   'personal_notes', 'reflection_access'
 ]) as t;
 
--- The canteen menu (REPORT → MENU): read-only for the team, and only today
--- onwards; filled monthly from the SQL Editor (menu/menu_from_pdf.py).
-create table if not exists public.canteen_menu (
-  day        date primary key,
-  venue      text not null default '',
-  courses    jsonb not null default '[]'::jsonb,  -- [{course, items: [{name, allergens: [int]}]}]
-  updated_at timestamptz not null default now()
-);
-alter table public.canteen_menu enable row level security;
-revoke all on table public.canteen_menu from public, anon, authenticated;
-grant select on table public.canteen_menu to authenticated;
-drop policy if exists "team reads the menu, today onwards" on public.canteen_menu;
-create policy "team reads the menu, today onwards" on public.canteen_menu
-  for select to authenticated
-  using ((select public.is_team_member()) and day >= (now() at time zone 'Europe/Rome')::date);
-
 alter default privileges for role postgres in schema public revoke all on tables    from anon;
 alter default privileges for role postgres in schema public revoke all on sequences from anon;
 alter default privileges for role postgres in schema public revoke all on functions from anon;
