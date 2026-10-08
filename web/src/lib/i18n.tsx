@@ -34,8 +34,6 @@ const IT: Dict = {
   "tabs.projects": "PROGETTI",
   "tabs.calendario": "CALENDARIO",
   "tabs.reflection": "RIFLESSIONE",
-  "tabs.tracking": "TRACKING 🔒",
-  "tabs.suggestions": "IDEE",
   "tabs.settings": "IMPOSTAZIONI",
 
   "filters.title": "Filtri",
@@ -265,18 +263,6 @@ const IT: Dict = {
   "weekly.recapByOwner": "Per assegnatario",
   "weekly.subtasksDone": "sotto-attività",
 
-  "track.title": "Tracking",
-  "track.prompt": "Inserisci la password per il monitoraggio del carico del team.",
-  "track.password": "Password",
-  "track.enter": "Entra",
-  "track.wrong": "Password errata.",
-  "track.help": "Tracking: carico di lavoro per membro (task attivi, esclusi DONE).",
-  "track.ok": "Ok",
-  "track.high": "Carico alto",
-  "track.over": "Sovraccarico",
-  "track.active": "Attivi",
-  "track.inProgress": "In corso",
-  "track.waiting": "Waiting",
 
 
   "mail.title": "Aggiornamento via mail",
@@ -288,19 +274,6 @@ const IT: Dict = {
   "mail.copied": "Copiato ✓",
   "mail.subject": "aggiornamento",
 
-  "sugg.title": "Idee per migliorare il sito",
-  "sugg.intro": "Proposte anonime: non viene salvato né il nome né alcun riferimento a chi scrive. Scrivi liberamente cosa cambieresti.",
-  "sugg.placeholder": "Cosa miglioreresti? Un'idea alla volta…",
-  "sugg.send": "Invia in anonimo",
-  "sugg.sent": "Grazie! Idea inviata ✓",
-  "sugg.none": "Ancora nessuna idea. Scrivi la prima.",
-  "sugg.count": "{n} idee",
-  "sugg.count1": "1 idea",
-  "sugg.mine": "La tua",
-  "sugg.delete": "Elimina",
-  "sugg.confirmDelete": "Eliminare questa idea?",
-  "sugg.anon": "Anonimo",
-  "sugg.privacy": "Nessun nome, nessun indirizzo, nessun orario di login viene registrato. Solo il testo e la data.",
   "assign.title": "Assegnata a",
   "assign.edit": "Cambia chi se ne occupa",
   "assign.hintMulti": "Puoi selezionare pi\u00f9 persone",
@@ -326,11 +299,6 @@ const IT: Dict = {
   "notes.unavailable": "Le note non si caricano dal server.",
   "notes.migrationNote": "Le note personali richiedono la migrazione \u2018migration-010-personal-notes.sql\u2019 su Supabase.",
 
-  "sugg.unavailable": "Le idee non si caricano dal server: l\u2019elenco qui sotto pu\u00f2 essere incompleto o vuoto anche se qualcuno ha gi\u00e0 scritto.",
-  "sugg.failed": "Non salvata \u2014 riprova",
-  "sugg.placeholderOff": "Invio non disponibile finch\u00e9 il server non risponde.",
-  "sugg.noneUnavailable": "Impossibile leggere le idee dal server.",
-  "sugg.migrationNote": "Le idee richiedono la migrazione 'migration-008-suggestions.sql' su Supabase.",
 
   "tree.title": "Albero prodotti \u00b7 Corporate, PMI & Small Business",
   "tree.intro": "Tassonomia consolidata del pacchetto di reporting: ogni prodotto compare una volta sola, raggruppato per famiglia, con i tag che indicano su quale template \u00e8 riportato. Apri un ramo per vedere cosa contiene, cerca un prodotto, oppure filtra per tag.",
@@ -462,10 +430,6 @@ const IT: Dict = {
   "projects.addItem": "Aggiungi voce…",
   "projects.items": "Voci",
 
-  "track.reflections": "Riflessioni del team",
-  "track.reflAll": "Tutti",
-  "track.reflNone": "Nessuna riflessione registrata.",
-  "track.reflEmptyMember": "Nessuna riflessione per questo membro.",
 
   "common.close": "Chiudi",
 };
@@ -498,8 +462,6 @@ const EN: Dict = {
   "tabs.projects": "PROJECTS",
   "tabs.calendario": "CALENDAR",
   "tabs.reflection": "REFLECTION",
-  "tabs.tracking": "TRACKING 🔒",
-  "tabs.suggestions": "IDEAS",
   "tabs.settings": "SETTINGS",
 
   "filters.title": "Filters",
@@ -729,18 +691,6 @@ const EN: Dict = {
   "weekly.recapByOwner": "By owner",
   "weekly.subtasksDone": "subtasks",
 
-  "track.title": "Tracking",
-  "track.prompt": "Enter the password to view team workload monitoring.",
-  "track.password": "Password",
-  "track.enter": "Enter",
-  "track.wrong": "Wrong password.",
-  "track.help": "Tracking: workload per member (active tasks, DONE excluded).",
-  "track.ok": "OK",
-  "track.high": "High load",
-  "track.over": "Overloaded",
-  "track.active": "Active",
-  "track.inProgress": "In progress",
-  "track.waiting": "Waiting",
 
 
   "mail.title": "Mail update",
@@ -752,19 +702,6 @@ const EN: Dict = {
   "mail.copied": "Copied ✓",
   "mail.subject": "update",
 
-  "sugg.title": "Ideas to improve the site",
-  "sugg.intro": "Anonymous suggestions: no name and no reference to the author is ever stored. Say freely what you would change.",
-  "sugg.placeholder": "What would you improve? One idea at a time…",
-  "sugg.send": "Send anonymously",
-  "sugg.sent": "Thanks! Idea sent ✓",
-  "sugg.none": "No ideas yet. Write the first one.",
-  "sugg.count": "{n} ideas",
-  "sugg.count1": "1 idea",
-  "sugg.mine": "Yours",
-  "sugg.delete": "Delete",
-  "sugg.confirmDelete": "Delete this idea?",
-  "sugg.anon": "Anonymous",
-  "sugg.privacy": "No name, no address, no login time is recorded. Only the text and the date.",
   "assign.title": "Assigned to",
   "assign.edit": "Change who handles this",
   "assign.hintMulti": "You can pick more than one person",
@@ -790,11 +727,6 @@ const EN: Dict = {
   "notes.unavailable": "Notes are not loading from the server.",
   "notes.migrationNote": "Personal notes require the \u2018migration-010-personal-notes.sql\u2019 migration on Supabase.",
 
-  "sugg.unavailable": "Ideas are not loading from the server: the list below may be incomplete or empty even if people have already written some.",
-  "sugg.failed": "Not saved \u2014 try again",
-  "sugg.placeholderOff": "Sending is unavailable until the server responds.",
-  "sugg.noneUnavailable": "The ideas could not be read from the server.",
-  "sugg.migrationNote": "Ideas require the 'migration-008-suggestions.sql' migration on Supabase.",
 
   "tree.title": "Product tree \u00b7 Corporate, SME & Small Business",
   "tree.intro": "Consolidated taxonomy of the reporting pack: each product appears once, grouped into families, with tags showing which template reports it. Open a branch to see what it contains, search for a product, or filter by tag.",
@@ -926,10 +858,6 @@ const EN: Dict = {
   "projects.addItem": "Add item…",
   "projects.items": "Items",
 
-  "track.reflections": "Team reflections",
-  "track.reflAll": "All",
-  "track.reflNone": "No reflections logged yet.",
-  "track.reflEmptyMember": "No reflections for this member.",
 
   "common.close": "Close",
 };

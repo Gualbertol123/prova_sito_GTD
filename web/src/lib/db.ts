@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, PersonalNote, Op, Project, Reflection, Suggestion, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, PersonalNote, Op, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -183,12 +183,6 @@ async function fetchProjects(): Promise<Project[]> {
   }
 }
 
-interface SuggestionRow {
-  id: string;
-  body: string;
-  created_at: number;
-}
-
 // Does tasks.assignees exist? Starts false and is only turned on by a
 // successful probe, so a write that somehow beats the first load omits the
 // column rather than failing outright.
@@ -221,8 +215,8 @@ export interface PersonalNotesResult {
   error?: string;
 }
 
-// Tolerant but not silent, for the same reason as the suggestions read: an
-// unreachable table must not look like "you have not written any notes yet".
+// Tolerant but not silent: an unreachable table must not look like
+// "you have not written any notes yet".
 async function fetchPersonalNotes(): Promise<PersonalNotesResult> {
   try {
     const { data, error } = await supabase
@@ -237,36 +231,6 @@ async function fetchPersonalNotes(): Promise<PersonalNotesResult> {
         body: r.body ?? "",
         createdAt: r.created_at,
         updatedAt: r.updated_at,
-      })),
-    };
-  } catch (e) {
-    return { list: [], error: e instanceof Error ? e.message : String(e) };
-  }
-}
-
-export interface SuggestionsResult {
-  list: Suggestion[];
-  /** Why the read failed, when it did. Undefined means the read succeeded. */
-  error?: string;
-}
-
-// Tolerant like the other late-migration reads — the board still loads if this
-// table is missing — but NOT silent. Returning a bare [] made an unreachable
-// table (migration 008 never run, or a select blocked by RLS) look exactly like
-// "nobody has posted an idea yet", so ideas could be typed in and lost with
-// nothing on screen ever saying why. The reason travels with the result now.
-async function fetchSuggestions(): Promise<SuggestionsResult> {
-  try {
-    const { data, error } = await supabase
-      .from("suggestions")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) return { list: [], error: error.message || String(error) };
-    return {
-      list: ((data ?? []) as SuggestionRow[]).map((r) => ({
-        id: r.id,
-        body: r.body ?? "",
-        createdAt: r.created_at,
       })),
     };
   } catch (e) {
@@ -296,7 +260,6 @@ export async function fetchBoard(): Promise<Board> {
     weekly,
     reflectionList,
     projectList,
-    suggestionsRes,
     notesRes,
     assignees,
   ] = await Promise.all([
@@ -305,7 +268,6 @@ export async function fetchBoard(): Promise<Board> {
     supabase.from("weekly").select("*").order("created_at", { ascending: true }),
     fetchReflections(),
     fetchProjects(),
-    fetchSuggestions(),
     fetchPersonalNotes(),
     probeAssignees(),
   ]);
@@ -338,8 +300,6 @@ export async function fetchBoard(): Promise<Board> {
     weekly: weeklyGrouped,
     reflections: reflectionList,
     projects: projectList,
-    suggestions: suggestionsRes.list,
-    suggestionsError: suggestionsRes.error,
     personalNotes: notesRes.list,
     personalNotesError: notesRes.error,
     assigneesAvailable: assignees,
@@ -557,15 +517,6 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
         supabase.from("projects").update({ report_hidden: op.hidden, updated_at: Date.now() }).eq("id", op.id)
       );
       break;
-    case "suggestionAdd":
-      await must(
-        supabase.from("suggestions").insert({
-          id: op.suggestion.id,
-          body: op.suggestion.body,
-          created_at: op.suggestion.createdAt,
-        })
-      );
-      break;
     case "noteAdd":
       await must(
         supabase.from("personal_notes").insert({
@@ -587,9 +538,6 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       break;
     case "noteDelete":
       await must(supabase.from("personal_notes").delete().eq("id", op.id));
-      break;
-    case "suggestionDelete":
-      await must(supabase.from("suggestions").delete().eq("id", op.id));
       break;
   }
 }

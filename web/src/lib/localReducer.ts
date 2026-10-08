@@ -18,7 +18,6 @@ export function applyOpLocal(board: Board, op: Op): Board {
     members: [...board.members],
     reflections: [...(board.reflections ?? [])],
     projects: [...(board.projects ?? [])],
-    suggestions: [...(board.suggestions ?? [])],
     personalNotes: [...(board.personalNotes ?? [])],
     updatedAt: now,
   };
@@ -143,9 +142,6 @@ export function applyOpLocal(board: Board, op: Op): Board {
     case "projectDelete":
       b.projects = b.projects.filter((p) => p.id !== op.id);
       break;
-    case "suggestionAdd":
-      b.suggestions = [op.suggestion, ...b.suggestions];
-      break;
     case "noteAdd":
       b.personalNotes = [op.note, ...b.personalNotes];
       break;
@@ -156,9 +152,6 @@ export function applyOpLocal(board: Board, op: Op): Board {
       break;
     case "noteDelete":
       b.personalNotes = b.personalNotes.filter((nt) => nt.id !== op.id);
-      break;
-    case "suggestionDelete":
-      b.suggestions = b.suggestions.filter((s) => s.id !== op.id);
       break;
   }
 

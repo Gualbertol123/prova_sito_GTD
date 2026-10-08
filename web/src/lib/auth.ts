@@ -8,7 +8,7 @@ import { clearLoginState, writeAuth } from "./prefs";
 // holds a password it did not just receive from the person typing it:
 //   - the team login is a real Supabase Auth account (one shared e-mail, set
 //     at build time), so the database only answers to a logged-in session;
-//   - the Reflection and Tracking passwords are bcrypt hashes checked by
+//   - the Reflection passwords are bcrypt hashes checked by
 //     database functions (supabase/migration-011-auth-step1.sql).
 
 /** Machine-readable outcome, turned into a sentence by the caller (i18n). */
@@ -151,11 +151,6 @@ export function reflectionLogin(member: string, password: string): Promise<AuthO
 /** Change a member's Reflection password (needs the current one). */
 export function reflectionChangePassword(member: string, current: string, next: string): Promise<AuthOutcome> {
   return rpcResult("reflection_change_password", { p_member: member, p_current: current, p_new: next });
-}
-
-/** Check the Tracking tab password on the server. */
-export function trackingLogin(password: string): Promise<AuthOutcome> {
-  return rpcResult("tracking_login", { p_password: password });
 }
 
 // Ask the login gate to re-check the session now (e.g. after a request was

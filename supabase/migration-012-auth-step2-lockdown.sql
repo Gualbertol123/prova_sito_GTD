@@ -293,12 +293,17 @@ begin
 end;
 $$;
 
+-- (Only while the Tracking password exists: migration 014 removes it.)
+do $outer$
+begin
+  if to_regclass('private.app_secrets') is not null then
+    execute $create$
 create or replace function private.admin_set_tracking_password(p_new text)
 returns text
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $fn$
 begin
   if p_new is null or length(p_new) < 1 or octet_length(p_new) > 72 then
     raise exception 'Give a password of up to 72 characters.';
@@ -312,16 +317,17 @@ begin
          updated_at      = now();
   return 'Tracking password changed.';
 end;
-$$;
+$fn$;
+    $create$;
+    revoke all on function private.admin_set_tracking_password(text) from public, anon, authenticated;
+  end if;
+end $outer$;
 
 revoke all on function private.admin_remove_team_account(text)                  from public, anon, authenticated;
 revoke all on function private.admin_set_team_password(text, boolean, text)     from public, anon, authenticated;
 revoke all on function private.admin_set_reflection_password(text, text)        from public, anon, authenticated;
-revoke all on function private.admin_set_tracking_password(text)                from public, anon, authenticated;
 
 commit;
 
--- After this, change the passwords that were readable before today:
---   select private.admin_set_tracking_password('a new password');
--- and have every member change their Reflection password (Reflection tab →
+-- After this, have every member change their Reflection password (Reflection tab →
 -- "Your password"). See README §11.

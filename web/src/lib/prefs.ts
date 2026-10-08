@@ -12,7 +12,6 @@ const KEYS = {
   reviewed: "gtd-reviewed",
   prio: "gtd-prio-collapsed",
   reflauth: "gtd-refl-auth",
-  mysugg: "gtd-my-suggestions",
   reflpane: "gtd-reflection-pane",
   skin: "gtd-skin",
   appearance: "gtd-appearance",
@@ -139,19 +138,6 @@ export function readReviewedToday(date: string): Set<string> {
 }
 export function writeReviewedToday(date: string, ids: string[]): void {
   writePref("reviewed", JSON.stringify({ date, ids }));
-}
-
-// Ids of the suggestions posted from THIS browser. Suggestions are anonymous —
-// the server stores no author — so this local list is the only thing that lets
-// someone delete their own. It never leaves the device.
-export function readMySuggestions(): string[] {
-  return readJson<string[]>("mysugg", []).filter((x) => typeof x === "string");
-}
-export function addMySuggestion(id: string): void {
-  writePref("mysugg", JSON.stringify([...readMySuggestions(), id]));
-}
-export function removeMySuggestion(id: string): void {
-  writePref("mysugg", JSON.stringify(readMySuggestions().filter((x) => x !== id)));
 }
 
 function readJson<T>(key: keyof typeof KEYS, fallback: T): T {

@@ -22,7 +22,7 @@ full file map, how to run and deploy it, and how to extend it.
 
 | Tab | What it does |
 | --- | --- |
-| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: assignees, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose assignees/priority/status/due up front); search + owner/priority/Focus-P1 filters. A task can be held by **one person or several** — open the assignee pill to tick names; the first one stays the `owner` column, so filters, the tracking view and the weekly recap all count a shared task for everyone on it. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
+| **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: assignees, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose assignees/priority/status/due up front); search + owner/priority/Focus-P1 filters. A task can be held by **one person or several** — open the assignee pill to tick names; the first one stays the `owner` column, so filters and the weekly recap all count a shared task for everyone on it. A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
 | **PROJECTS** | A sidebar of projects; each project is a simple checklist of items with the same interaction as the Kanban subtasks (add, tick, inline-edit, drag-reorder, delete, progress bar). Create / rename / delete projects inline. |
 | **WEEKLY** | Weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **REPORT** | Builds the weekly report as **A4 pages in Liquid Glass** (light mode) right in the tab (see §5): a cover with the week's numbers, then Done, Next, Projects, the Planner and the weekly retro. Click any text on the pages to edit it; hover a card and press × to leave it out; **Download PDF** saves exactly what is on screen. The old Intesa Sanpaolo Word template is still one click away as **Word (classic template)**. |
@@ -89,7 +89,6 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-session` | the Supabase Auth session (tokens, not the password) |
 | `gtd-auth` | when this device's login ends `{exp}` (Settings → login duration) |
 | `gtd-refl-auth` | per-member Reflection login cache (`member → expiry \| "never"`) |
-| `gtd-my-suggestions` | ids of the anonymous ideas posted from this browser |
 | `gtd-report-draft:<period>` | that week's report edits, kept 7 days; removed on logout |
 | `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
 | `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
@@ -98,11 +97,10 @@ the **login session** (Supabase access + refresh token, never the password; key
 
 ## 3. Data model (Supabase)
 
-Eight tables in `public`, all with **RLS enabled and one policy: the logged-in
+Seven tables in `public`, all with **RLS enabled and one policy: the logged-in
 team account only** (`is_team_member()`; the anon key alone gets nothing — §11).
 All except `reflection_access` are in the `supabase_realtime` publication. A
-`private` schema, which the website's API cannot reach, holds the team list and
-the Tracking password hash.
+`private` schema, which the website's API cannot reach, holds the team list.
 
 **`board_meta`** — one row, `id = 'main'`, holds board-wide state:
 `board_name`, `members text[]`, `subtitle_it`, `subtitle_en`, `login_days`
@@ -139,10 +137,7 @@ not work any more.
 `updated_at`.
 
 **`private.team_accounts`** — the Supabase Auth user id(s) allowed to use the
-board. **`private.app_secrets`** — the Tracking password hash.
-
-**`suggestions`** — one row per anonymous idea: `id`, `body`, `created_at`.
-Deliberately **no author column**.
+board.
 
 SQL files in `supabase/`:
 
@@ -169,6 +164,10 @@ SQL files in `supabase/`:
 - `migration-011-auth-step1.sql` — **real login, step 1 (additive).** Team
   list, bcrypt-hashed Reflection/Tracking passwords, the password functions and
   the admin tools. The old site keeps working after it. See §11.
+- `migration-014-remove-ideas-tracking.sql` — **deletes** the data of the
+  removed IDEE and TRACKING tabs: the `suggestions` table and the Tracking
+  password (its hash and the two functions). Counts the rows of every other
+  table before and after and rolls back if any changed.
 - `migration-013-report-projects.sql` — adds `projects.report_hidden`: a
   project taken off the weekly report with its × stays off every later report
   until put back from REPORT → **Progetti esclusi**.
@@ -225,7 +224,7 @@ prova_sito_GTD/
         │   ├── constants.ts      ← statuses, priorities, tabs, weekly columns (no passwords)
         │   ├── supabaseConfig.ts ← URL + anon key + team e-mail (env or placeholder)
         │   ├── supabaseClient.ts ← createClient; the login session is kept in localStorage
-        │   ├── auth.ts           ← team login/logout/password change + Reflection/Tracking checks
+        │   ├── auth.ts           ← team login/logout/password change + Reflection checks
         │   ├── db.ts             ← row<->type mapping, fetchBoard, seedIfEmpty, writeOp
         │   ├── localReducer.ts   ← applyOpLocal (optimistic in-memory updates)
         │   ├── useBoard.ts       ← load + realtime + poll + optimistic send()  (core hook)
@@ -259,8 +258,6 @@ prova_sito_GTD/
             ├── CalendarView.tsx  ← month grid + left detail panel
             ├── WeeklyView.tsx    ← recap + 5 retro columns
             ├── DailyReflection.tsx ← reflection form + recent + spaced review
-            ├── TrackingView.tsx  ← password-gated workload monitor
-            ├── SuggestionsView.tsx ← anonymous improvement ideas
             ├── SettingsView.tsx  ← branding upload, team password change, login duration
             └── MailModal.tsx     ← mail-update text generator
 ```
@@ -396,7 +393,7 @@ project set up as in §7 / §11 and log in with the team password.
    sign up". **Authentication → Users → Add user → Create new user**: the team
    e-mail + a strong team password, tick **Auto Confirm User**.
 3. **SQL Editor → New query** → paste **all** of `supabase/schema.sql`, put the
-   team e-mail and a Tracking password on its last lines → **Run**.
+   team e-mail on its last line → **Run**.
    For an existing project with data, follow §11 instead.
 4. **Project Settings → API** → copy the **Project URL** and the **anon public**
    key.
@@ -580,9 +577,9 @@ React mounts so the first frame is already the right skin.
   checks that the login session still exists, so an account created by mistake
   gets nothing, and a logged-out or reset session is refused at once. The anon
   key in the site's code is therefore harmless on its own.
-- **Reflection and Tracking passwords are bcrypt hashes** checked by database
-  functions (`reflection_login`, `reflection_change_password`,
-  `tracking_login`), callable only by the logged-in team account. Five wrong
+- **Reflection passwords are bcrypt hashes** checked by database
+  functions (`reflection_login`, `reflection_change_password`),
+  callable only by the logged-in team account. Five wrong
   tries in a row lock that password for 5 minutes. None of them is in the code.
 - **Sessions.** A device stays logged in for Settings → *Login duration* days
   (the Supabase session is kept in `localStorage`, refreshed automatically);
@@ -613,8 +610,8 @@ Keep:
 Leave OFF (the app does not support them and nobody could log in): **CAPTCHA**
 (Attack Protection), **MFA** on the team user, **single session per user**.
 
-The Security Advisor will warn that `is_team_member`, `reflection_login`,
-`reflection_change_password` and `tracking_login` are SECURITY DEFINER
+The Security Advisor will warn that `is_team_member`, `reflection_login` and
+`reflection_change_password` are SECURITY DEFINER
 functions callable by `authenticated`; that is intended — each one checks the
 team login itself.
 
@@ -638,8 +635,7 @@ Table Editor → each table → **Export → CSV** (works on the free plan).
    `VITE_TEAM_EMAIL` = that e-mail. Then deploy the new code (push to the
    deployed branch, or *Deploys → Trigger deploy*).
 5. Open the site, log in with the new team password, check the board, the
-   Reflection tab (everyone's current password still works) and Tracking
-   (still `Matusalemme` until you change it in step 7).
+   Reflection tab (everyone's current password still works).
 6. **SQL Editor**: run `supabase/migration-012-auth-step2-lockdown.sql`. From
    now on **every table** is closed to everyone but the team account — it
    lists (as warnings) any extra table it closed, such as the old app's
@@ -648,8 +644,7 @@ Table Editor → each table → **Export → CSV** (works on the free plan).
    need a reload and a login.
 7. **Change the passwords that were exposed** — all of them were readable
    before this upgrade:
-   `select private.admin_set_tracking_password('new tracking password');`
-   and have **every member** change their Reflection password in the
+   have **every member** change their Reflection password in the
    Reflection tab (or reset it for them, below).
 
 If step 5 fails, nothing is lost: the database is still open as before; fix
@@ -667,7 +662,6 @@ only someone signed in to the Supabase dashboard can run them.
 | …when there is more than one team account | `select private.admin_set_team_password('new password', true, 'e-mail');` |
 | Reset a member's **Reflection** password (also unlocks it) | `select private.admin_set_reflection_password('Name', 'new password');` |
 | Put a member back on the initial password | `select private.admin_set_reflection_password('Name', 'password');` |
-| Set the **Tracking** password (also unlocks it) | `select private.admin_set_tracking_password('new password');` |
 | Allow another Auth user to use the board | `select private.admin_add_team_account('e-mail');` |
 | Stop an Auth user from using the board (not the last one) | `select private.admin_remove_team_account('e-mail');` |
 | Close a table you added | `select private.lock_table('table_name');` |

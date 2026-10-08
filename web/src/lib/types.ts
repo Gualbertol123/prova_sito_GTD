@@ -79,14 +79,6 @@ export interface Project {
   reportHidden?: boolean;
 }
 
-// An anonymous suggestion for improving the site. No author is stored anywhere
-// — the posting device keeps its own ids locally so it can delete them again.
-export interface Suggestion {
-  id: string;
-  body: string;
-  createdAt: number;
-}
-
 // A note only its author sees, kept behind the same per-member password as the
 // daily reflections. Nothing links it to a task or to the board.
 export interface PersonalNote {
@@ -98,7 +90,7 @@ export interface PersonalNote {
 }
 
 // The assembled board — the entire shared state, rebuilt from the Supabase
-// tables (board_meta + tasks + weekly + reflections + projects + suggestions)
+// tables (board_meta + tasks + weekly + reflections + projects)
 // and kept live.
 export interface Board {
   id: "board";
@@ -108,9 +100,6 @@ export interface Board {
   weekly: Weekly;
   reflections: Reflection[];
   projects: Project[];
-  suggestions: Suggestion[];
-  /** Set when the suggestions read failed, so the IDEAS tab can say why. */
-  suggestionsError?: string;
   personalNotes: PersonalNote[];
   /** Set when the personal-notes read failed, so the section can say why. */
   personalNotesError?: string;
@@ -152,8 +141,6 @@ export type Op =
   | { type: "projectUpdate"; id: string; patch: Partial<Project> }
   | { type: "projectDelete"; id: string }
   | { type: "projectReportHidden"; id: string; hidden: boolean }
-  | { type: "suggestionAdd"; suggestion: Suggestion }
-  | { type: "suggestionDelete"; id: string }
   | { type: "noteAdd"; note: PersonalNote }
   | { type: "noteUpdate"; id: string; body: string }
   | { type: "noteDelete"; id: string };

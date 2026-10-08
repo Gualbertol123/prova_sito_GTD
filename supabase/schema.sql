@@ -10,7 +10,7 @@
 --      sign up".
 --   2. Authentication → Users → Add user → Create new user: the shared team
 --      e-mail + a strong password, tick "Auto Confirm User".
---   3. Put that e-mail, and a Tracking password, on the LAST lines of this file.
+--   3. Put that e-mail on the LAST line of this file.
 -- Then: SQL Editor → New query → paste all of this → Run.
 --
 -- Result: only the team account can read or write anything; every password
@@ -99,14 +99,6 @@ create table public.projects (
 );
 create index projects_created_idx on public.projects (created_at);
 
--- One row per anonymous improvement suggestion (no author column, by design).
-create table public.suggestions (
-  id          text primary key,
-  body        text   not null default '',
-  created_at  bigint not null default 0
-);
-create index suggestions_created_idx on public.suggestions (created_at);
-
 -- One row per personal note, tagged with the member who wrote it.
 create table public.personal_notes (
   id          text primary key,
@@ -124,16 +116,6 @@ create table public.weekly (
   body        text   not null default '',       -- the item text
   created_at  bigint not null default 0
 );
-
--- Server-only secrets (the Tracking tab password), as bcrypt hashes.
-create table private.app_secrets (
-  name            text primary key,
-  password_hash   text not null,
-  failed_attempts integer not null default 0,
-  locked_until    timestamptz,
-  updated_at      timestamptz not null default now()
-);
-revoke all on table private.app_secrets from public, anon, authenticated;
 
 -- The Supabase Auth user id(s) allowed to use the board.
 create table private.team_accounts (
@@ -208,7 +190,7 @@ revoke all on function private.lock_table(text) from public, anon, authenticated
 
 select private.lock_table(t) from unnest(array[
   'board_meta', 'tasks', 'weekly', 'reflections', 'projects',
-  'suggestions', 'personal_notes', 'reflection_access'
+  'personal_notes', 'reflection_access'
 ]) as t;
 
 alter default privileges for role postgres in schema public revoke all on tables    from anon;
@@ -300,44 +282,11 @@ begin
 end;
 $$;
 
-create or replace function public.tracking_login(p_password text)
-returns text
-language plpgsql
-volatile
-security definer
-set search_path = ''
-as $$
-declare
-  s private.app_secrets%rowtype;
-begin
-  if not public.is_team_member() then
-    return 'forbidden';
-  end if;
-  select * into s from private.app_secrets where name = 'tracking' for update;
-  if not found then
-    return 'wrong';
-  end if;
-  if s.locked_until is not null and s.locked_until > now() then
-    return 'locked';
-  end if;
-  if s.password_hash = extensions.crypt(coalesce(p_password, ''), s.password_hash) then
-    update private.app_secrets set failed_attempts = 0, locked_until = null where name = 'tracking';
-    return 'ok';
-  end if;
-  update private.app_secrets
-     set failed_attempts = case when s.failed_attempts + 1 >= 5 then 0 else s.failed_attempts + 1 end,
-         locked_until    = case when s.failed_attempts + 1 >= 5 then now() + interval '5 minutes' else null end
-   where name = 'tracking';
-  return 'wrong';
-end;
-$$;
 
 revoke all on function public.reflection_login(text, text)                   from public, anon;
 revoke all on function public.reflection_change_password(text, text, text)   from public, anon;
-revoke all on function public.tracking_login(text)                           from public, anon;
 grant execute on function public.reflection_login(text, text)                 to authenticated;
 grant execute on function public.reflection_change_password(text, text, text) to authenticated;
-grant execute on function public.tracking_login(text)                         to authenticated;
 
 -- ---- Admin tools: run these from the Supabase SQL Editor only -------------
 
@@ -445,32 +394,11 @@ begin
 end;
 $$;
 
-create or replace function private.admin_set_tracking_password(p_new text)
-returns text
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if p_new is null or length(p_new) < 1 or octet_length(p_new) > 72 then
-    raise exception 'Give a password of up to 72 characters.';
-  end if;
-  insert into private.app_secrets (name, password_hash, failed_attempts, locked_until, updated_at)
-  values ('tracking', extensions.crypt(p_new, extensions.gen_salt('bf', 10)), 0, null, now())
-  on conflict (name) do update
-     set password_hash   = excluded.password_hash,
-         failed_attempts = 0,
-         locked_until    = null,
-         updated_at      = now();
-  return 'Tracking password changed.';
-end;
-$$;
 
 revoke all on function private.admin_add_team_account(text)                  from public, anon, authenticated;
 revoke all on function private.admin_remove_team_account(text)               from public, anon, authenticated;
 revoke all on function private.admin_set_team_password(text, boolean, text)  from public, anon, authenticated;
 revoke all on function private.admin_set_reflection_password(text, text)     from public, anon, authenticated;
-revoke all on function private.admin_set_tracking_password(text)             from public, anon, authenticated;
 
 -- ---- Realtime --------------------------------------------------------------
 -- Change events for the board tables (they respect the policies above).
@@ -478,14 +406,10 @@ revoke all on function private.admin_set_tracking_password(text)             fro
 
 alter publication supabase_realtime add table
   public.board_meta, public.tasks, public.weekly, public.reflections,
-  public.projects, public.suggestions, public.personal_notes;
+  public.projects, public.personal_notes;
 
 -- ---- The team account -------------------------------------------------------
 -- >>> Replace the e-mail below with the team user you created. <<<
 select private.admin_add_team_account('team@example.com');
-
--- Pick the Tracking tab password here (change it any time with the same call).
--- >>> Replace the placeholder with a password of your choice. <<<
-select private.admin_set_tracking_password('CHANGE-ME-tracking-password');
 
 commit;
