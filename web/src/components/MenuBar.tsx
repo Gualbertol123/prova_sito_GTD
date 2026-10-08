@@ -67,7 +67,7 @@ export function MenuBar() {
                       {day.courses.map((c) => (
                         <div key={c.course}>
                           <div className="text-[9.5px] font-semibold uppercase tracking-wider text-[#8B6F3E]">
-                            {t(`gr.menu.${c.course}`)}
+                            {t(`menuBar.course.${c.course}`)}
                           </div>
                           <ul className="mt-0.5 space-y-0.5">
                             {c.items.map((dish, i) => (

@@ -1,12 +1,11 @@
 import type { Board, Priority, Project, Status, Task } from "./types";
 import type { PlannerColumn, ReportData } from "./reportData";
-import type { MenuDay } from "./menu";
 
 // -----------------------------------------------------------------------------
 // The Liquid Glass weekly report: its content as a flat list of blocks.
 //
 // The report is laid out as A4 pages in HTML. Content is cut into blocks —
-// a section heading, one task card, one project, one day of the menu — and
+// a section heading, one task card, one project — and
 // GlassReport measures every block and packs them onto portrait pages, so
 // nothing is ever split across a page break. The planner is different: it is
 // always one landscape page, the four columns side by side. Like the Word report, it is
@@ -31,19 +30,16 @@ export const SECTION_COLOR: Record<SectionKey, string> = {
   next: "#007AFF",
   projects: "#5856D6",
   planner: "#AF52DE",
-  menu: "#FF2D55",
 };
 
-export type SectionKey = "done" | "next" | "projects" | "planner" | "menu";
+export type SectionKey = "done" | "next" | "projects" | "planner";
 
-export const SECTION_ORDER: SectionKey[] = ["done", "next", "projects", "planner", "menu"];
+export const SECTION_ORDER: SectionKey[] = ["done", "next", "projects", "planner"];
 
 export type Block =
   | { kind: "section"; id: string; key: SectionKey; n: number; count: number }
   | { kind: "task"; id: string; task: Task; mode: "done" | "next"; completedAt: number | null }
   | { kind: "project"; id: string; project: Project }
-  | { kind: "menuDay"; id: string; day: MenuDay }
-  | { kind: "menuNote"; id: string; venue: string }
   | { kind: "empty"; id: string; key: SectionKey };
 
 export interface CoverStats {
@@ -70,32 +66,19 @@ export interface ReportLayoutInput {
   before: Block[];
   /** The planner page's columns and its section number. */
   planner: { n: number; columns: PlannerColumn[] };
-  /** Portrait blocks after the planner: the canteen menu of the week ahead. */
+  /** Portrait blocks after the planner (none at present: the report ends with the planner). */
   after: Block[];
 }
 
-/** The menu shown after the planner: the days of the week ahead, and where. */
-export interface ReportMenu {
-  venue: string;
-  days: MenuDay[];
-}
-
 /** Everything after the cover, in reading order. Hidden block ids are left out. */
-export function buildBlocks(
-  data: ReportData,
-  hidden: Set<string>,
-  menu: ReportMenu = { venue: "", days: [] }
-): ReportLayoutInput {
+export function buildBlocks(data: ReportData, hidden: Set<string>): ReportLayoutInput {
   let n = 0;
-  // `lead` is shown under the heading when the section has cards, and is not counted.
-  const section = (key: SectionKey, body: Block[], lead: Block[] = []): Block[] => {
+  const section = (key: SectionKey, body: Block[]): Block[] => {
     n += 1;
     const visible = body.filter((b) => !hidden.has(b.id));
     return [
       { kind: "section", id: `sec.${key}`, key, n, count: visible.length },
-      ...(visible.length
-        ? [...lead.filter((b) => !hidden.has(b.id)), ...visible]
-        : [{ kind: "empty" as const, id: `empty.${key}`, key }]),
+      ...(visible.length ? visible : [{ kind: "empty" as const, id: `empty.${key}`, key }]),
     ];
   };
 
@@ -130,11 +113,7 @@ export function buildBlocks(
   ];
   n += 1;
   const planner = { n, columns: data.planner };
-  const after = section(
-    "menu",
-    menu.days.map((day) => ({ kind: "menuDay" as const, id: `menu.${day.date}`, day })),
-    menu.venue ? [{ kind: "menuNote" as const, id: "menu.note", venue: menu.venue }] : []
-  );
+  const after: Block[] = [];
   return { before, planner, after };
 }
 

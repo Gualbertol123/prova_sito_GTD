@@ -11,11 +11,9 @@ import {
   type Block,
   reportPdfName,
   type CoverStats,
-  type ReportMenu,
 } from "../lib/glassReportModel";
-import { MENU_COLUMNS } from "../lib/menu";
 import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
-import { shortDate, weekdayDate } from "../lib/dates";
+import { shortDate } from "../lib/dates";
 import { readReportDraft, writeReportDraft } from "../lib/prefs";
 
 // -----------------------------------------------------------------------------
@@ -246,55 +244,6 @@ function ProjectCard({ block, edit, onExcludeProject }: BlockProps & { block: Ex
   );
 }
 
-function MenuDayCard({ block, edit, onHide }: BlockProps & { block: Extract<Block, { kind: "menuDay" }> }) {
-  const { t, lang } = useT();
-  const { day } = block;
-  const byCourse = new Map(day.courses.map((c) => [c.course, c.items]));
-  return (
-    <div className="gr-glass gr-card">
-      <span className="gr-accent" style={{ background: SECTION_COLOR.menu }} />
-      <HideButton onHide={onHide && (() => onHide(block.id))} />
-      <Ed tag="h3" id={`${block.id}.title`} value={weekdayDate(day.date, lang)} edit={edit} className="gr-card-title" />
-      <div className="gr-menu-cols">
-        {MENU_COLUMNS.map((col, ci) => (
-          <div key={ci} className="gr-menu-col">
-            {col.map((course) => {
-              const items = byCourse.get(course);
-              if (!items?.length) return null;
-              const cid = `${block.id}.${course}`;
-              return (
-                <div key={course} className="gr-menu-course">
-                  <Ed tag="div" id={cid} value={t(`gr.menu.${course}`)} edit={edit} className="gr-eyebrow" style={{ color: SECTION_COLOR.menu }} />
-                  <ul>
-                    {items.map((dish, i) => (
-                      <li key={i}>
-                        <Ed id={`${cid}.${i}`} value={dish.name} edit={edit} />
-                        {(dish.allergens.length > 0 || edit.get(`${cid}.${i}.a`)) && (
-                          <Ed id={`${cid}.${i}.a`} value={dish.allergens.join("-")} edit={edit} className="gr-menu-allergens" />
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MenuNote({ block, edit, onHide }: BlockProps & { block: Extract<Block, { kind: "menuNote" }> }) {
-  const { t } = useT();
-  return (
-    <div className="gr-glass gr-menu-note">
-      <HideButton onHide={onHide && (() => onHide(block.id))} />
-      <Ed tag="p" id={block.id} value={t("gr.menu.note", { venue: block.venue })} edit={edit} multiline />
-    </div>
-  );
-}
-
 function SectionHead({ block, edit }: BlockProps & { block: Extract<Block, { kind: "section" }> }) {
   const { t } = useT();
   const color = SECTION_COLOR[block.key];
@@ -332,10 +281,6 @@ function BlockView(props: BlockProps) {
       return <TaskCard {...props} block={block} />;
     case "project":
       return <ProjectCard {...props} block={block} />;
-    case "menuDay":
-      return <MenuDayCard {...props} block={block} />;
-    case "menuNote":
-      return <MenuNote {...props} block={block} />;
     case "empty":
       return (
         <div className="gr-glass gr-empty">
@@ -703,8 +648,6 @@ export interface GlassReportProps {
   onDraftChange?: (hasDraft: boolean) => void;
   /** × on a project card: leave it out of this and every later report. */
   onExcludeProject?: (projectId: string) => void;
-  /** The canteen menu of the week ahead (lib/menu.ts). */
-  menu?: ReportMenu;
 }
 
 // Pack measured blocks onto pages; returns block ids per page. A section
@@ -736,7 +679,6 @@ export function GlassReport({
   draftKey,
   onDraftChange,
   onExcludeProject,
-  menu,
 }: GlassReportProps) {
   const { lang } = useT();
   // Start from this week's saved draft, if there is one.
@@ -780,7 +722,7 @@ export function GlassReport({
   const measureRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const input = useMemo(() => buildBlocks(data, hidden, menu), [data, hidden, menu]);
+  const input = useMemo(() => buildBlocks(data, hidden), [data, hidden]);
   const all = useMemo(() => [...input.before, ...input.after], [input]);
   const byId = useMemo(() => new Map(all.map((b) => [b.id, b])), [all]);
   const stats = useMemo(() => coverStats(board, data), [board, data]);

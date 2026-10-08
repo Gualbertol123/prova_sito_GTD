@@ -1,8 +1,7 @@
 # Canteen menu
 
 The BOARD's **Menu mensa** bar (below Archived) shows today and the next
-menu days, and the weekly report's **MENU** section shows next week's menu,
-both from `web/src/data/menu.json`.
+menu days, from `web/src/data/menu.json`.
 
 ## Monthly update
 

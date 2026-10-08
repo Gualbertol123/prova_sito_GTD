@@ -7,7 +7,6 @@ import {
   type Block,
   type ReportLayoutInput,
 } from "./glassReportModel";
-import { MENU_COLUMNS, type CourseKey } from "./menu";
 
 // -----------------------------------------------------------------------------
 // The weekly report as plain data, for the server-side PDF.
@@ -22,12 +21,6 @@ import { MENU_COLUMNS, type CourseKey } from "./menu";
 export interface DocSub {
   text: string;
   done: boolean;
-}
-
-/** One course of a day's menu: its label and dishes (allergens as printed, e.g. "1-7"). */
-export interface DocCourse {
-  label: string;
-  items: { text: string; allergens: string }[];
 }
 
 export type DocCard =
@@ -51,8 +44,6 @@ export type DocCard =
       items: DocSub[];
       more: string;
     }
-  | { kind: "menuDay"; accent: string; title: string; columns: DocCourse[][] }
-  | { kind: "note"; text: string }
   | { kind: "empty"; text: string };
 
 export interface DocSection {
@@ -164,29 +155,6 @@ export function buildReportDoc({ root, board, data, input, hidden, highlights, e
           items: p.items.slice(0, 10).map((i) => ({ text: txt(`${b.id}.item.${i.id}`, i.text), done: i.done })),
           more: txt(`${b.id}.more`),
         });
-      } else if (b.kind === "menuDay") {
-        const byCourse = new Map(b.day.courses.map((c) => [c.course, c.items]));
-        const column = (keys: CourseKey[]): DocCourse[] =>
-          keys
-            .filter((k) => byCourse.get(k)?.length)
-            .map((k) => {
-              const cid = `${b.id}.${k}`;
-              return {
-                label: txt(cid),
-                items: byCourse.get(k)!.map((dish, i) => ({
-                  text: txt(`${cid}.${i}`, dish.name),
-                  allergens: txt(`${cid}.${i}.a`, dish.allergens.join("-")),
-                })),
-              };
-            });
-        sec.cards.push({
-          kind: "menuDay",
-          accent: SECTION_COLOR.menu,
-          title: txt(`${b.id}.title`),
-          columns: MENU_COLUMNS.map(column),
-        });
-      } else if (b.kind === "menuNote") {
-        sec.cards.push({ kind: "note", text: txt(b.id) });
       }
     }
     return out;
