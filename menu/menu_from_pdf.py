@@ -48,7 +48,7 @@ ALLERGENS = re.compile(r"\s*((?:\d+\s*-+\s*)*\d+)\s*-?\s*$")
 
 
 def grid(page):
-    """Row bands (y) and day columns (x) from the table's ruling lines."""
+    """Row bands (y), label column edges and day columns (x) from the table's ruling lines."""
     segs = []
     for d in page.get_drawings():
         for it in d["items"]:
@@ -56,6 +56,7 @@ def grid(page):
                 segs.append(it[1])
     ys = sorted({round(r.y0) for r in segs if r.x0 < 40})  # lines that cross the label column
     first_cell = [r for r in segs if r.x0 < 40 and r.x1 < 120]
+    label_left = min(r.x0 for r in first_cell)
     label_right = min(r.x1 for r in first_cell)
     xs = sorted({round(r.x0) for r in segs if r.x0 > label_right - 2}
                 | {round(r.x1) for r in segs if r.x1 > label_right})
@@ -65,7 +66,7 @@ def grid(page):
         if round(r.y0) == ys[1] and r.x0 > label_right - 2:
             cols.append((r.x0, r.x1))
     cols.sort()
-    return ys, label_right, cols
+    return ys, label_left, label_right, cols
 
 
 def lines_in(page, rect):
@@ -118,18 +119,18 @@ def dishes(lines):
 
 def parse_week(page):
     text = page.get_text()
-    m = re.search(r"Settimana\s+(?:dal\s+)?(\d{2})/(\d{2})/(\d{4})", text)
+    m = re.search(r"Settimana\s+(?:dal\s+)?(\d{2})/+(\d{2})/+(\d{4})", text)
     if not m:
         raise SystemExit(f"page {page.number + 1}: no 'Settimana dal dd/mm/yyyy' heading")
     monday = dt.date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
     if monday.weekday() != 0:
         raise SystemExit(f"page {page.number + 1}: {monday} is not a Monday")
-    ys, label_right, cols = grid(page)
+    ys, label_left, label_right, cols = grid(page)
     if len(cols) != 5:
         raise SystemExit(f"page {page.number + 1}: expected 5 day columns, found {len(cols)}")
     days = [{"date": (monday + dt.timedelta(days=i)).isoformat(), "courses": []} for i in range(5)]
     for y0, y1 in zip(ys, ys[1:]):
-        label_rect = pymupdf.Rect(28, y0 + 0.5, label_right, y1 - 0.5)
+        label_rect = pymupdf.Rect(label_left, y0 + 0.5, label_right, y1 - 0.5)
         label = squeeze(" ".join(lines_in(page, label_rect))).lower()
         key = COURSES.get(label)
         if key is None:
