@@ -11,7 +11,9 @@ import { toISODate } from "./dates";
 export type CourseKey =
   | "daily"
   | "first"
+  | "pasta"
   | "second"
+  | "grill"
   | "sideHot"
   | "sideRaw"
   | "cold"

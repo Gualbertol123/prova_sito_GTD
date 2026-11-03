@@ -28,7 +28,9 @@ OUT = pathlib.Path(__file__).resolve().parent.parent / "web" / "src" / "data" / 
 COURSES = {
     "piatto del giorno": "daily",
     "primi": "first",
+    "pasta fresca": "pasta",
     "secondi": "second",
+    "grill": "grill",
     "contorni lavorati": "sideHot",
     "contorni caldi": "sideHot",
     "contorni freddi": "sideRaw",

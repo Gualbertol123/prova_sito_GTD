@@ -5,6 +5,7 @@ import { LangProvider } from "./lib/i18n";
 import { IdentityProvider } from "./lib/identity";
 import { AuthGate } from "./components/AuthGate";
 import { initSkin } from "./lib/skin";
+import { IdleOpener } from "./components/IdleOpener";
 import "./index.css";
 import "./styles/glass.css";
 
@@ -13,6 +14,7 @@ initSkin();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <IdleOpener />
     <LangProvider>
       <IdentityProvider>
         <AuthGate>
