@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, PersonalNote, Op, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, PersonalNote, Op, Phase, Priority, Project, ProjectStatus, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -35,6 +35,7 @@ interface TaskRow {
   done_at: number | null;
   updated_at: number;
   created_at: number;
+  project_id?: string | null; // migration 015
 }
 
 function rowToTask(r: TaskRow): Task {
@@ -52,6 +53,7 @@ function rowToTask(r: TaskRow): Task {
     waitingSince: r.waiting_since ?? undefined,
     fileDir: r.file_dir ?? undefined,
     doneAt: r.done_at ?? undefined,
+    projectId: r.project_id ?? undefined,
     updatedAt: r.updated_at,
     createdAt: r.created_at,
   };
@@ -72,6 +74,7 @@ function taskToRow(t: Task): TaskRow {
     waiting_since: t.waitingSince ?? null,
     file_dir: t.fileDir ?? null,
     done_at: t.doneAt ?? null,
+    project_id: t.projectId ?? null,
     updated_at: t.updatedAt ?? Date.now(),
     created_at: t.createdAt ?? Date.now(),
   };
@@ -94,6 +97,8 @@ function patchToRow(patch: Partial<Task>): Record<string, unknown> {
   if ("waitingSince" in patch) out.waiting_since = patch.waitingSince ?? null;
   if ("fileDir" in patch) out.file_dir = patch.fileDir ?? null;
   if ("doneAt" in patch) out.done_at = patch.doneAt ?? null;
+  // Same rule as assignees: only once migration 015 is known to be in.
+  if ("projectId" in patch && hasProjectsV2) out.project_id = patch.projectId ?? null;
   out.updated_at = Date.now();
   return out;
 }
@@ -147,7 +152,19 @@ interface ProjectRow {
   created_at: number;
   updated_at: number;
   report_hidden?: boolean | null; // migration 013
+  // migration 015
+  description?: string | null;
+  owners?: string[] | null;
+  status?: string | null;
+  priority?: string | null;
+  start_date?: string | null;
+  target_date?: string | null;
+  color?: string | null;
+  phases?: Phase[] | null;
 }
+
+const PROJECT_STATUSES: ProjectStatus[] = ["planned", "active", "onhold", "done"];
+const PRIORITIES: Priority[] = ["P1", "P2", "P3", "P4"];
 
 function rowToProject(r: ProjectRow): Project {
   return {
@@ -157,17 +174,42 @@ function rowToProject(r: ProjectRow): Project {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     reportHidden: !!r.report_hidden,
+    description: r.description ?? "",
+    owners: Array.isArray(r.owners) ? r.owners.filter(Boolean) : [],
+    status: PROJECT_STATUSES.includes(r.status as ProjectStatus) ? (r.status as ProjectStatus) : "active",
+    priority: PRIORITIES.includes(r.priority as Priority) ? (r.priority as Priority) : "P2",
+    startDate: r.start_date || undefined,
+    targetDate: r.target_date || undefined,
+    color: r.color || "",
+    phases: Array.isArray(r.phases) ? r.phases.filter((ph) => ph && typeof ph.id === "string") : [],
   };
 }
 
 function projectToRow(p: Project): ProjectRow {
-  return {
+  const row: ProjectRow = {
     id: p.id,
     name: p.name ?? "",
     items: p.items ?? [],
     created_at: p.createdAt ?? Date.now(),
     updated_at: p.updatedAt ?? Date.now(),
   };
+  if (hasProjectsV2) Object.assign(row, projectPatchToRow(p));
+  return row;
+}
+
+// The migration-015 fields of a project patch, as columns. Only called once
+// those columns are known to exist.
+function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if ("description" in patch) out.description = patch.description ?? "";
+  if ("owners" in patch) out.owners = patch.owners ?? [];
+  if ("status" in patch) out.status = patch.status ?? "active";
+  if ("priority" in patch) out.priority = patch.priority ?? "P2";
+  if ("startDate" in patch) out.start_date = patch.startDate || null;
+  if ("targetDate" in patch) out.target_date = patch.targetDate || null;
+  if ("color" in patch) out.color = patch.color ?? "";
+  if ("phases" in patch) out.phases = patch.phases ?? [];
+  return out;
 }
 
 async function fetchProjects(): Promise<Project[]> {
@@ -190,6 +232,23 @@ let hasAssignees = false;
 
 export function assigneesAvailable(): boolean {
   return hasAssignees;
+}
+
+// Has migration 015 run (project details + tasks.project_id)? Same idea as
+// hasAssignees: off until a probe proves the columns are there.
+let hasProjectsV2 = false;
+
+async function probeProjectsV2(): Promise<boolean> {
+  try {
+    const [p, t] = await Promise.all([
+      supabase.from("projects").select("status,phases").limit(1),
+      supabase.from("tasks").select("project_id").limit(1),
+    ]);
+    hasProjectsV2 = !p.error && !t.error;
+  } catch {
+    hasProjectsV2 = false;
+  }
+  return hasProjectsV2;
 }
 
 async function probeAssignees(): Promise<boolean> {
@@ -262,6 +321,7 @@ export async function fetchBoard(): Promise<Board> {
     projectList,
     notesRes,
     assignees,
+    projectsV2,
   ] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
@@ -270,6 +330,7 @@ export async function fetchBoard(): Promise<Board> {
     fetchProjects(),
     fetchPersonalNotes(),
     probeAssignees(),
+    probeProjectsV2(),
   ]);
 
   if (meta.error) throw meta.error;
@@ -303,6 +364,7 @@ export async function fetchBoard(): Promise<Board> {
     personalNotes: notesRes.list,
     personalNotesError: notesRes.error,
     assigneesAvailable: assignees,
+    projectsV2Available: projectsV2,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
@@ -333,7 +395,7 @@ export async function seedIfEmpty(): Promise<boolean> {
     );
   await supabase
     .from("tasks")
-    .upsert(seedTasks().map(taskToRow), { onConflict: "id", ignoreDuplicates: true });
+    .upsert(seedTasks().map((t) => { const { project_id: _p, ...row } = taskToRow(t); return row; }), { onConflict: "id", ignoreDuplicates: true });
   await supabase
     .from("weekly")
     .upsert(
@@ -366,6 +428,7 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       if (row.file_dir == null) delete row.file_dir;
       if (row.done_at == null) delete row.done_at;
       if (!hasAssignees || row.assignees == null) delete row.assignees;
+      if (!hasProjectsV2 || row.project_id == null) delete row.project_id;
       await must(supabase.from("tasks").insert(row));
       break;
     }
@@ -506,6 +569,7 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       const upd: Record<string, unknown> = { updated_at: Date.now() };
       if (op.patch.name !== undefined) upd.name = op.patch.name;
       if (op.patch.items !== undefined) upd.items = op.patch.items;
+      if (hasProjectsV2) Object.assign(upd, projectPatchToRow(op.patch));
       await must(supabase.from("projects").update(upd).eq("id", op.id));
       break;
     }

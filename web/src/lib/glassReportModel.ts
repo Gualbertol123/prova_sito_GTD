@@ -1,4 +1,5 @@
 import type { Board, Priority, Project, Status, Task } from "./types";
+import { projectColor, projectStats, reportProjects, type ProjectStats } from "./projects";
 import type { PlannerColumn, ReportData } from "./reportData";
 
 // -----------------------------------------------------------------------------
@@ -39,7 +40,7 @@ export const SECTION_ORDER: SectionKey[] = ["done", "next", "projects", "planner
 export type Block =
   | { kind: "section"; id: string; key: SectionKey; n: number; count: number }
   | { kind: "task"; id: string; task: Task; mode: "done" | "next"; completedAt: number | null }
-  | { kind: "project"; id: string; project: Project }
+  | { kind: "project"; id: string; project: Project; stats: ProjectStats; color: string }
   | { kind: "empty"; id: string; key: SectionKey };
 
 export interface CoverStats {
@@ -106,9 +107,13 @@ export function buildBlocks(data: ReportData, hidden: Set<string>): ReportLayout
     ...section(
       "projects",
       // Projects left out of the report (× on the card) stay out of every report.
-      data.projects
-        .filter((p) => !p.reportHidden)
-        .map((p) => ({ kind: "project" as const, id: `proj.${p.id}`, project: p }))
+      reportProjects(data.projects).map((p) => ({
+          kind: "project" as const,
+          id: `proj.${p.id}`,
+          project: p,
+          stats: projectStats(p, data.tasks),
+          color: projectColor(p),
+        }))
     ),
   ];
   n += 1;

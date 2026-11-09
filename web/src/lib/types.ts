@@ -16,6 +16,8 @@ export interface Subtask {
   text: string;
   done: boolean;
   doneAt?: number; // set when ticked, cleared when unticked — drives the weekly report
+  /** Project checklist items only: the phase this item belongs to. */
+  phaseId?: string;
 }
 
 export interface Task {
@@ -38,6 +40,8 @@ export interface Task {
   waitingSince?: string; // ISO yyyy-mm-dd
   fileDir?: string; // shared network file path
   doneAt?: number; // set when it enters DONE; drives auto-archiving
+  /** The project this task belongs to (migration 015). */
+  projectId?: string;
   updatedAt: number;
   createdAt?: number; // ordering within a column (oldest first)
 }
@@ -68,7 +72,19 @@ export interface Reflection {
   createdAt?: number;
 }
 
-// A project — simply a named checklist of items (same shape as subtasks).
+export type ProjectStatus = "planned" | "active" | "onhold" | "done";
+
+// A stage of a project. Checklist items point at it through `phaseId`.
+export interface Phase {
+  id: string;
+  name: string;
+  dueDate?: string; // ISO yyyy-mm-dd
+}
+
+// A project: details, phases, a checklist of items (same shape as subtasks),
+// and — through Task.projectId — any number of board tasks.
+// Every field after `items` needs migration 015; before it they read as
+// defaults and are not saved.
 export interface Project {
   id: string;
   name: string;
@@ -77,6 +93,15 @@ export interface Project {
   updatedAt?: number;
   /** Left out of the weekly report (from now on, until put back). */
   reportHidden?: boolean;
+  description?: string;
+  owners?: string[];
+  status?: ProjectStatus;
+  priority?: Priority;
+  startDate?: string; // ISO yyyy-mm-dd
+  targetDate?: string; // ISO yyyy-mm-dd
+  /** #rrggbb accent; empty = picked from the id. */
+  color?: string;
+  phases?: Phase[];
 }
 
 // A note only its author sees, kept behind the same per-member password as the
@@ -105,6 +130,8 @@ export interface Board {
   personalNotesError?: string;
   /** False when migration 009 has not been run: tasks stay single-assignee. */
   assigneesAvailable?: boolean;
+  /** False when migration 015 has not been run: projects are name + checklist only. */
+  projectsV2Available?: boolean;
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
   // Editable settings (nullable until the settings migration is applied).

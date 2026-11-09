@@ -66,6 +66,7 @@ export interface ReportData {
   done: ReportTask[]; // completed inside the period
   next: ReportTask[]; // current NEXT column
   projects: Project[]; // current projects, with their checklists
+  tasks: Task[]; // every board task — project progress counts linked tasks
   planner: PlannerColumn[];
   totalTasks: number; // completed in the period
   totalSubtasks: number; // subtasks completed in the period
@@ -118,6 +119,7 @@ export function collectReport(board: Board, period: Period): ReportData {
     done,
     next,
     projects: board.projects ?? [],
+    tasks: board.tasks,
     planner,
     totalTasks: done.length,
     totalSubtasks,

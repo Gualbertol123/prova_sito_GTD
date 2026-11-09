@@ -1,5 +1,6 @@
 import { unzipSync, zipSync, strToU8, strFromU8 } from "fflate";
-import type { Project, Subtask, Task } from "./types";
+import type { Project, ProjectStatus, Subtask, Task } from "./types";
+import { projectPriority, projectStats, projectStatus, reportProjects } from "./projects";
 import { STATUS_LABEL } from "./constants";
 import type { PlannerColumn, ReportData, ReportTask } from "./reportData";
 
@@ -196,6 +197,10 @@ const L = {
   noneNext: "No activity is currently scheduled as Next.",
   noneProjects: "No project is currently open.",
   noneTasks: "—",
+  target: "Target",
+  tasks: "Tasks",
+  phases: "Phases",
+  status: { planned: "Planned", active: "Active", onhold: "On hold", done: "Done" } as Record<ProjectStatus, string>,
 };
 
 // dd/mm/yyyy, as the template's own placeholder spells it.
@@ -332,7 +337,7 @@ function activityTable(items: ReportTask[], dateHeading: string, empty: string):
   return table(COLS, header + body, { borders: true }) + para("", { after: 260 });
 }
 
-function projectsTable(projects: Project[]): string {
+function projectsTable(projects: Project[], tasks: Task[]): string {
   if (projects.length === 0)
     return para(run(L.noneProjects, { i: true, color: GRAY }), { after: 260 });
   const w = [CONTENT_W - 1600, 1600];
@@ -342,20 +347,49 @@ function projectsTable(projects: Project[]): string {
   const body = projects
     .map((p) => {
       const items = p.items ?? [];
-      const done = items.filter((i) => i.done).length;
+      const s = projectStats(p, tasks);
+      // Status · priority · target · linked tasks — one grey line under the name.
+      const facts = [
+        L.status[projectStatus(p)],
+        projectPriority(p),
+        p.targetDate ? `${L.target} ${ddmmyyyy(p.targetDate)}` : "",
+        s.tasks.length ? `${L.tasks} ${s.tasksDone}/${s.tasks.length}` : "",
+      ]
+        .filter(Boolean)
+        .join("  ·  ");
+      const phases = s.phases.length
+        ? para(
+            run(`${L.phases}:  `, { b: true, sz: 16, color: GRAY }) +
+              run(
+                s.phases
+                  .map((ph) => `${ph.phase.name || "—"} ${ph.done}/${ph.total}${ph.total && ph.done === ph.total ? " ✓" : ""}`)
+                  .join("   ·   "),
+                { sz: 16 }
+              ),
+            { keepNext: true, before: 20, after: 20 }
+          )
+        : "";
       const head = row(
         cell(
           para(run(p.name || L.noneTasks, { b: true, sz: 20 }), {
             keepNext: true,
             before: 20,
-            after: 20,
-          }),
+            after: 0,
+          }) +
+            para(run(facts, { sz: 16, color: GRAY }), { keepNext: true, before: 10, after: 20 }) +
+            (p.description?.trim()
+              ? para(run(p.description.trim(), { i: true, sz: 17, color: GRAY }), {
+                  keepNext: true,
+                  before: 0,
+                  after: 20,
+                })
+              : "") +
+            phases,
           { w: w[0], vAlign: "top" }
         ) +
           cell(
-            para(run(items.length ? `${done} / ${items.length}` : "—", { sz: 18 }), {
-              jc: "center",
-            }),
+            para(run(s.total ? `${Math.round(s.share * 100)}%` : "—", { b: true, sz: 20 }), { jc: "center" }) +
+              (s.total ? para(run(`${s.done} / ${s.total}`, { sz: 16, color: GRAY }), { jc: "center" }) : ""),
             { w: w[1], vAlign: "center" }
           )
       );
@@ -449,7 +483,7 @@ function buildBody(data: ReportData, templateSectPr: string): string {
   out.push(activityTable(data.next, L.colDue, L.noneNext));
 
   out.push(sectionHeading(L.currentProjects));
-  out.push(projectsTable(data.projects));
+  out.push(projectsTable(reportProjects(data.projects), data.tasks));
 
   // Section break: page 1 keeps the template's portrait setup, the planner
   // page turns landscape so four columns actually fill the sheet.

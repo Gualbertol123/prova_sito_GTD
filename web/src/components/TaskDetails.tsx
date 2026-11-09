@@ -5,6 +5,8 @@ import { ownerInitial, ownersLabel, ownersPatch, taskOwners } from "../lib/owner
 import { priorityLabel, statusLabel, useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
 import { daysSince } from "../lib/dates";
+import { useProjects } from "../lib/projectsContext";
+import { projectColor } from "../lib/projects";
 import { AutoTextarea } from "./AutoTextarea";
 import { SortableSubtasks } from "./SortableSubtasks";
 
@@ -34,6 +36,8 @@ export function TaskDetails({
   const [confirmDel, setConfirmDel] = useState(false);
   const [newSub, setNewSub] = useState("");
   const [assignOpen, setAssignOpen] = useState(false);
+  const { projects, available: projectsOn } = useProjects();
+  const linked = task.projectId ? projects.find((p) => p.id === task.projectId) : undefined;
 
   const title = useSyncedField(task.title);
   const notes = useSyncedField(task.notes);
@@ -133,6 +137,28 @@ export function TaskDetails({
             className="bg-transparent outline-none text-[12px] text-[#0A1931]"
           />
         </label>
+
+        {projectsOn && projects.length > 0 && (
+          <label className="inline-flex items-center gap-1.5 bg-[#F5F3EF] rounded-full pl-2.5 pr-1 h-8 border border-[#E8E6E1] text-[12px] text-[#6B6B6B] max-w-full">
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ background: linked ? projectColor(linked) : "transparent", boxShadow: linked ? undefined : "inset 0 0 0 1px #C9C5BE" }}
+            />
+            <select
+              value={linked ? linked.id : ""}
+              onChange={(e) => patch({ projectId: e.target.value || undefined })}
+              title={t("task.project")}
+              className="bg-transparent outline-none text-[12px] text-[#0A1931] max-w-[180px] cursor-pointer"
+            >
+              <option value="">{t("task.noProject")}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || "—"}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       {showNames && assignOpen && (

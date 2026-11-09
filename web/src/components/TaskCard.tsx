@@ -5,6 +5,8 @@ import { ownerLabel, statusLabel, useT, localeCode } from "../lib/i18n";
 import { ownerInitial, ownersLabel, taskOwners } from "../lib/owners";
 import { daysSince, daysUntil } from "../lib/dates";
 import { TaskDetails } from "./TaskDetails";
+import { useProjects } from "../lib/projectsContext";
+import { projectColor } from "../lib/projects";
 
 interface Props {
   task: Task;
@@ -36,6 +38,8 @@ export function TaskCard({
   const waiting = task.status === "WAITING" ? daysSince(task.waitingSince) : 0;
   const dueFmt = task.dueDate ? new Date(task.dueDate).toLocaleDateString(localeCode(lang)) : "";
   const owners = taskOwners(task);
+  const { projects } = useProjects();
+  const project = task.projectId ? projects.find((p) => p.id === task.projectId) : undefined;
 
   return (
     <div
@@ -98,6 +102,15 @@ export function TaskCard({
           {total > 0 && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#F5F3EF] text-[#6B6B6B] border border-[#E8E6E1]">
               ☑ {done}/{total}
+            </span>
+          )}
+          {project && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full max-w-full truncate"
+              style={{ color: projectColor(project), background: `${projectColor(project)}1A` }}
+              title={project.name}
+            >
+              ◆ <span className="truncate">{project.name}</span>
             </span>
           )}
         </div>

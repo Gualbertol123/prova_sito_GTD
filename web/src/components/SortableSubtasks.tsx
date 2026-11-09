@@ -21,13 +21,15 @@ interface Props {
   onToggle: (id: string, done: boolean) => void;
   onText: (id: string, text: string) => void;
   onDelete: (id: string) => void;
+  /** Optional control shown on each row, before the delete button. */
+  renderExtra?: (item: Subtask) => React.ReactNode;
 }
 
 // Pointer-based drag-to-reorder styled like a small kanban column: each subtask
 // is a white card that grows with its text. The grabbed card lifts and follows
 // the cursor; the others slide (FLIP-animated) to their new positions; the
 // target slot is highlighted.
-export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete }: Props) {
+export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete, renderExtra }: Props) {
   const [order, setOrder] = useState<string[]>(() => items.map((i) => i.id));
   const [dragId, setDragId] = useState<string | null>(null);
   const [pointerY, setPointerY] = useState(0);
@@ -168,6 +170,7 @@ export function SortableSubtasks({ items, onReorder, onToggle, onText, onDelete 
           onToggle={(done) => onToggle(s.id, done)}
           onText={(text) => onText(s.id, text)}
           onDelete={() => onDelete(s.id)}
+          extra={renderExtra?.(s)}
         />
       ))}
 
@@ -204,6 +207,7 @@ function SubtaskRow({
   onToggle,
   onText,
   onDelete,
+  extra,
 }: {
   s: Subtask;
   index: number;
@@ -213,6 +217,7 @@ function SubtaskRow({
   onToggle: (done: boolean) => void;
   onText: (text: string) => void;
   onDelete: () => void;
+  extra?: React.ReactNode;
 }) {
   const { t } = useT();
   const field = useSyncedField(s.text);
@@ -286,6 +291,7 @@ function SubtaskRow({
           s.done ? "line-through text-[#A8A29E]" : "text-[#0A1931]"
         }`}
       />
+      {extra}
       <button
         onClick={onDelete}
         className={`${lead} opacity-0 group-hover:opacity-100 text-[#DC2626] text-[12px]`}

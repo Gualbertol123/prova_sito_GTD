@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Board, Priority, Project, Status, Subtask, Task } from "../lib/types";
+import type { Board, Priority, Status, Subtask, Task } from "../lib/types";
 import type { PlannerColumn, ReportData } from "../lib/reportData";
 import { statusLabel, useT } from "../lib/i18n";
 import {
@@ -13,6 +13,7 @@ import {
   type CoverStats,
 } from "../lib/glassReportModel";
 import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
+import { PROJECT_STATUS_COLOR, projectStatus } from "../lib/projects";
 import { shortDate } from "../lib/dates";
 import { readReportDraft, writeReportDraft } from "../lib/prefs";
 
@@ -207,24 +208,67 @@ function TaskCard({ block, edit, fmtDate, onHide }: BlockProps & { block: Extrac
   );
 }
 
-function ProjectCard({ block, edit, onExcludeProject }: BlockProps & { block: Extract<Block, { kind: "project" }> }) {
+function projectMeta(block: Extract<Block, { kind: "project" }>, t: (k: string, v?: Record<string, string | number>) => string, fmtDate: (d: number | string) => string): string {
+  const { project: p, stats: s } = block;
+  return [
+    p.targetDate ? t("gr.proj.target", { d: fmtDate(p.targetDate) }) : "",
+    s.tasks.length ? t("gr.proj.tasks", { n: `${s.tasksDone}/${s.tasks.length}` }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function ProjectCard({ block, edit, fmtDate, onExcludeProject }: BlockProps & { block: Extract<Block, { kind: "project" }> }) {
   const { t } = useT();
-  const p: Project = block.project;
-  const done = p.items.filter((i) => i.done).length;
-  const share = p.items.length ? done / p.items.length : 0;
+  const { project: p, stats: s, color } = block;
+  const status = projectStatus(p);
+  const statusColor = PROJECT_STATUS_COLOR[status];
   const limit = 10;
   return (
     <div className="gr-glass gr-card">
-      <span className="gr-accent" style={{ background: SECTION_COLOR.projects }} />
+      <span className="gr-accent" style={{ background: color }} />
       <HideButton onHide={onExcludeProject && (() => onExcludeProject(p.id))} />
+      <div className="gr-card-top">
+        <span className="gr-pill" style={{ color: statusColor, background: `${statusColor}17` }}>
+          <span className="gr-dot" style={{ background: statusColor }} />
+          <Ed id={`${block.id}.status`} value={t(`projects.status.${status}`)} edit={edit} />
+        </span>
+        <Ed id={`${block.id}.meta`} className="gr-meta" edit={edit} value={projectMeta(block, t, fmtDate)} />
+      </div>
       <div className="gr-project-head">
         <Ed tag="h3" id={`${block.id}.name`} value={p.name || t("gr.untitled")} edit={edit} className="gr-card-title" />
-        <Ed id={`${block.id}.pct`} className="gr-big-pct gr-gradtext" value={`${Math.round(share * 100)}%`} edit={edit} />
+        <Ed
+          id={`${block.id}.pct`}
+          className="gr-big-pct"
+          style={{ backgroundImage: `linear-gradient(100deg, ${color}, ${color}B3)` }}
+          value={`${Math.round(s.share * 100)}%`}
+          edit={edit}
+        />
       </div>
+      {(edit.get(`${block.id}.desc`) ?? p.description) && (
+        <Ed tag="p" id={`${block.id}.desc`} value={p.description ?? ""} edit={edit} className="gr-card-desc" multiline />
+      )}
       <div className="gr-progress-row">
-        <Bar value={share} color="linear-gradient(90deg,#5856D6,#AF52DE)" />
-        <Ed id={`${block.id}.progress`} className="gr-progress-label" value={`${done}/${p.items.length}`} edit={edit} />
+        <Bar value={s.share} color={color} />
+        <Ed id={`${block.id}.progress`} className="gr-progress-label" value={`${s.done}/${s.total}`} edit={edit} />
       </div>
+      {s.phases.length > 0 && (
+        <ul className="gr-phases">
+          {s.phases.map((ph) => (
+            <li key={ph.phase.id}>
+              <Check done={ph.total > 0 && ph.done === ph.total} />
+              <Ed id={`${block.id}.ph.${ph.phase.id}`} className="gr-phase-name" value={ph.phase.name || "—"} edit={edit} />
+              <Bar value={ph.share} color={ph.overdue ? "#FF3B30" : color} />
+              <Ed
+                id={`${block.id}.ph.${ph.phase.id}.n`}
+                className="gr-progress-label"
+                value={`${ph.done}/${ph.total}${ph.phase.dueDate ? ` · ${fmtDate(ph.phase.dueDate)}` : ""}`}
+                edit={edit}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       {p.items.length > 0 && (
         <ul className="gr-subs gr-subs-2col">
           {p.items.slice(0, limit).map((it) => (

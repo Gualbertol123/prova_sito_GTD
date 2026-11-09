@@ -141,6 +141,8 @@ export function applyOpLocal(board: Board, op: Op): Board {
       break;
     case "projectDelete":
       b.projects = b.projects.filter((p) => p.id !== op.id);
+      // The database unlinks its tasks (on delete set null); mirror that.
+      b.tasks = b.tasks.map((t) => (t.projectId === op.id ? { ...t, projectId: undefined } : t));
       break;
     case "noteAdd":
       b.personalNotes = [op.note, ...b.personalNotes];

@@ -15,6 +15,8 @@ const KEYS = {
   reflpane: "gtd-reflection-pane",
   skin: "gtd-skin",
   appearance: "gtd-appearance",
+  projOpen: "gtd-project-open",
+  projView: "gtd-projects-view",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {

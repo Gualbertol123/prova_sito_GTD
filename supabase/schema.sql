@@ -88,16 +88,32 @@ create table public.reflection_access (
   locked_until    timestamptz
 );
 
--- One row per project — each project is a checklist of items (like subtasks).
+-- One row per project: details, phases and a checklist of items (like
+-- subtasks; an item may carry a "phaseId"). Board tasks link to it through
+-- tasks.project_id.
 create table public.projects (
   id          text primary key,
   name        text  not null default '',
   items       jsonb not null default '[]'::jsonb,
   created_at  bigint not null default 0,
   updated_at  bigint not null default 0,
-  report_hidden boolean not null default false  -- left out of the weekly report
+  report_hidden boolean not null default false, -- left out of the weekly report
+  description text   not null default '',
+  owners      text[] not null default '{}',
+  status      text   not null default 'active'
+              constraint projects_status_check check (status in ('planned', 'active', 'onhold', 'done')),
+  priority    text   not null default 'P2',     -- P1..P4
+  start_date  text,                             -- ISO yyyy-mm-dd
+  target_date text,                             -- ISO yyyy-mm-dd
+  color       text   not null default '',       -- #rrggbb, '' = automatic
+  phases      jsonb  not null default '[]'::jsonb -- [{id, name, dueDate?}]
 );
 create index projects_created_idx on public.projects (created_at);
+
+-- The project a board task belongs to (deleting the project unlinks it).
+alter table public.tasks add column project_id text
+  references public.projects (id) on delete set null;
+create index tasks_project_idx on public.tasks (project_id);
 
 -- One row per personal note, tagged with the member who wrote it.
 create table public.personal_notes (

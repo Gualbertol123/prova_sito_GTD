@@ -7,6 +7,7 @@ import {
   type Block,
   type ReportLayoutInput,
 } from "./glassReportModel";
+import { PROJECT_STATUS_COLOR, projectStatus } from "./projects";
 
 // -----------------------------------------------------------------------------
 // The weekly report as plain data, for the server-side PDF.
@@ -43,6 +44,11 @@ export type DocCard =
       progress: { value: number; label: string; color: string };
       items: DocSub[];
       more: string;
+      // Added with the reworked projects; absent from older clients.
+      status?: { text: string; color: string };
+      meta?: string;
+      desc?: string;
+      phases?: { name: string; label: string; value: number; color: string; done: boolean }[];
     }
   | { kind: "empty"; text: string };
 
@@ -141,19 +147,30 @@ export function buildReportDoc({ root, board, data, input, hidden, highlights, e
         });
       } else if (b.kind === "project") {
         const p = b.project;
-        const done = p.items.filter((i) => i.done).length;
+        const s = b.stats;
+        const statusColor = PROJECT_STATUS_COLOR[projectStatus(p)];
         sec.cards.push({
           kind: "project",
-          accent: SECTION_COLOR.projects,
+          accent: b.color,
           title: txt(`${b.id}.name`, p.name),
           pct: txt(`${b.id}.pct`),
           progress: {
-            value: p.items.length ? done / p.items.length : 0,
+            value: s.share,
             label: txt(`${b.id}.progress`),
-            color: SECTION_COLOR.projects,
+            color: b.color,
           },
           items: p.items.slice(0, 10).map((i) => ({ text: txt(`${b.id}.item.${i.id}`, i.text), done: i.done })),
           more: txt(`${b.id}.more`),
+          status: { text: txt(`${b.id}.status`), color: statusColor },
+          meta: txt(`${b.id}.meta`),
+          desc: txt(`${b.id}.desc`),
+          phases: s.phases.map((ph) => ({
+            name: txt(`${b.id}.ph.${ph.phase.id}`, ph.phase.name),
+            label: txt(`${b.id}.ph.${ph.phase.id}.n`),
+            value: ph.share,
+            color: ph.overdue ? "#FF3B30" : b.color,
+            done: ph.total > 0 && ph.done === ph.total,
+          })),
         });
       }
     }

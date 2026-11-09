@@ -383,16 +383,59 @@ function Card({ card }: { card: DocCard }) {
     if (card.progress) body.push(h(Progress, { key: "p", ...card.progress }));
     body.push(h(Subs, { key: "s", items: card.subs, more: card.more }));
   } else if (card.kind === "project") {
+    // Status pill and date line (sent by current clients; older ones omit them).
+    if (card.status || card.meta) {
+      body.push(
+        h(
+          View,
+          { key: "st", style: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 7.5 } },
+          card.status ? h(Pill, { text: card.status.text, color: card.status.color }) : h(View, null),
+          card.meta ? h(Meta, { text: card.meta }) : null
+        )
+      );
+    }
     body.push(
       h(
         View,
         { key: "top", style: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" } },
         h(Text, { style: { flex: 1, fontSize: 12.75, lineHeight: 1.3, fontWeight: 600, color: INK } }, card.title),
-        h(Text, { style: { fontSize: 18, fontWeight: 700, color: "#6a4fd8", marginLeft: 9 } }, card.pct)
-      ),
-      h(Progress, { key: "p", ...card.progress }),
-      h(Subs, { key: "s", items: card.items, more: card.more, twoCols: true })
+        h(Text, { style: { fontSize: 18, fontWeight: 700, color: card.status ? card.accent : "#6a4fd8", marginLeft: 9 } }, card.pct)
+      )
     );
+    if (card.desc) {
+      body.push(h(Text, { key: "d", style: { marginTop: 3, fontSize: 9.75, lineHeight: 1.45, color: INK2 } }, card.desc));
+    }
+    body.push(h(Progress, { key: "p", ...card.progress }));
+    if (card.phases && card.phases.length) {
+      body.push(
+        h(
+          View,
+          { key: "ph", style: { marginTop: 9 } },
+          ...card.phases.map((ph, i) =>
+            h(
+              View,
+              { key: i, style: { flexDirection: "row", alignItems: "center", marginBottom: 5 } },
+              h(Check, { done: ph.done }),
+              h(Text, { style: { width: "38%", fontSize: 9.4, fontWeight: 600, color: INK2 } }, ph.name),
+              h(
+                View,
+                { style: { flex: 1, height: 4.5, borderRadius: 2.25, backgroundColor: "rgba(60,60,67,0.09)", marginLeft: 6 } },
+                h(View, {
+                  style: {
+                    width: `${Math.round(Math.max(0, Math.min(1, ph.value)) * 100)}%`,
+                    height: 4.5,
+                    borderRadius: 2.25,
+                    backgroundColor: ph.color,
+                  },
+                })
+              ),
+              h(Text, { style: { fontSize: 8.6, fontWeight: 600, color: INK3, marginLeft: 7.5 } }, ph.label)
+            )
+          )
+        )
+      );
+    }
+    body.push(h(Subs, { key: "s", items: card.items, more: card.more, twoCols: true }));
   }
   return h(
     Glass,

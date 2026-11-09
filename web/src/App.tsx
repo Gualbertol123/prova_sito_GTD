@@ -18,6 +18,7 @@ import { ConnBadge } from "./components/ConnBadge";
 import { LangToggle } from "./components/LangToggle";
 import { IdentityPicker } from "./components/IdentityPicker";
 import { GlassToggle } from "./components/GlassToggle";
+import { ProjectsProvider } from "./lib/projectsContext";
 
 export default function App() {
   const { board, conn, error, send } = useBoard();
@@ -69,6 +70,7 @@ export default function App() {
   }
 
   return (
+    <ProjectsProvider value={{ projects: board.projects, available: !!board.projectsV2Available }}>
     <div className="min-h-screen bg-[#F5F3EF] text-[#0A1931] pb-16">
       <TopBar
         board={board}
@@ -143,6 +145,7 @@ export default function App() {
 
       {mailOpen && <MailModal board={board} onClose={() => setMailOpen(false)} />}
     </div>
+    </ProjectsProvider>
   );
 }
 
