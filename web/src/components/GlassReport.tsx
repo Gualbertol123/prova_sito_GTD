@@ -10,10 +10,11 @@ import {
   coverStats,
   type Block,
   reportPdfName,
+  reportProjectTasks,
   type CoverStats,
 } from "../lib/glassReportModel";
 import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
-import { PROJECT_STATUS_COLOR, projectStatus } from "../lib/projects";
+import { PROJECT_STATUS_COLOR } from "../lib/projects";
 import { shortDate } from "../lib/dates";
 import { readReportDraft, writeReportDraft } from "../lib/prefs";
 
@@ -210,9 +211,10 @@ function TaskCard({ block, edit, fmtDate, onHide }: BlockProps & { block: Extrac
 
 function projectMeta(block: Extract<Block, { kind: "project" }>, t: (k: string, v?: Record<string, string | number>) => string, fmtDate: (d: number | string) => string): string {
   const { project: p, stats: s } = block;
+  if (s.status === "done") return t("gr.proj.completed", { d: fmtDate(s.completedAt!) });
   return [
     p.targetDate ? t("gr.proj.target", { d: fmtDate(p.targetDate) }) : "",
-    s.tasks.length ? t("gr.proj.tasks", { n: `${s.tasksDone}/${s.tasks.length}` }) : "",
+    s.total ? t("gr.proj.tasks", { n: `${s.done}/${s.total}` }) : "",
   ]
     .filter(Boolean)
     .join(" · ");
@@ -220,18 +222,19 @@ function projectMeta(block: Extract<Block, { kind: "project" }>, t: (k: string, 
 
 function ProjectCard({ block, edit, fmtDate, onExcludeProject }: BlockProps & { block: Extract<Block, { kind: "project" }> }) {
   const { t } = useT();
-  const { project: p, stats: s, color } = block;
-  const status = projectStatus(p);
-  const statusColor = PROJECT_STATUS_COLOR[status];
+  const { project: p, stats: s } = block;
+  const color = s.status === "done" ? PROJECT_STATUS_COLOR.done : block.color;
+  const statusColor = PROJECT_STATUS_COLOR[s.status];
+  const tasks = reportProjectTasks(block);
   const limit = 10;
   return (
     <div className="gr-glass gr-card">
-      <span className="gr-accent" style={{ background: color }} />
+      <span className="gr-accent" style={{ background: block.color }} />
       <HideButton onHide={onExcludeProject && (() => onExcludeProject(p.id))} />
       <div className="gr-card-top">
         <span className="gr-pill" style={{ color: statusColor, background: `${statusColor}17` }}>
           <span className="gr-dot" style={{ background: statusColor }} />
-          <Ed id={`${block.id}.status`} value={t(`projects.status.${status}`)} edit={edit} />
+          <Ed id={`${block.id}.status`} value={t(`projects.status.${s.status}`)} edit={edit} />
         </span>
         <Ed id={`${block.id}.meta`} className="gr-meta" edit={edit} value={projectMeta(block, t, fmtDate)} />
       </div>
@@ -241,7 +244,7 @@ function ProjectCard({ block, edit, fmtDate, onExcludeProject }: BlockProps & { 
           id={`${block.id}.pct`}
           className="gr-big-pct"
           style={{ backgroundImage: `linear-gradient(100deg, ${color}, ${color}B3)` }}
-          value={`${Math.round(s.share * 100)}%`}
+          value={s.total ? `${Math.round(s.share * 100)}%` : "—"}
           edit={edit}
         />
       </div>
@@ -252,34 +255,17 @@ function ProjectCard({ block, edit, fmtDate, onExcludeProject }: BlockProps & { 
         <Bar value={s.share} color={color} />
         <Ed id={`${block.id}.progress`} className="gr-progress-label" value={`${s.done}/${s.total}`} edit={edit} />
       </div>
-      {s.phases.length > 0 && (
-        <ul className="gr-phases">
-          {s.phases.map((ph) => (
-            <li key={ph.phase.id}>
-              <Check done={ph.total > 0 && ph.done === ph.total} />
-              <Ed id={`${block.id}.ph.${ph.phase.id}`} className="gr-phase-name" value={ph.phase.name || "—"} edit={edit} />
-              <Bar value={ph.share} color={ph.overdue ? "#FF3B30" : color} />
-              <Ed
-                id={`${block.id}.ph.${ph.phase.id}.n`}
-                className="gr-progress-label"
-                value={`${ph.done}/${ph.total}${ph.phase.dueDate ? ` · ${fmtDate(ph.phase.dueDate)}` : ""}`}
-                edit={edit}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      {p.items.length > 0 && (
+      {tasks.length > 0 && (
         <ul className="gr-subs gr-subs-2col">
-          {p.items.slice(0, limit).map((it) => (
-            <li key={it.id} className={it.done ? "gr-sub-done" : ""}>
-              <Check done={it.done} />
-              <Ed id={`${block.id}.item.${it.id}`} value={it.text} edit={edit} />
+          {tasks.slice(0, limit).map((x) => (
+            <li key={x.id} className={x.status === "DONE" ? "gr-sub-done" : ""}>
+              <Check done={x.status === "DONE"} />
+              <Ed id={`${block.id}.task.${x.id}`} value={x.title} edit={edit} />
             </li>
           ))}
-          {p.items.length > limit && (
+          {tasks.length > limit && (
             <li className="gr-more">
-              <Ed id={`${block.id}.more`} value={t("gr.more", { n: p.items.length - limit })} edit={edit} />
+              <Ed id={`${block.id}.more`} value={t("gr.more", { n: tasks.length - limit })} edit={edit} />
             </li>
           )}
         </ul>

@@ -12,7 +12,7 @@ function toMs(iso: string): number {
 }
 
 // Every dated project as a bar from its start to its target date, with its
-// progress filled in, phase deadlines as ticks, and a line for today.
+// progress filled in and a line for today.
 // A project with a target but no start runs from the day it was created.
 export function ProjectTimeline({
   projects,
@@ -139,20 +139,6 @@ export function ProjectTimeline({
                           {Math.round(s.share * 100)}%
                         </span>
                       </span>
-                      {s.phases
-                        .filter((ph) => ph.phase.dueDate)
-                        .map((ph) => (
-                          <span
-                            key={ph.phase.id}
-                            className="absolute top-0 bottom-0 w-[3px] rounded-full"
-                            style={{
-                              left: `${pos(toMs(ph.phase.dueDate!) + DAY / 2)}%`,
-                              background: ph.overdue ? "#FF3B30" : ph.total && ph.done === ph.total ? "#34C759" : "#0A1931",
-                              opacity: 0.75,
-                            }}
-                            title={`${ph.phase.name} · ${fmtDay(ph.phase.dueDate, lang)} · ${ph.done}/${ph.total}`}
-                          />
-                        ))}
                     </span>
                   </button>
                 );

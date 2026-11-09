@@ -16,8 +16,6 @@ export interface Subtask {
   text: string;
   done: boolean;
   doneAt?: number; // set when ticked, cleared when unticked — drives the weekly report
-  /** Project checklist items only: the phase this item belongs to. */
-  phaseId?: string;
 }
 
 export interface Task {
@@ -72,36 +70,29 @@ export interface Reflection {
   createdAt?: number;
 }
 
-export type ProjectStatus = "planned" | "active" | "onhold" | "done";
+/** Derived, never stored: "done" once every linked task is DONE. */
+export type ProjectStatus = "ongoing" | "done";
 
-// A stage of a project. Checklist items point at it through `phaseId`.
-export interface Phase {
-  id: string;
-  name: string;
-  dueDate?: string; // ISO yyyy-mm-dd
-}
-
-// A project: details, phases, a checklist of items (same shape as subtasks),
-// and — through Task.projectId — any number of board tasks.
-// Every field after `items` needs migration 015; before it they read as
-// defaults and are not saved.
+// A project: details and notes; its work is the board tasks linked to it
+// through Task.projectId. Every field after `items` needs migration 015;
+// before it they read as defaults and are not saved.
 export interface Project {
   id: string;
   name: string;
+  /** The old checklist. No longer edited; offered for conversion. */
   items: Subtask[];
   createdAt?: number;
   updatedAt?: number;
   /** Left out of the weekly report (from now on, until put back). */
   reportHidden?: boolean;
   description?: string;
+  notes?: string;
   owners?: string[];
-  status?: ProjectStatus;
   priority?: Priority;
   startDate?: string; // ISO yyyy-mm-dd
   targetDate?: string; // ISO yyyy-mm-dd
   /** #rrggbb accent; empty = picked from the id. */
   color?: string;
-  phases?: Phase[];
 }
 
 // A note only its author sees, kept behind the same per-member password as the
@@ -130,7 +121,7 @@ export interface Board {
   personalNotesError?: string;
   /** False when migration 009 has not been run: tasks stay single-assignee. */
   assigneesAvailable?: boolean;
-  /** False when migration 015 has not been run: projects are name + checklist only. */
+  /** False when migration 015 has not been run: projects have a name only. */
   projectsV2Available?: boolean;
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend

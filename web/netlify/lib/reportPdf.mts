@@ -406,35 +406,6 @@ function Card({ card }: { card: DocCard }) {
       body.push(h(Text, { key: "d", style: { marginTop: 3, fontSize: 9.75, lineHeight: 1.45, color: INK2 } }, card.desc));
     }
     body.push(h(Progress, { key: "p", ...card.progress }));
-    if (card.phases && card.phases.length) {
-      body.push(
-        h(
-          View,
-          { key: "ph", style: { marginTop: 9 } },
-          ...card.phases.map((ph, i) =>
-            h(
-              View,
-              { key: i, style: { flexDirection: "row", alignItems: "center", marginBottom: 5 } },
-              h(Check, { done: ph.done }),
-              h(Text, { style: { width: "38%", fontSize: 9.4, fontWeight: 600, color: INK2 } }, ph.name),
-              h(
-                View,
-                { style: { flex: 1, height: 4.5, borderRadius: 2.25, backgroundColor: "rgba(60,60,67,0.09)", marginLeft: 6 } },
-                h(View, {
-                  style: {
-                    width: `${Math.round(Math.max(0, Math.min(1, ph.value)) * 100)}%`,
-                    height: 4.5,
-                    borderRadius: 2.25,
-                    backgroundColor: ph.color,
-                  },
-                })
-              ),
-              h(Text, { style: { fontSize: 8.6, fontWeight: 600, color: INK3, marginLeft: 7.5 } }, ph.label)
-            )
-          )
-        )
-      );
-    }
     body.push(h(Subs, { key: "s", items: card.items, more: card.more, twoCols: true }));
   }
   return h(

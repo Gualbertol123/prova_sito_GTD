@@ -17,6 +17,7 @@ const KEYS = {
   appearance: "gtd-appearance",
   projOpen: "gtd-project-open",
   projView: "gtd-projects-view",
+  projTasksView: "gtd-project-tasks-view",
 } as const;
 
 export function readPref(key: keyof typeof KEYS): string | null {

@@ -88,9 +88,10 @@ create table public.reflection_access (
   locked_until    timestamptz
 );
 
--- One row per project: details, phases and a checklist of items (like
--- subtasks; an item may carry a "phaseId"). Board tasks link to it through
--- tasks.project_id.
+-- One row per project. Its work is the board tasks linked through
+-- tasks.project_id; it is "completed" once all of them are DONE (not stored).
+-- `items` is the old checklist, kept so nothing is lost; the app offers to
+-- turn it into tasks or notes.
 create table public.projects (
   id          text primary key,
   name        text  not null default '',
@@ -99,14 +100,12 @@ create table public.projects (
   updated_at  bigint not null default 0,
   report_hidden boolean not null default false, -- left out of the weekly report
   description text   not null default '',
+  notes       text   not null default '',
   owners      text[] not null default '{}',
-  status      text   not null default 'active'
-              constraint projects_status_check check (status in ('planned', 'active', 'onhold', 'done')),
   priority    text   not null default 'P2',     -- P1..P4
   start_date  text,                             -- ISO yyyy-mm-dd
   target_date text,                             -- ISO yyyy-mm-dd
-  color       text   not null default '',       -- #rrggbb, '' = automatic
-  phases      jsonb  not null default '[]'::jsonb -- [{id, name, dueDate?}]
+  color       text   not null default ''        -- #rrggbb, '' = automatic
 );
 create index projects_created_idx on public.projects (created_at);
 

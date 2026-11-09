@@ -1,6 +1,6 @@
 import type { ProjectStatus } from "../../lib/types";
-import { useT } from "../../lib/i18n";
-import { HEALTH_COLOR, PROJECT_STATUS_COLOR, type Health } from "../../lib/projects";
+import { statusLabel, useT } from "../../lib/i18n";
+import { HEALTH_COLOR, PROJECT_STATUS_COLOR, TASK_STATUS_COLOR, type Health } from "../../lib/projects";
 import { ownerInitial } from "../../lib/owners";
 
 // Small presentational pieces shared by the overview, the detail page and the
@@ -91,7 +91,7 @@ export function HealthBadge({ health, daysLeft }: { health: Health; daysLeft: nu
   const { t } = useT();
   const color = HEALTH_COLOR[health];
   let detail = "";
-  if (daysLeft !== null && health !== "done" && health !== "paused") {
+  if (daysLeft !== null && health !== "done") {
     if (daysLeft < 0) detail = t("projects.daysLate", { n: -daysLeft });
     else if (daysLeft === 0) detail = t("projects.dueToday");
     else detail = t("projects.daysLeft", { n: daysLeft });
@@ -136,6 +136,46 @@ export function fmtDay(iso: string | undefined, lang: "it" | "en", withYear = fa
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
   return new Date(y, m - 1, d).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    ...(withYear ? { year: "numeric" } : {}),
+  });
+}
+
+/** Linked tasks per board column as one stacked bar. */
+export function StatusStack({
+  byStatus,
+  total,
+  height = 8,
+}: {
+  byStatus: Record<import("../../lib/types").Status, number>;
+  total: number;
+  height?: number;
+}) {
+  const { lang } = useT();
+  if (!total) return <div className="flex-1 rounded-full" style={{ height, background: "rgba(120,120,128,0.16)" }} />;
+  return (
+    <div className="flex-1 flex rounded-full overflow-hidden" style={{ height, background: "rgba(120,120,128,0.16)" }}>
+      {STACK_ORDER.map((st) =>
+        byStatus[st] ? (
+          <div
+            key={st}
+            style={{ width: `${(byStatus[st] / total) * 100}%`, background: TASK_STATUS_COLOR[st] }}
+            title={`${statusLabel(lang, st)}: ${byStatus[st]}`}
+          />
+        ) : null
+      )}
+    </div>
+  );
+}
+
+// Done first, so the filled part reads as progress.
+export const STACK_ORDER: import("../../lib/types").Status[] = ["DONE", "IN PROGRESS", "WAITING", "NEXT", "BACKLOG", "MAYBE"];
+
+/** A millisecond time as fmtDay does it (local calendar day). */
+export function fmtMs(ms: number, lang: "it" | "en", withYear = false): string {
+  const d = new Date(ms);
+  return d.toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
     day: "numeric",
     month: "short",
     ...(withYear ? { year: "numeric" } : {}),

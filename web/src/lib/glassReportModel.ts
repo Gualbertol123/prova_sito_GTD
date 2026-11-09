@@ -1,6 +1,6 @@
 import type { Board, Priority, Project, Status, Task } from "./types";
-import { projectColor, projectStats, reportProjects, type ProjectStats } from "./projects";
-import type { PlannerColumn, ReportData } from "./reportData";
+import { projectColor, reportProjects, type ProjectStats } from "./projects";
+import { periodBounds, type PlannerColumn, type ReportData } from "./reportData";
 
 // -----------------------------------------------------------------------------
 // The Liquid Glass weekly report: its content as a flat list of blocks.
@@ -107,19 +107,26 @@ export function buildBlocks(data: ReportData, hidden: Set<string>): ReportLayout
     ...section(
       "projects",
       // Projects left out of the report (× on the card) stay out of every report.
-      reportProjects(data.projects).map((p) => ({
-          kind: "project" as const,
-          id: `proj.${p.id}`,
-          project: p,
-          stats: projectStats(p, data.tasks),
-          color: projectColor(p),
-        }))
+      // Ongoing projects, and those completed inside the period.
+      reportProjects(data.projects, data.tasks, periodBounds(data.period)).map(({ project, stats }) => ({
+        kind: "project" as const,
+        id: `proj.${project.id}`,
+        project,
+        stats,
+        color: projectColor(project),
+      }))
     ),
   ];
   n += 1;
   const planner = { n, columns: data.planner };
   const after: Block[] = [];
   return { before, planner, after };
+}
+
+/** The tasks a report project card lists: open ones first (board order), then done. */
+export function reportProjectTasks(block: Extract<Block, { kind: "project" }>): Task[] {
+  const ts = block.stats.tasks;
+  return [...ts.filter((x) => x.status !== "DONE"), ...ts.filter((x) => x.status === "DONE")];
 }
 
 export function reportPdfName(data: ReportData): string {

@@ -1,24 +1,32 @@
 // -----------------------------------------------------------------------------
 // Project maths, shared by the Projects tab, the board and the weekly report.
 //
-// A project's progress counts two kinds of work as equal units:
-//   • its checklist items (ticked = done), and
-//   • the board tasks linked to it (in DONE = done).
-// Phases group checklist items; a phase's progress is its own items only.
+// A project's work is the board tasks linked to it (Task.projectId).
+// Its status is never set by hand:
+//   • ongoing   — no linked task yet, or some still open
+//   • completed — it has linked tasks and every one of them is DONE;
+//                 completed on the day its last task was.
+// Completed projects are "recent" for a week, like the board's Done bar, and
+// "older" after that.
 // -----------------------------------------------------------------------------
 
-import type { Phase, Priority, Project, ProjectStatus, Subtask, Task } from "./types";
-import { PRIORITY_ORDER, genId } from "./constants";
+import type { Priority, Project, ProjectStatus, Status, Task } from "./types";
+import { ARCHIVE_DAYS, PRIORITY_ORDER, STATUS_ORDER, genId } from "./constants";
 import { daysUntil } from "./dates";
 
-export const PROJECT_STATUSES: ProjectStatus[] = ["active", "planned", "onhold", "done"];
-
-/** Apple system colours, light variant — read well on both skins. */
 export const PROJECT_STATUS_COLOR: Record<ProjectStatus, string> = {
-  planned: "#8E8E93",
-  active: "#007AFF",
-  onhold: "#FF9500",
+  ongoing: "#007AFF",
   done: "#34C759",
+};
+
+/** Per board column, for the task breakdown bars. Apple light palette. */
+export const TASK_STATUS_COLOR: Record<Status, string> = {
+  BACKLOG: "#8E8E93",
+  NEXT: "#007AFF",
+  "IN PROGRESS": "#AF52DE",
+  WAITING: "#FF9500",
+  DONE: "#34C759",
+  MAYBE: "#C7C7CC",
 };
 
 export const PROJECT_COLORS = [
@@ -40,12 +48,13 @@ export function projectColor(p: Pick<Project, "id" | "color">): string {
   return PROJECT_COLORS[h % PROJECT_COLORS.length];
 }
 
-export function projectStatus(p: Project): ProjectStatus {
-  return p.status ?? "active";
-}
-
 export function projectPriority(p: Project): Priority {
   return p.priority ?? "P2";
+}
+
+/** When a task was completed (same rule as the report and the archive). */
+function completedAt(t: Task): number {
+  return t.doneAt ?? t.updatedAt ?? 0;
 }
 
 /** Every task linked to the project, in board order. */
@@ -53,114 +62,90 @@ export function projectTasks(tasks: Task[], projectId: string): Task[] {
   return tasks.filter((t) => t.projectId === projectId);
 }
 
-export type Health = "done" | "paused" | "overdue" | "atRisk" | "onTrack" | "noDate";
+export type Health = "done" | "overdue" | "atRisk" | "onTrack" | "noDate";
 
 export const HEALTH_COLOR: Record<Health, string> = {
   done: "#34C759",
-  paused: "#FF9500",
   overdue: "#FF3B30",
   atRisk: "#FF9500",
   onTrack: "#34C759",
   noDate: "#8E8E93",
 };
 
-export interface PhaseStats {
-  phase: Phase;
-  items: Subtask[];
-  done: number;
-  total: number;
-  share: number;
-  /** Days to its due date (negative = past), null without one. */
-  daysLeft: number | null;
-  overdue: boolean;
-}
-
 export interface ProjectStats {
-  itemsTotal: number;
-  itemsDone: number;
   tasks: Task[];
-  tasksDone: number;
   total: number;
   done: number;
   /** 0..1 */
   share: number;
-  phases: PhaseStats[];
-  /** Checklist items not in any (existing) phase. */
-  loose: Subtask[];
+  /** Linked tasks per board column. */
+  byStatus: Record<Status, number>;
+  status: ProjectStatus;
+  /** When the last task was completed; null while ongoing. */
+  completedAt: number | null;
+  /** Completed within the last week. */
+  recent: boolean;
+  /** Open linked tasks past their due date. */
+  overdueTasks: number;
+  /** The open linked task due soonest. */
+  nextDue: Task | null;
   daysLeft: number | null;
   health: Health;
-  /** The first phase not finished yet. */
-  nextPhase: PhaseStats | null;
 }
 
 function isoDiffDays(fromIso: string, toIso: string): number {
-  const a = new Date(fromIso);
-  const b = new Date(toIso);
-  return Math.round((b.getTime() - a.getTime()) / 86400000);
+  return Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86400000);
 }
 
-export function projectStats(p: Project, allTasks: Task[]): ProjectStats {
-  const items = p.items ?? [];
-  const phases = p.phases ?? [];
-  const phaseIds = new Set(phases.map((ph) => ph.id));
+export function projectStats(p: Project, allTasks: Task[], now = Date.now()): ProjectStats {
   const tasks = projectTasks(allTasks, p.id);
-  const itemsDone = items.filter((i) => i.done).length;
-  const tasksDone = tasks.filter((t) => t.status === "DONE").length;
-  const total = items.length + tasks.length;
-  const done = itemsDone + tasksDone;
+  const byStatus = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<Status, number>;
+  for (const t of tasks) byStatus[t.status] += 1;
+  const total = tasks.length;
+  const done = byStatus.DONE;
   const share = total ? done / total : 0;
+  const complete = total > 0 && done === total;
+  const finishedAt = complete ? Math.max(...tasks.map(completedAt)) : null;
 
-  const phaseStats: PhaseStats[] = phases.map((phase) => {
-    const its = items.filter((i) => i.phaseId === phase.id);
-    const d = its.filter((i) => i.done).length;
-    const left = daysUntil(phase.dueDate);
-    const complete = its.length > 0 && d === its.length;
-    return {
-      phase,
-      items: its,
-      done: d,
-      total: its.length,
-      share: its.length ? d / its.length : 0,
-      daysLeft: left,
-      overdue: left !== null && left < 0 && !complete,
-    };
-  });
-  const loose = items.filter((i) => !i.phaseId || !phaseIds.has(i.phaseId));
+  const open = tasks.filter((t) => t.status !== "DONE");
+  const overdueTasks = open.filter((t) => {
+    const d = daysUntil(t.dueDate);
+    return d !== null && d < 0;
+  }).length;
+  const nextDue =
+    open.filter((t) => t.dueDate).sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))[0] ?? null;
 
-  const status = projectStatus(p);
   const daysLeft = daysUntil(p.targetDate);
   let health: Health;
-  if (status === "done") health = "done";
-  else if (status === "onhold") health = "paused";
-  else if (daysLeft === null) health = "noDate";
+  if (complete) health = "done";
+  else if (daysLeft === null) health = overdueTasks ? "atRisk" : "noDate";
   else if (daysLeft < 0) health = "overdue";
   else {
-    // Behind schedule when progress trails the share of time already used,
-    // or when the end is a week away and most of the work is still open.
+    // Behind when progress trails the share of time already used, or when
+    // the end is a week away and most of the work is still open.
     let expected = 0;
     if (p.startDate && p.targetDate) {
       const span = isoDiffDays(p.startDate, p.targetDate);
-      const left = daysLeft;
-      if (span > 0) expected = Math.min(1, Math.max(0, (span - left) / span));
+      if (span > 0) expected = Math.min(1, Math.max(0, (span - daysLeft) / span));
     }
     const behind = total > 0 && share + 0.2 < expected;
-    const tight = daysLeft <= 7 && total > 0 && share < 0.75;
-    health = behind || tight || phaseStats.some((ph) => ph.overdue) ? "atRisk" : "onTrack";
+    const tight = daysLeft <= 7 && share < 0.75;
+    health = behind || tight || overdueTasks > 0 ? "atRisk" : "onTrack";
   }
 
   return {
-    itemsTotal: items.length,
-    itemsDone,
     tasks,
-    tasksDone,
     total,
     done,
     share,
-    phases: phaseStats,
-    loose,
+    byStatus,
+    status: complete ? "done" : "ongoing",
+    completedAt: finishedAt,
+    recent: finishedAt !== null && now - finishedAt < ARCHIVE_DAYS * 86400000,
+    overdueTasks,
+    nextDue,
     daysLeft,
     health,
-    nextPhase: phaseStats.find((ph) => ph.total === 0 || ph.done < ph.total) ?? null,
   };
 }
 
@@ -168,7 +153,6 @@ export type ProjectSort = "target" | "progress" | "priority" | "name" | "updated
 
 export function sortProjects(list: Project[], by: ProjectSort, stats: Map<string, ProjectStats>): Project[] {
   const out = [...list];
-  const statusRank = (p: Project) => PROJECT_STATUSES.indexOf(projectStatus(p));
   out.sort((a, b) => {
     let c = 0;
     switch (by) {
@@ -188,23 +172,30 @@ export function sortProjects(list: Project[], by: ProjectSort, stats: Map<string
         c = (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
         break;
     }
-    return c || statusRank(a) - statusRank(b) || a.name.localeCompare(b.name);
+    return c || a.name.localeCompare(b.name);
   });
   return out;
 }
 
 /**
- * The projects the weekly report shows, in report order: left-out ones
- * dropped, open work first (active, planned, on hold, done), then priority.
+ * The projects the weekly report shows: left-out ones dropped, and completed
+ * ones only if they were completed inside the report period. Ongoing first,
+ * then by priority.
  */
-export function reportProjects(list: Project[]): Project[] {
+export function reportProjects(
+  list: Project[],
+  tasks: Task[],
+  bounds: { start: number; end: number }
+): { project: Project; stats: ProjectStats }[] {
   return list
     .filter((p) => !p.reportHidden)
+    .map((project) => ({ project, stats: projectStats(project, tasks) }))
+    .filter(({ stats }) => stats.status === "ongoing" || (stats.completedAt! >= bounds.start && stats.completedAt! < bounds.end))
     .sort(
       (a, b) =>
-        PROJECT_STATUSES.indexOf(projectStatus(a)) - PROJECT_STATUSES.indexOf(projectStatus(b)) ||
-        PRIORITY_ORDER[projectPriority(a)] - PRIORITY_ORDER[projectPriority(b)] ||
-        (a.createdAt ?? 0) - (b.createdAt ?? 0)
+        (a.stats.status === "done" ? 1 : 0) - (b.stats.status === "done" ? 1 : 0) ||
+        PRIORITY_ORDER[projectPriority(a.project)] - PRIORITY_ORDER[projectPriority(b.project)] ||
+        (a.project.createdAt ?? 0) - (b.project.createdAt ?? 0)
     );
 }
 
@@ -218,22 +209,11 @@ export function newProject(name: string, owners: string[] = []): Project {
     createdAt: now,
     updatedAt: now,
     description: "",
+    notes: "",
     owners,
-    status: "active",
     priority: "P2",
     startDate: undefined,
     targetDate: undefined,
     color: "",
-    phases: [],
   };
-}
-
-/**
- * Put a reordered subset (one phase's items) back into the full list: the
- * subset fills the same slots it held before, so other phases don't move.
- */
-export function mergeReordered(all: Subtask[], subset: Subtask[]): Subtask[] {
-  const ids = new Set(subset.map((s) => s.id));
-  let k = 0;
-  return all.map((it) => (ids.has(it.id) ? subset[k++] ?? it : it));
 }

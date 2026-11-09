@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, PersonalNote, Op, Phase, Priority, Project, ProjectStatus, Reflection, Task, Weekly, WeeklyItem } from "./types";
+import type { Board, PersonalNote, Op, Priority, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -154,16 +154,14 @@ interface ProjectRow {
   report_hidden?: boolean | null; // migration 013
   // migration 015
   description?: string | null;
+  notes?: string | null;
   owners?: string[] | null;
-  status?: string | null;
   priority?: string | null;
   start_date?: string | null;
   target_date?: string | null;
   color?: string | null;
-  phases?: Phase[] | null;
 }
 
-const PROJECT_STATUSES: ProjectStatus[] = ["planned", "active", "onhold", "done"];
 const PRIORITIES: Priority[] = ["P1", "P2", "P3", "P4"];
 
 function rowToProject(r: ProjectRow): Project {
@@ -175,13 +173,12 @@ function rowToProject(r: ProjectRow): Project {
     updatedAt: r.updated_at,
     reportHidden: !!r.report_hidden,
     description: r.description ?? "",
+    notes: r.notes ?? "",
     owners: Array.isArray(r.owners) ? r.owners.filter(Boolean) : [],
-    status: PROJECT_STATUSES.includes(r.status as ProjectStatus) ? (r.status as ProjectStatus) : "active",
     priority: PRIORITIES.includes(r.priority as Priority) ? (r.priority as Priority) : "P2",
     startDate: r.start_date || undefined,
     targetDate: r.target_date || undefined,
     color: r.color || "",
-    phases: Array.isArray(r.phases) ? r.phases.filter((ph) => ph && typeof ph.id === "string") : [],
   };
 }
 
@@ -202,13 +199,12 @@ function projectToRow(p: Project): ProjectRow {
 function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if ("description" in patch) out.description = patch.description ?? "";
+  if ("notes" in patch) out.notes = patch.notes ?? "";
   if ("owners" in patch) out.owners = patch.owners ?? [];
-  if ("status" in patch) out.status = patch.status ?? "active";
   if ("priority" in patch) out.priority = patch.priority ?? "P2";
   if ("startDate" in patch) out.start_date = patch.startDate || null;
   if ("targetDate" in patch) out.target_date = patch.targetDate || null;
   if ("color" in patch) out.color = patch.color ?? "";
-  if ("phases" in patch) out.phases = patch.phases ?? [];
   return out;
 }
 
@@ -241,7 +237,7 @@ let hasProjectsV2 = false;
 async function probeProjectsV2(): Promise<boolean> {
   try {
     const [p, t] = await Promise.all([
-      supabase.from("projects").select("status,phases").limit(1),
+      supabase.from("projects").select("notes,owners,target_date").limit(1),
       supabase.from("tasks").select("project_id").limit(1),
     ]);
     hasProjectsV2 = !p.error && !t.error;

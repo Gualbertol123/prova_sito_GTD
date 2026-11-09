@@ -23,7 +23,7 @@ full file map, how to run and deploy it, and how to extend it.
 | Tab | What it does |
 | --- | --- |
 | **BOARD** | Kanban with 6 columns (Backlog · Next · In Progress · Waiting · Done · Maybe) **and** a List view (toggle, remembered). Cards expand **inline** (no popups) into a full editor: assignees, priority pills, due date, description, notes, a **File Directory** field with a copy button, a "move to section" dropdown, prev/next arrows, and drag-reorderable subtasks. Columns fill the width edge-to-edge, wrap instead of scrolling, can be shown/hidden (**Columns** editor), and resized in an **edit-layout** mode (neighbours adjust). Below the columns are two full-width collapsible bars, each with its own search: a **Done** bar (this week's completed tasks — a searchable mirror of the DONE column, cards stay in the column too) and an **Archived** bar (tasks completed more than a week ago, auto-moved out of the DONE column). A **Team** panel (collapsed) manages members; a collapsible **priority distribution** chart; a full new-task bar (choose assignees/priority/status/due up front); search + owner/priority/Focus-P1 filters. A task can be held by **one person or several** — open the assignee pill to tick names; the first one stays the `owner` column, so filters and the weekly recap all count a shared task for everyone on it. Below Archived, a **Menu mensa** bar (open by default) shows the canteen menu of today and the next four menu days — today highlighted, its dish of the day in the bar's header — from `web/src/data/menu.json` (§8, updated monthly; past days never shown). A **Names** toggle next to **Columns** blanks every owner name on the board (cards, list rows, the expanded editor and the new-task bar) so you can screenshot it — it is per-session only and names are always back on next load. |
-| **PROJECTS** | An **overview dashboard**: figures (active / planned / on hold / done / need attention), status filter chips (Open by default), search, lead filter, sort (target date, progress, priority, name, recently updated), and two views — **Cards** (colour accent, status, priority, progress ring, phase segments, next phase, leads, target date, health badge) and **Timeline** (each project as a bar from start to target with its progress, phase deadlines as ticks and a line for today). Click a project to open its **page**: name, status, priority, start/target dates, colour, leads, description; a progress ring and health badge (on track / at risk / overdue / on hold / done); a schedule strip (time used vs work done); **phases**, each with a due date, progress bar and its own drag-reorderable checklist (items can move between phases; deleting a phase keeps its items); and **linked board tasks** — create a task straight into the project, link an existing one, tick it done, open its full editor, or unlink it. Progress counts ticked checklist items plus linked tasks in DONE. The page also toggles whether the project is in the weekly report. On the BOARD, a task card shows its project as a coloured chip, and the task editor has a project picker. The open project and the cards/timeline choice are remembered per device. Needs migration 015 (§3); before it, name and checklist work as they always did and the tab says what to run. |
+| **PROJECTS** | Two filters, **Ongoing** and **Completed**. A project's status is never set by hand: it is *ongoing* until it has linked board tasks and **every one is DONE**, then it moves to *completed* on its own (dated by its last task's completion), and back to ongoing if a task is reopened or a new one is added. **Ongoing** shows figures (ongoing, completed this week, need attention, open tasks), search, a lead filter, sorting, and two views: **Cards** (colour, priority, progress ring, a bar of its tasks by status, overdue count, next task due, leads, target date, health badge) and **Timeline** (start-to-target bars with progress and a line for today). **Completed** works like the board's Done/Archived: **Recently completed** (last 7 days) as cards, then a collapsible **Older** list. A project's **page** has name, priority, start/target dates, colour, leads, a short description, a progress ring, health (on track / at risk / overdue), tasks per status, a time-vs-work strip, a small **Notes** box, and the **Tasks** section: a status breakdown, a new-task form (title, status, priority, holder, due date) that creates the task on the board already linked, a picker to link an existing board task, search and a person filter, and two views — a **List** grouped by status (tick done, change status inline, due/overdue chips, holders, subtasks, waiting days, unlink, open the full task editor; completed tasks hidden until shown) and a **Board** of the project's tasks where cards are dragged between columns. Progress = linked tasks in DONE ÷ linked tasks. On the BOARD, a task card shows its project as a coloured chip and the task editor has a project picker. Projects used to have checklists; a project that still holds one shows it once, with **Turn into tasks** / **Copy into notes**. Needs migration 015 (§3); before it, projects have a name only and the tab says what to run. |
 | **WEEKLY** | Weekly review: a "Recap" block auto-fills from tasks completed **this week** (with owner + subtask progress), a collapsible **Archived** section for tasks done more than a week ago, plus 5 editable retro columns: WINS · LEARNINGS · TO IMPROVE · BLOCKERS · FOCUS NEXT WEEK. |
 | **REPORT** | Builds the weekly report as **A4 pages in Liquid Glass** (light mode) right in the tab (see §5): a cover with the week's numbers, then Done, Next, Projects and the Planner. Click any text on the pages to edit it; hover a card and press × to leave it out; **Download PDF** saves exactly what is on screen. The old Intesa Sanpaolo Word template is still one click away as **Word (classic template)**. |
 | **CALENDAR** | Month grid; drag a task onto a day to set its due date. Click any task to open its full details in the left panel. Day cells grow to fit all their items. |
@@ -94,6 +94,7 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
 | `gtd-project-open` | the project page left open in the PROJECTS tab |
 | `gtd-projects-view` | PROJECTS overview as `cards` or `timeline` |
+| `gtd-project-tasks-view` | a project's tasks as `list` or `board` |
 
 ---
 
@@ -125,13 +126,14 @@ needs no migration.
 `member`, `date`, `done`, `well`, `improve`, `learning`, `updated_at`,
 `created_at`.
 
-**`projects`** — one row per project: `id`, `name`, `items jsonb`
-(`[{id,text,done,doneAt,phaseId?}]`, same shape as subtasks), `created_at`,
-`updated_at`, `report_hidden`, and since migration 015 `description`,
-`owners text[]`, `status` (`planned`/`active`/`onhold`/`done`), `priority`
-(P1–P4), `start_date`, `target_date` (ISO text), `color` (`#rrggbb`, empty =
-automatic) and `phases jsonb` (`[{id,name,dueDate?}]`). The maths (progress,
-health, phase stats, report order) lives in `web/src/lib/projects.ts`.
+**`projects`** — one row per project: `id`, `name`, `items jsonb` (the old
+checklist, `[{id,text,done,doneAt}]` — no longer edited, offered for
+conversion), `created_at`, `updated_at`, `report_hidden`, and since migration
+015 `description`, `notes`, `owners text[]`, `priority` (P1–P4), `start_date`,
+`target_date` (ISO text) and `color` (`#rrggbb`, empty = automatic). There is
+**no status column**: ongoing/completed is worked out from the linked tasks
+(`web/src/lib/projects.ts`, which also holds progress, health and the report
+selection).
 
 **`tasks.project_id`** (migration 015) — the project a task belongs to;
 `on delete set null`, so deleting a project unlinks its tasks and keeps them.
@@ -181,11 +183,12 @@ SQL files in `supabase/`:
 - `migration-013-report-projects.sql` — adds `projects.report_hidden`: a
   project taken off the weekly report with its × stays off every later report
   until put back from REPORT → **Progetti esclusi**.
-- `migration-015-projects-v2.sql` — the reworked Projects tab: adds the
-  project detail columns (description, owners, status, priority, dates,
-  colour, phases) and `tasks.project_id`. Additive; existing projects start
-  as active / P2 with no dates. The app probes for these columns and only
-  writes them once they exist.
+- `migration-015-projects-v2.sql` — the reworked Projects tab: adds
+  `description`, `notes`, `owners`, `priority`, `start_date`, `target_date`,
+  `color` to `projects` and `tasks.project_id`. Additive and re-runnable (an
+  earlier version also added `status`/`phases`; if you ran that one, run this
+  one again — the two extra columns are simply unused). The app probes for the
+  columns and only writes them once they exist.
 - `migration-012-auth-step2-lockdown.sql` — **real login, step 2.** Closes all
   tables to the anon key, hides `reflection_access`, deletes the clear-text
   password columns. Run only after the new site is live and you have logged in
@@ -218,7 +221,7 @@ prova_sito_GTD/
 │   ├── migration-011-auth-step1.sql          ← real login, step 1 (additive)
 │   ├── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 │   ├── migration-013-report-projects.sql · migration-014-remove-ideas-tracking.sql
-│   └── migration-015-projects-v2.sql         ← project details, phases, tasks.project_id
+│   └── migration-015-projects-v2.sql         ← project details + notes, tasks.project_id
 ├── menu/                        ← the canteen menu: monthly PDF → web/src/data/menu.json (§8)
 │   ├── menu_from_pdf.py
 │   └── README.md
@@ -258,7 +261,7 @@ prova_sito_GTD/
         │   ├── glassReportModel.ts ← the Liquid Glass report as blocks + cover figures
         │   ├── reportDoc.ts      ← the report as data (texts read from the pages) for the server PDF
         │   ├── reportDocx.ts     ← the classic Word template (.docx, lazy-loaded)
-        │   ├── projects.ts       ← project progress, health, phases, colours, sorting, report order
+        │   ├── projects.ts       ← derived status, progress, health, colours, sorting, report selection
         │   ├── projectsContext.tsx ← the board's projects for task cards / the task editor
         │   ├── skin.ts           ← which visual skin is on (glass / classic)
         │   └── useSyncedField.ts ← text field that syncs w/o clobbering active typing
@@ -277,9 +280,10 @@ prova_sito_GTD/
             ├── Filters.tsx       ← search/owner/priority/Focus-P1 (used by calendar)
             ├── MembersBar.tsx    ← inline add/remove team members
             ├── PriorityDistribution.tsx ← collapsible P1–P4 chart
-            ├── ProjectsView.tsx  ← Projects overview: figures, filters, cards / timeline
-            ├── projects/ProjectDetail.tsx ← one project's page: details, phases, linked tasks
-            ├── projects/ProjectTimeline.tsx ← dated projects as bars, phase ticks, today line
+            ├── ProjectsView.tsx  ← Projects: Ongoing (cards / timeline) and Completed (recent / older)
+            ├── projects/ProjectDetail.tsx ← one project's page: details, notes, old-checklist conversion
+            ├── projects/ProjectTasks.tsx ← the project's tasks: new-task form, link, list / mini board
+            ├── projects/ProjectTimeline.tsx ← dated projects as bars, today line
             ├── projects/ProjectBits.tsx ← progress ring, pills, health badge, avatars
             ├── CalendarView.tsx  ← month grid + left detail panel
             ├── WeeklyView.tsx    ← recap + 5 retro columns
@@ -310,7 +314,7 @@ REPORT tab ─▶ pick a week (or a custom period) ─▶ Generate report
 | Cover | board name and period, an editable headline and subtitle, tiles for completed tasks, closed subtasks, in progress, next and waiting, an **In evidenza** list whose tasks you pick with **Scegli attività** (up to 8, from the completed, in-progress, next and waiting tasks; left out of the PDF when empty), and an editable **In sintesi** paragraph |
 | 01 Completate | every task that entered DONE inside the period, with priority, completion date, its subtasks and a progress bar |
 | 02 Prossimi passi | the NEXT column now, with due dates and subtasks |
-| 03 Progetti | each project from the Projects tab — status, target date, linked-task count, description, % done (checklist items + linked tasks in DONE), its phases with a bar each, and its checklist; open work first, then by priority — except projects taken off with their × (`projects.report_hidden`, shared by the whole team): they stay off **every** later report until put back from the **Progetti esclusi** view of the REPORT tab |
+| 03 Progetti | every ongoing project, plus those completed inside the period — status, target date (or completion date), task count, description, % done and its linked tasks (open first); ongoing first, then by priority — except projects taken off with their × (`projects.report_hidden`, shared by the whole team): they stay off **every** later report until put back from the **Progetti esclusi** view of the REPORT tab |
 | 04 Planner | always **one landscape page**: Backlog · Next · In Progress · Waiting side by side; a very full board is scaled down to fit |
 
 Only the Done section is period-filtered; the rest is how the board stands when
