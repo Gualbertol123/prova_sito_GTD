@@ -70,7 +70,7 @@ export default function App() {
   }
 
   return (
-    <ProjectsProvider value={{ projects: board.projects, available: !!board.projectsV2Available }}>
+    <ProjectsProvider value={{ projects: board.projects, tasks: board.tasks, available: !!board.projectsV2Available }}>
     <div className="min-h-screen bg-[#F5F3EF] text-[#0A1931] pb-16">
       <TopBar
         board={board}

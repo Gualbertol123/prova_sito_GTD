@@ -14,7 +14,7 @@ import {
   type CoverStats,
 } from "../lib/glassReportModel";
 import { buildReportDoc, type ReportDoc } from "../lib/reportDoc";
-import { PROJECT_STATUS_COLOR } from "../lib/projects";
+import { PROJECT_STATUS_COLOR, boardTasks } from "../lib/projects";
 import { shortDate } from "../lib/dates";
 import { readReportDraft, writeReportDraft } from "../lib/prefs";
 
@@ -493,7 +493,7 @@ function highlightCandidates(board: Board, data: ReportData): { status: Status; 
     { status: "DONE" as Status, tasks: data.done.map((r) => r.task) },
     ...(["IN PROGRESS", "NEXT", "WAITING"] as Status[]).map((status) => ({
       status,
-      tasks: board.tasks.filter((t) => t.status === status && !doneIds.has(t.id)),
+      tasks: boardTasks(board).filter((t) => t.status === status && !doneIds.has(t.id)),
     })),
   ].filter((g) => g.tasks.length > 0);
 }

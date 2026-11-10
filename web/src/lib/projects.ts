@@ -10,7 +10,7 @@
 // "older" after that.
 // -----------------------------------------------------------------------------
 
-import type { Priority, Project, ProjectStatus, Status, Task } from "./types";
+import type { Board, BoardMode, Priority, Project, ProjectStatus, Status, Task } from "./types";
 import { ARCHIVE_DAYS, PRIORITY_ORDER, STATUS_ORDER, genId } from "./constants";
 import { daysUntil } from "./dates";
 
@@ -62,6 +62,68 @@ export function projectTasks(tasks: Task[], projectId: string): Task[] {
   return tasks.filter((t) => t.projectId === projectId);
 }
 
+export function boardMode(p: Project): BoardMode {
+  return p.boardMode ?? "all";
+}
+
+/**
+ * The project's tasks in step order: the ones listed in taskOrder first, in
+ * that order, then any others oldest first (a newly linked task goes last).
+ */
+export function orderedProjectTasks(p: Project, tasks: Task[]): Task[] {
+  const mine = projectTasks(tasks, p.id);
+  const rank = new Map((p.taskOrder ?? []).map((id, i) => [id, i]));
+  return [...mine].sort((a, b) => {
+    const ra = rank.get(a.id);
+    const rb = rank.get(b.id);
+    if (ra !== undefined && rb !== undefined) return ra - rb;
+    if (ra !== undefined) return -1;
+    if (rb !== undefined) return 1;
+    return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+  });
+}
+
+/** In a sequential project, the step on the board now: the first task not DONE. */
+export function currentStep(ordered: Task[]): Task | null {
+  return ordered.find((t) => t.status !== "DONE") ?? null;
+}
+
+/**
+ * Ids of the tasks the main BOARD does not show:
+ *   • every task of a "project only" project;
+ *   • in a sequential project, the steps after the current one that are not
+ *     DONE yet (finished steps were on the board when they were done).
+ */
+export function hiddenFromBoard(projects: Project[], tasks: Task[]): Set<string> {
+  const hidden = new Set<string>();
+  for (const p of projects) {
+    const mode = boardMode(p);
+    if (mode === "all") continue;
+    const ordered = orderedProjectTasks(p, tasks);
+    if (mode === "none") {
+      for (const t of ordered) hidden.add(t.id);
+      continue;
+    }
+    const cur = currentStep(ordered);
+    for (const t of ordered) if (t.status !== "DONE" && t !== cur) hidden.add(t.id);
+  }
+  return hidden;
+}
+
+/** The tasks the main BOARD shows (and the report's board snapshot). */
+export function boardTasks(board: Pick<Board, "tasks" | "projects">): Task[] {
+  const hidden = hiddenFromBoard(board.projects ?? [], board.tasks);
+  return hidden.size ? board.tasks.filter((t) => !hidden.has(t.id)) : board.tasks;
+}
+
+/** "Step 2 of 5" for a task of a sequential project, else null. */
+export function stepOf(task: Task, projects: Project[], tasks: Task[]): { n: number; total: number } | null {
+  const p = task.projectId ? projects.find((x) => x.id === task.projectId) : undefined;
+  if (!p || boardMode(p) !== "sequential") return null;
+  const ordered = orderedProjectTasks(p, tasks);
+  return { n: ordered.findIndex((t) => t.id === task.id) + 1, total: ordered.length };
+}
+
 export type Health = "done" | "overdue" | "atRisk" | "onTrack" | "noDate";
 
 export const HEALTH_COLOR: Record<Health, string> = {
@@ -78,6 +140,8 @@ export interface ProjectStats {
   done: number;
   /** 0..1 */
   share: number;
+  /** Sequential projects: the step on the board now. */
+  current: Task | null;
   /** Linked tasks per board column. */
   byStatus: Record<Status, number>;
   status: ProjectStatus;
@@ -98,7 +162,7 @@ function isoDiffDays(fromIso: string, toIso: string): number {
 }
 
 export function projectStats(p: Project, allTasks: Task[], now = Date.now()): ProjectStats {
-  const tasks = projectTasks(allTasks, p.id);
+  const tasks = orderedProjectTasks(p, allTasks);
   const byStatus = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0])) as Record<Status, number>;
   for (const t of tasks) byStatus[t.status] += 1;
   const total = tasks.length;
@@ -138,6 +202,7 @@ export function projectStats(p: Project, allTasks: Task[], now = Date.now()): Pr
     total,
     done,
     share,
+    current: boardMode(p) === "sequential" ? currentStep(tasks) : null,
     byStatus,
     status: complete ? "done" : "ongoing",
     completedAt: finishedAt,
@@ -215,5 +280,7 @@ export function newProject(name: string, owners: string[] = []): Project {
     startDate: undefined,
     targetDate: undefined,
     color: "",
+    boardMode: "all",
+    taskOrder: [],
   };
 }

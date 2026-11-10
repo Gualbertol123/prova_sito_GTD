@@ -73,6 +73,9 @@ export interface Reflection {
 /** Derived, never stored: "done" once every linked task is DONE. */
 export type ProjectStatus = "ongoing" | "done";
 
+/** How a project's tasks reach the main board (migration 016). */
+export type BoardMode = "all" | "sequential" | "none";
+
 // A project: details and notes; its work is the board tasks linked to it
 // through Task.projectId. Every field after `items` needs migration 015;
 // before it they read as defaults and are not saved.
@@ -93,6 +96,10 @@ export interface Project {
   targetDate?: string; // ISO yyyy-mm-dd
   /** #rrggbb accent; empty = picked from the id. */
   color?: string;
+  /** all = every task on the board; sequential = only the current step; none = project only. */
+  boardMode?: BoardMode;
+  /** Task ids in step order; tasks not listed follow, oldest first. */
+  taskOrder?: string[];
 }
 
 // A note only its author sees, kept behind the same per-member password as the
@@ -123,6 +130,8 @@ export interface Board {
   assigneesAvailable?: boolean;
   /** False when migration 015 has not been run: projects have a name only. */
   projectsV2Available?: boolean;
+  /** False when migration 016 has not been run: every project task is on the board. */
+  boardModeAvailable?: boolean;
   updatedAt: number;
   rev?: number; // optional; not used by the Supabase backend
   // Editable settings (nullable until the settings migration is applied).

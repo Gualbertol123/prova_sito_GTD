@@ -1,5 +1,5 @@
 import type { Board, Priority, Project, Status, Task } from "./types";
-import { projectColor, reportProjects, type ProjectStats } from "./projects";
+import { boardTasks, projectColor, reportProjects, type ProjectStats } from "./projects";
 import { periodBounds, type PlannerColumn, type ReportData } from "./reportData";
 
 // -----------------------------------------------------------------------------
@@ -52,7 +52,9 @@ export interface CoverStats {
 }
 
 export function coverStats(board: Board, data: ReportData): CoverStats {
-  const count = (s: Status) => board.tasks.filter((t) => t.status === s).length;
+  // The board as the BOARD tab shows it (project tasks kept off it excluded).
+  const shown = boardTasks(board);
+  const count = (s: Status) => shown.filter((t) => t.status === s).length;
   return {
     done: data.totalTasks,
     subtasks: data.totalSubtasks,

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { boardTasks } from "../lib/projects";
 import { taskOwners } from "../lib/owners";
 import type { Board } from "../lib/types";
 import { isArchived } from "../lib/constants";
@@ -15,7 +16,7 @@ export function MailModal({ board, onClose }: { board: Board; onClose: () => voi
   const text = useMemo(() => {
     const done = board.tasks.filter((tk) => tk.status === "DONE" && !isArchived(tk));
     const focus = board.weekly.focus;
-    const next = board.tasks.filter((tk) => tk.status === "NEXT");
+    const next = boardTasks(board).filter((tk) => tk.status === "NEXT");
 
     let e = `${t("mail.completed")}\n`;
     if (done.length === 0) e += `- ${t("mail.none")}\n`;

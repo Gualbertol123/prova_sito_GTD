@@ -1,6 +1,7 @@
 import type { Board, Project, Status, Subtask, Task } from "./types";
 import { PRIORITY_ORDER } from "./constants";
 import { toISODate } from "./dates";
+import { boardTasks } from "./projects";
 
 // ---- Week maths -------------------------------------------------------------
 // Weeks run Monday → Sunday (ISO), which is how the team reads a "week".
@@ -104,14 +105,17 @@ export function collectReport(board: Board, period: Period): ReportData {
   }
   done.sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
 
-  const next: ReportTask[] = board.tasks
+  // Next and the planner are a snapshot of the BOARD tab, so project tasks
+  // kept off the board are not in them. Done counts every completed task.
+  const onBoard = boardTasks(board);
+  const next: ReportTask[] = onBoard
     .filter((t) => t.status === "NEXT")
     .sort(byPriorityThenTitle)
     .map((task) => ({ task, completedAt: null, subtasks: task.subtasks ?? [] }));
 
   const planner: PlannerColumn[] = PLANNER_COLUMNS.map((status) => ({
     status,
-    tasks: board.tasks.filter((t) => t.status === status).sort(byPriorityThenTitle),
+    tasks: onBoard.filter((t) => t.status === status).sort(byPriorityThenTitle),
   }));
 
   return {

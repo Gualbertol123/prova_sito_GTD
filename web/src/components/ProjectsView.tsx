@@ -5,6 +5,7 @@ import { useMe } from "../lib/identity";
 import { readPref, writePref } from "../lib/prefs";
 import {
   HEALTH_COLOR,
+  boardMode,
   PROJECT_STATUS_COLOR,
   newProject,
   projectColor,
@@ -434,6 +435,19 @@ function ProjectCard({ project: p, stats: s, onOpen }: { project: Project; stats
               </span>
             )}
           </div>
+          {!done && boardMode(p) !== "all" && (
+            <div className="text-[11px] text-[#8A8A8A] truncate">
+              {boardMode(p) === "sequential" ? "⇢ " : "⊘ "}
+              {t(`projects.mode.${boardMode(p)}`)}
+              {boardMode(p) === "sequential" && s.current && (
+                <>
+                  {" · "}
+                  {t("projects.step.of", { n: s.tasks.indexOf(s.current) + 1, total: s.total })}:{" "}
+                  <span className="text-[#0A1931] font-medium">{s.current.title}</span>
+                </>
+              )}
+            </div>
+          )}
           {!done && s.nextDue && (
             <div className="text-[11px] text-[#8A8A8A] truncate">
               {t("projects.nextDue")}: <span className="text-[#0A1931] font-medium">{s.nextDue.title}</span> · {fmtDay(s.nextDue.dueDate, lang)}

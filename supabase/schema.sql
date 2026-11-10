@@ -105,7 +105,10 @@ create table public.projects (
   priority    text   not null default 'P2',     -- P1..P4
   start_date  text,                             -- ISO yyyy-mm-dd
   target_date text,                             -- ISO yyyy-mm-dd
-  color       text   not null default ''        -- #rrggbb, '' = automatic
+  color       text   not null default '',       -- #rrggbb, '' = automatic
+  board_mode  text   not null default 'all'     -- all | sequential | none (migration 016)
+              constraint projects_board_mode_check check (board_mode in ('all', 'sequential', 'none')),
+  task_order  jsonb  not null default '[]'::jsonb -- task ids in step order
 );
 create index projects_created_idx on public.projects (created_at);
 

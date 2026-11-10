@@ -6,7 +6,7 @@ import { ownerInitial, ownersLabel, taskOwners } from "../lib/owners";
 import { daysSince, daysUntil } from "../lib/dates";
 import { TaskDetails } from "./TaskDetails";
 import { useProjects } from "../lib/projectsContext";
-import { projectColor } from "../lib/projects";
+import { projectColor, stepOf } from "../lib/projects";
 
 interface Props {
   task: Task;
@@ -38,8 +38,9 @@ export function TaskCard({
   const waiting = task.status === "WAITING" ? daysSince(task.waitingSince) : 0;
   const dueFmt = task.dueDate ? new Date(task.dueDate).toLocaleDateString(localeCode(lang)) : "";
   const owners = taskOwners(task);
-  const { projects } = useProjects();
+  const { projects, tasks: allTasks } = useProjects();
   const project = task.projectId ? projects.find((p) => p.id === task.projectId) : undefined;
+  const step = project ? stepOf(task, projects, allTasks) : null;
 
   return (
     <div
@@ -111,6 +112,7 @@ export function TaskCard({
               title={project.name}
             >
               ◆ <span className="truncate">{project.name}</span>
+              {step && <span className="shrink-0 opacity-80">· {t("projects.step.of", { n: step.n, total: step.total })}</span>}
             </span>
           )}
         </div>

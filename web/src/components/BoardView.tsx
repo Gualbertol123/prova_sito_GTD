@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { boardTasks } from "../lib/projects";
 import type { Board, Op, Priority, Status, Task } from "../lib/types";
 import { STATUS_ORDER, PRIORITY_ORDER, isArchived } from "../lib/constants";
 import { priorityLabel, statusLabel, useT } from "../lib/i18n";
@@ -77,9 +78,13 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   };
   const getW = (s: string) => weightsRef.current[s] ?? 1;
 
+  // Project tasks kept off the board (project only, or later steps of a
+  // sequential project) are left out of everything on this tab.
+  const shown = useMemo(() => boardTasks(board), [board]);
+
   // Filter + priority-sort.
   const q = filters.search.trim().toLowerCase();
-  const tasks: Task[] = board.tasks
+  const tasks: Task[] = shown
     .filter((tk) => {
       const text = !q || tk.title.toLowerCase().includes(q) || tk.desc.toLowerCase().includes(q);
       const owner = filters.owner === "all" || isOwnedBy(tk, filters.owner);
@@ -93,7 +98,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
   const listTasks = tasks.filter((tk) => !hidden.has(tk.status));
   // Archive is self-contained: the whole archive (ignoring the board filters
   // above) with its own search box.
-  const archivedAll = board.tasks.filter((tk) => isArchived(tk));
+  const archivedAll = shown.filter((tk) => isArchived(tk));
   const aq = archQuery.trim().toLowerCase();
   const archivedShown = aq
     ? archivedAll.filter(
@@ -103,7 +108,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
 
   // Done bar mirrors the DONE column (this week's completed) as a full-width
   // section with its own search, sitting above the Archived bar.
-  const doneWeekAll = board.tasks.filter((tk) => tk.status === "DONE" && !isArchived(tk));
+  const doneWeekAll = shown.filter((tk) => tk.status === "DONE" && !isArchived(tk));
   const dq = doneQuery.trim().toLowerCase();
   const doneShown = dq
     ? doneWeekAll.filter(
@@ -331,7 +336,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
       </div>
 
       {/* Priority distribution — its own space */}
-      <PriorityDistribution tasks={board.tasks} />
+      <PriorityDistribution tasks={shown} />
 
       {view === "list" ? (
         <ListView

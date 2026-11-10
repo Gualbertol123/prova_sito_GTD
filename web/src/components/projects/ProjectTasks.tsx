@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import type { Board, Op, Priority, Project, Status, Task } from "../../lib/types";
+import type { Board, BoardMode, Op, Priority, Project, Status, Task } from "../../lib/types";
 import { PRIORITY_DOT, STATUS_ORDER, UNASSIGNED, genId, isArchived } from "../../lib/constants";
 import { priorityLabel, statusLabel, useT } from "../../lib/i18n";
 import { useMe } from "../../lib/identity";
 import { isOwnedBy, ownersPatch, taskOwners } from "../../lib/owners";
 import { daysSince, daysUntil, toISODate } from "../../lib/dates";
 import { readPref, writePref } from "../../lib/prefs";
-import { HEALTH_COLOR, TASK_STATUS_COLOR, projectPriority, type ProjectStats } from "../../lib/projects";
+import { HEALTH_COLOR, TASK_STATUS_COLOR, boardMode, projectPriority, type ProjectStats } from "../../lib/projects";
 import { TaskDetails } from "../TaskDetails";
 import { Avatars, StatusStack, fmtDay } from "./ProjectBits";
 
@@ -88,6 +88,18 @@ export function ProjectTasks({
   });
   const doneCount = filtered.filter((x) => x.status === "DONE").length;
 
+  const mode = boardMode(p);
+  const sequential = mode === "sequential";
+  // Swap a step with its neighbour in the full order (filters don't matter).
+  const shiftStep = (id: string, dir: -1 | 1) => {
+    const ids = s.tasks.map((x) => x.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    save({ type: "projectUpdate", id: p.id, patch: { taskOrder: ids } });
+  };
+
   const move = (id: string, st: Status) => save({ type: "moveTask", id, status: st });
   const unlink = (id: string) => save({ type: "updateTask", id, patch: { projectId: undefined } });
   const toggle = (id: string) => setOpenId((cur) => (cur === id ? null : id));
@@ -113,6 +125,8 @@ export function ProjectTasks({
           ))}
         </div>
       </div>
+
+      <BoardModePicker project={p} available={v2 && !!board.boardModeAvailable} save={save} />
 
       {s.total > 0 && (
         <div className="space-y-1.5">
@@ -223,7 +237,7 @@ export function ProjectTasks({
               ))}
             </select>
           )}
-          {view === "list" && doneCount > 0 && (
+          {view === "list" && !sequential && doneCount > 0 && (
             <button
               onClick={() => setShowDone((v) => !v)}
               className="h-8 px-3 rounded-full border border-[#E8E6E1] bg-white text-[12px] text-[#6B6B6B] hover:border-[#C9A96E]"
@@ -238,6 +252,73 @@ export function ProjectTasks({
         v2 && <div className="text-[12px] text-[#A8A29E] py-3 text-center">{t("projects.tasks.none")}</div>
       ) : filtered.length === 0 ? (
         <div className="text-[12px] text-[#A8A29E] py-3 text-center">{t("projects.tasks.noneFiltered")}</div>
+      ) : view === "list" && sequential ? (
+        <div className="space-y-1.5">
+          {filtered.map((task) => {
+            const n = s.tasks.findIndex((x) => x.id === task.id);
+            const isNow = s.current?.id === task.id;
+            const done = task.status === "DONE";
+            return (
+              <div key={task.id} className="flex items-stretch gap-2">
+                <div className="flex flex-col items-center w-7 shrink-0 pt-2">
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold"
+                    style={
+                      done
+                        ? { background: "#34C759", color: "#fff" }
+                        : isNow
+                          ? { background: "#007AFF", color: "#fff" }
+                          : { background: "rgba(120,120,128,0.18)", color: "#8E8E93" }
+                    }
+                  >
+                    {done ? "✓" : n + 1}
+                  </span>
+                  {n < s.tasks.length - 1 && <span className="flex-1 w-px mt-1" style={{ background: "rgba(120,120,128,0.3)" }} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <TaskRow
+                    task={task}
+                    board={board}
+                    open={openId === task.id}
+                    onToggle={() => toggle(task.id)}
+                    onMove={(st2) => move(task.id, st2)}
+                    onUnlink={() => unlink(task.id)}
+                    save={save}
+                    badge={
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wide ${
+                          isNow ? "text-[#007AFF]" : done ? "text-[#34C759]" : "text-[#A8A29E]"
+                        }`}
+                      >
+                        {isNow ? t("projects.step.now") : done ? t("projects.step.done") : t("projects.step.waiting")}
+                      </span>
+                    }
+                    extra={
+                      <span className="flex flex-col shrink-0">
+                        <button
+                          onClick={() => shiftStep(task.id, -1)}
+                          disabled={n === 0}
+                          title={t("projects.step.up")}
+                          className="w-6 h-[14px] leading-none text-[11px] text-[#8A8A8A] disabled:opacity-25"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => shiftStep(task.id, 1)}
+                          disabled={n === s.tasks.length - 1}
+                          title={t("projects.step.down")}
+                          className="w-6 h-[14px] leading-none text-[11px] text-[#8A8A8A] disabled:opacity-25"
+                        >
+                          ▼
+                        </button>
+                      </span>
+                    }
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : view === "list" ? (
         <div className="space-y-3">
           {STATUS_ORDER.filter((st) => st !== "DONE" || showDone).map((st) => {
@@ -328,6 +409,8 @@ function TaskRow({
   onMove,
   onUnlink,
   save,
+  badge,
+  extra,
 }: {
   task: Task;
   board: Board;
@@ -336,6 +419,10 @@ function TaskRow({
   onMove: (s: Status) => void;
   onUnlink: () => void;
   save: (op: Op) => void;
+  /** Shown above the title (sequence state). */
+  badge?: React.ReactNode;
+  /** Shown before the status menu (sequence arrows). */
+  extra?: React.ReactNode;
 }) {
   const { t, lang } = useT();
   const done = task.status === "DONE";
@@ -347,6 +434,7 @@ function TaskRow({
         </span>
         <span className={`w-2 h-2 mt-1.5 shrink-0 rounded-full ${PRIORITY_DOT[task.priority]}`} title={task.priority} />
         <button onClick={onToggle} className="flex-1 min-w-0 text-left space-y-1">
+          {badge && <span className="block">{badge}</span>}
           <span
             className={`block text-[13px] leading-snug break-words [overflow-wrap:anywhere] ${
               done ? "line-through text-[#A8A29E]" : "text-[#0A1931] font-medium"
@@ -356,6 +444,7 @@ function TaskRow({
           </span>
           <TaskMeta task={task} />
         </button>
+        {extra}
         <select
           value={task.status}
           onChange={(e) => onMove(e.target.value as Status)}
@@ -494,6 +583,36 @@ function MiniBoard({
           <Editor task={opened} board={board} save={save} onDeleted={() => onToggle(opened.id)} />
         </div>
       )}
+    </div>
+  );
+}
+
+const MODES: BoardMode[] = ["all", "sequential", "none"];
+
+// How this project's tasks reach the main BOARD.
+function BoardModePicker({ project: p, available, save }: { project: Project; available: boolean; save: (op: Op) => void }) {
+  const { t } = useT();
+  const mode = boardMode(p);
+  return (
+    <div className="rounded-[12px] border border-[#E8E6E1] bg-[#F5F3EF] px-3 py-2 space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="font-trajan text-[10px] uppercase tracking-widest text-[#8A8A8A]">{t("projects.board.label")}</span>
+        <div className="flex rounded-full border border-[#E8E6E1] bg-white p-0.5">
+          {MODES.map((m) => (
+            <button
+              key={m}
+              disabled={!available}
+              onClick={() => m !== mode && save({ type: "projectUpdate", id: p.id, patch: { boardMode: m } })}
+              className={`h-7 px-3 rounded-full text-[12px] font-semibold disabled:opacity-50 ${
+                mode === m ? "bg-[#0A1931] text-[#C9A96E]" : "text-[#6B6B6B]"
+              }`}
+            >
+              {t(`projects.board.${m}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="text-[11px] text-[#8A8A8A]">{available ? t(`projects.board.hint.${mode}`) : t("projects.board.needsMigration")}</div>
     </div>
   );
 }

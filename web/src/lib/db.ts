@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { Board, PersonalNote, Op, Priority, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
+import type { BoardMode, Board, PersonalNote, Op, Priority, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -160,7 +160,11 @@ interface ProjectRow {
   start_date?: string | null;
   target_date?: string | null;
   color?: string | null;
+  board_mode?: string | null; // migration 016
+  task_order?: string[] | null;
 }
+
+const BOARD_MODES: BoardMode[] = ["all", "sequential", "none"];
 
 const PRIORITIES: Priority[] = ["P1", "P2", "P3", "P4"];
 
@@ -179,6 +183,8 @@ function rowToProject(r: ProjectRow): Project {
     startDate: r.start_date || undefined,
     targetDate: r.target_date || undefined,
     color: r.color || "",
+    boardMode: BOARD_MODES.includes(r.board_mode as BoardMode) ? (r.board_mode as BoardMode) : "all",
+    taskOrder: Array.isArray(r.task_order) ? r.task_order.filter((x) => typeof x === "string") : [],
   };
 }
 
@@ -205,6 +211,10 @@ function projectPatchToRow(patch: Partial<Project>): Record<string, unknown> {
   if ("startDate" in patch) out.start_date = patch.startDate || null;
   if ("targetDate" in patch) out.target_date = patch.targetDate || null;
   if ("color" in patch) out.color = patch.color ?? "";
+  if (hasBoardMode) {
+    if ("boardMode" in patch) out.board_mode = patch.boardMode ?? "all";
+    if ("taskOrder" in patch) out.task_order = patch.taskOrder ?? [];
+  }
   return out;
 }
 
@@ -245,6 +255,19 @@ async function probeProjectsV2(): Promise<boolean> {
     hasProjectsV2 = false;
   }
   return hasProjectsV2;
+}
+
+// Has migration 016 run (projects.board_mode / task_order)?
+let hasBoardMode = false;
+
+async function probeBoardMode(): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("projects").select("board_mode,task_order").limit(1);
+    hasBoardMode = !error;
+  } catch {
+    hasBoardMode = false;
+  }
+  return hasBoardMode;
 }
 
 async function probeAssignees(): Promise<boolean> {
@@ -318,6 +341,7 @@ export async function fetchBoard(): Promise<Board> {
     notesRes,
     assignees,
     projectsV2,
+    boardMode,
   ] = await Promise.all([
     supabase.from("board_meta").select("*").eq("id", "main").maybeSingle(),
     supabase.from("tasks").select("*").order("created_at", { ascending: true }),
@@ -327,6 +351,7 @@ export async function fetchBoard(): Promise<Board> {
     fetchPersonalNotes(),
     probeAssignees(),
     probeProjectsV2(),
+    probeBoardMode(),
   ]);
 
   if (meta.error) throw meta.error;
@@ -361,6 +386,7 @@ export async function fetchBoard(): Promise<Board> {
     personalNotesError: notesRes.error,
     assigneesAvailable: assignees,
     projectsV2Available: projectsV2,
+    boardModeAvailable: boardMode,
     updatedAt: Date.now(),
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
