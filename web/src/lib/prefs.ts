@@ -15,7 +15,6 @@ const KEYS = {
   reflpane: "gtd-reflection-pane",
   skin: "gtd-skin",
   appearance: "gtd-appearance",
-  projOpen: "gtd-project-open",
   projView: "gtd-projects-view",
   projTasksView: "gtd-project-tasks-view",
   layout: "gtd-layout",

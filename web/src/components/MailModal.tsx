@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useBackClose } from "../lib/history";
 import { boardTasks } from "../lib/projects";
 import { taskOwners } from "../lib/owners";
 import type { Board } from "../lib/types";
@@ -10,6 +11,7 @@ const mailOwners = (t: { owner: string; assignees?: string[] }) =>
   taskOwners(t).filter((n) => n !== "Unassigned").join(", ");
 
 export function MailModal({ board, onClose }: { board: Board; onClose: () => void }) {
+  useBackClose(onClose); // the browser's Back closes it
   const { t } = useT();
   const [copied, setCopied] = useState(false);
 

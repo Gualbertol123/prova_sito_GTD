@@ -20,6 +20,7 @@ import { IdentityPicker } from "./components/IdentityPicker";
 import { GlassToggle } from "./components/GlassToggle";
 import { ProjectsProvider } from "./lib/projectsContext";
 import { useLayout } from "./mobile/useLayout";
+import { navigate, useRoute } from "./lib/history";
 
 // The phone layout is its own chunk: desktop visitors never download it.
 const MobileApp = lazy(() => import("./mobile/MobileApp").then((m) => ({ default: m.MobileApp })));
@@ -28,7 +29,16 @@ export default function App() {
   const { board, conn, error, send } = useBoard();
   const { t } = useT();
   const layout = useLayout();
-  const [tab, setTab] = useState<TabId>("board");
+  // The tab lives in the URL (#/board, #/projects/<id>, …) so the browser's
+  // Back and Forward move between tabs. Addresses from the phone layout are
+  // translated, so switching layout keeps your place.
+  const route = useRoute();
+  const tab = desktopTab(route.tab, route.sub);
+  const setTab = (t: TabId) => navigate({ tab: t });
+  useEffect(() => {
+    if (!layout.mobile && (route.tab !== tab || (route.sub && tab !== "projects")))
+      navigate({ tab, sub: tab === "projects" ? route.sub : undefined }, { replace: true });
+  }, [layout.mobile, route.tab, route.sub, tab]);
   const [mailOpen, setMailOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     search: "",
@@ -174,6 +184,16 @@ export default function App() {
     </div>
     </ProjectsProvider>
   );
+}
+
+const DESKTOP_TABS = new Set<string>(TABS.map((x) => x.id));
+
+/** The desktop tab for a URL, including the phone layout's addresses. */
+function desktopTab(tab: string, sub?: string): TabId {
+  if (DESKTOP_TABS.has(tab)) return tab as TabId;
+  if (tab === "agenda") return "calendario";
+  if (tab === "more" && sub && DESKTOP_TABS.has(sub)) return sub as TabId;
+  return "board";
 }
 
 function filteredForCalendar(

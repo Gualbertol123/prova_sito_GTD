@@ -4,6 +4,7 @@ import type { Priority, Status, Task } from "../lib/types";
 import { UNASSIGNED } from "../lib/constants";
 import { daysUntil } from "../lib/dates";
 import { useT } from "../lib/i18n";
+import { useBackClose } from "../lib/history";
 import { taskOwners } from "../lib/owners";
 import { IconClose } from "./icons";
 
@@ -130,6 +131,7 @@ export function Sheet({
   const drag = useRef<{ y0: number; dy: number } | null>(null);
   const close = useRef(onClose);
   close.current = onClose;
+  useBackClose(onClose); // the browser's / phone's Back closes the top sheet
 
   useEffect(() => {
     const id = ++sheetSeq;

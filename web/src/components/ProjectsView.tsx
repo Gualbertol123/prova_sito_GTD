@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { goBackTo, useRouteSub } from "../lib/history";
 import type { Board, Op, Project } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { useMe } from "../lib/identity";
@@ -36,7 +37,10 @@ export function ProjectsView({ board, send }: Props) {
   const v2 = !!board.projectsV2Available;
   const projects = board.projects;
 
-  const [openId, setOpenId] = useState<string | null>(() => readPref("projOpen") || null);
+  // The open project is part of the URL (#/projects/<id>), so Back returns
+  // from a project page to the list.
+  const [openSub, setOpenSub] = useRouteSub("projects");
+  const openId = openSub ?? null;
   const [view, setView] = useState<ViewMode>(() => (readPref("projView") === "timeline" ? "timeline" : "cards"));
   const [filter, setFilter] = useState<Filter>("ongoing");
   const [owner, setOwner] = useState("all");
@@ -46,9 +50,8 @@ export function ProjectsView({ board, send }: Props) {
   const [creating, setCreating] = useState("");
   const { me } = useMe();
 
-  const open = (id: string | null) => {
-    setOpenId(id);
-    writePref("projOpen", id ?? "");
+  const open = (id: string | null, replace = false) => {
+    setOpenSub(id ?? undefined, { replace });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const setViewMode = (m: ViewMode) => {
@@ -58,7 +61,7 @@ export function ProjectsView({ board, send }: Props) {
 
   // A project deleted (here or elsewhere) closes its page.
   useEffect(() => {
-    if (openId && !projects.some((p) => p.id === openId)) open(null);
+    if (openId && !projects.some((p) => p.id === openId)) open(null, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects, openId]);
 
@@ -136,7 +139,10 @@ export function ProjectsView({ board, send }: Props) {
         stats={stats.get(selected.id)!}
         send={send}
         v2={v2}
-        onBack={() => open(null)}
+        onBack={() => {
+          goBackTo({ tab: "projects" });
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
         prevId={idx > 0 ? list[idx - 1].id : null}
         nextId={idx >= 0 && idx < list.length - 1 ? list[idx + 1].id : null}
         onOpen={open}

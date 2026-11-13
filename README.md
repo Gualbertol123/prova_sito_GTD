@@ -67,6 +67,19 @@ sheen, Apple's system colours, label steps — so it follows light / dark with
 it. The tab bar floats as a glass capsule with the + beside it, as on iOS 26.
 With the classic skin it falls back to the cream / navy / gold look.
 
+### 1c. Addresses and the Back button
+
+Where you are is part of the address (`lib/history.ts`), so the browser's
+**Back** and **Forward** work and a link or a reload opens the same place:
+`#/board`, `#/projects`, `#/projects/<id>` (an open project), `#/weekly`,
+`#/calendario`, … on the desktop; `#/today`, `#/board`, `#/projects`,
+`#/agenda`, `#/more`, `#/more/weekly`, … on a phone. Each layout understands
+the other's addresses (the desktop calendar is the phone's Agenda, the
+desktop Weekly is *More → Weekly*), so switching layout keeps your place.
+Sheets and pop-ups (the task, project, add and chooser sheets on a phone, the
+mail pop-up on the desktop) add a step of their own: Back closes the one on
+top first. Closing one with ×, a swipe or Escape removes its step again.
+
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
 switch (§10, on by default), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
@@ -137,7 +150,6 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-report-draft:<period>` | that week's report edits, kept 7 days; removed on logout |
 | `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
 | `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
-| `gtd-project-open` | the project page left open in the PROJECTS tab |
 | `gtd-projects-view` | PROJECTS overview as `cards` or `timeline` |
 | `gtd-project-tasks-view` | a project's tasks as `list` or `board` |
 | `gtd-layout` | `auto` (phone-sized → mobile) / `mobile` / `desktop` |
@@ -315,6 +327,7 @@ prova_sito_GTD/
         │   ├── localReducer.ts   ← applyOpLocal (optimistic in-memory updates)
         │   ├── useBoard.ts       ← load + realtime + poll + optimistic send()  (core hook)
         │   ├── rowSync.ts        ← folds one changed row (from realtime) into the board
+        │   ├── history.ts        ← tabs / project / More page in the URL; Back closes sheets
         │   ├── i18n.mobile.ts    ← the mobile app's IT/EN strings (merged into i18n.tsx)
         │   ├── __tests__/        ← Vitest: reducer, live sync, projects, subtask writes, i18n parity
         │   ├── seed.ts           ← initial data for a brand-new empty project

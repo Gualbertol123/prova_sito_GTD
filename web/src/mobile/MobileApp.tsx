@@ -7,6 +7,7 @@ import { isOwnedBy } from "../lib/owners";
 import { boardTasks } from "../lib/projects";
 import { daysUntil } from "../lib/dates";
 import { readPref, writePref } from "../lib/prefs";
+import { goBackTo, navigate, useRoute } from "../lib/history";
 import { MailModal } from "../components/MailModal";
 import { Avatar, ToastProvider, setAvatarMembers } from "./ui";
 import { NavCtx, type MobileNav, type MobileTab } from "./nav";
@@ -37,9 +38,25 @@ const CONN_COLOR: Record<ConnState, string> = {
   offline: "var(--m-red)",
 };
 
-function readTab(): MobileTab {
+function savedTab(): MobileTab {
   const v = readPref("mTab");
   return TABS.some((t) => t.id === v) ? (v as MobileTab) : "today";
+}
+
+const MORE_PAGES = new Set<string>(["weekly", "report", "reflection", "products", "settings"]);
+
+/**
+ * Where the URL points, in phone terms. The desktop's addresses are
+ * translated (its calendar is the Agenda, its Weekly is a page in More), so
+ * switching layout keeps your place; an empty address opens the last tab.
+ */
+function mobileRoute(tab: string, sub?: string): { tab: MobileTab; page: MorePage } {
+  if (tab === "more") return { tab, page: sub && MORE_PAGES.has(sub) ? (sub as MorePage) : null };
+  if (TABS.some((x) => x.id === tab)) return { tab: tab as MobileTab, page: null };
+  if (tab === "calendario") return { tab: "agenda", page: null };
+  if (MORE_PAGES.has(tab)) return { tab: "more", page: tab as MorePage };
+  if (tab === "board" || tab === "projects") return { tab, page: null };
+  return { tab: savedTab(), page: null };
 }
 
 /**
@@ -77,8 +94,18 @@ function Shell({
 }) {
   const { t, lang } = useT();
   const { me } = useMe();
-  const [tab, setTabState] = useState<MobileTab>(readTab);
-  const [morePage, setMorePage] = useState<MorePage>(null);
+  // Tab and More page live in the URL (#/today, #/more/weekly, …), so the
+  // browser's Back moves between them; sheets add their own entries (Sheet).
+  const route = useRoute();
+  const { tab, page: morePage } = mobileRoute(route.tab, route.sub);
+  useEffect(() => {
+    if (route.tab !== tab || (route.sub ?? null) !== (morePage ?? null))
+      navigate({ tab, sub: morePage ?? undefined }, { replace: true });
+  }, [route.tab, route.sub, tab, morePage]);
+  const setMorePage = useCallback(
+    (p: MorePage) => (p ? navigate({ tab: "more", sub: p }) : goBackTo({ tab: "more" })),
+    []
+  );
   const [taskId, setTaskId] = useState<string | null>(null);
   const [moveId, setMoveId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -98,14 +125,15 @@ function Shell({
     };
   }, []);
 
-  const setTab = useCallback((next: MobileTab) => {
-    setTabState((cur) => {
-      if (cur === next) window.scrollTo({ top: 0, behavior: "smooth" });
-      return next;
-    });
-    if (next !== "more") setMorePage(null);
-    writePref("mTab", next);
-  }, []);
+  const setTab = useCallback(
+    (next: MobileTab) => {
+      // Tapping the tab you are on scrolls to the top (and leaves a More page).
+      if (next === tab && !morePage) window.scrollTo({ top: 0, behavior: "smooth" });
+      else navigate({ tab: next });
+      writePref("mTab", next);
+    },
+    [tab, morePage]
+  );
 
   // Changing tab starts at the top.
   useEffect(() => {
