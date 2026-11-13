@@ -12,7 +12,7 @@ import {
   usePlaylists,
   type Playlist,
 } from "../lib/musicDb";
-import { ModeSwitch, Progress, SearchError } from "./MusicPlayer";
+import { Cover, ModeSwitch, Progress, SearchError } from "./MusicPlayer";
 import "../styles/musicTab.css";
 
 // -----------------------------------------------------------------------------
@@ -162,11 +162,16 @@ function ArtistAvatar({ name, size }: { name: string; size: number }) {
 function Mosaic({ tracks, size }: { tracks: Track[]; size: number }) {
   const pics = tracks.slice(0, 4).map((t) => coverOf(t.id));
   if (pics.length === 0) return <span className="mt-mosaic mt-mosaic--empty" style={{ width: size, height: size }}>♪</span>;
-  if (pics.length < 4) return <img className="mt-mosaic" src={pics[0]} alt="" style={{ width: size, height: size }} />;
+  if (pics.length < 4)
+    return (
+      <span className="mt-mosaic" style={{ width: size, height: size, display: "inline-grid" }}>
+        <Cover src={pics[0]} className="mt-mosaic__one" />
+      </span>
+    );
   return (
     <span className="mt-mosaic mt-mosaic--grid" style={{ width: size, height: size }}>
       {pics.map((p, i) => (
-        <img key={i} src={p} alt="" />
+        <Cover key={i} src={p} />
       ))}
     </span>
   );
@@ -497,7 +502,7 @@ function TrackTable({ tracks, label, playlists, inPlaylist }: { tracks: Track[];
               </button>
             </span>
             <span className="mt-tr__title">
-              <img src={tr.thumb || coverOf(tr.id)} alt="" loading="lazy" />
+              <Cover id={tr.id} src={tr.thumb} className="mt-img40" />
               <span>
                 <b>{tr.title || tr.id}</b>
                 <small>{tr.channel}</small>
@@ -627,7 +632,7 @@ function NowPlaying() {
         {video ? (
           <div className="mt-now__video" ref={slot} />
         ) : (
-          <div className="mt-now__cover">{st.now ? <img src={coverOf(st.now.id, true)} alt="" /> : <span>♪</span>}</div>
+          <div className="mt-now__cover">{st.now ? <Cover id={st.now.id} big /> : <span>♪</span>}</div>
         )}
         <div className="mt-now__title">{st.notice ?? st.now?.title ?? t("music.nothing")}</div>
         <div className="mt-now__author">{st.now?.author}</div>
@@ -639,7 +644,7 @@ function NowPlaying() {
             <div className="mt-queue">
               {upNext.map((tr, i) => (
                 <button key={tr.id + i} className="mt-qitem" onClick={() => music.playAt(st.index + 1 + i)}>
-                  <img src={tr.thumb || coverOf(tr.id)} alt="" loading="lazy" />
+                  <Cover id={tr.id} src={tr.thumb} className="mt-img40" />
                   <span>
                     <b>{tr.title}</b>
                     <small>{tr.channel}</small>
@@ -663,7 +668,7 @@ function PlayerBar({ playlists }: { playlists: Playlist[] }) {
   return (
     <footer className="mt-bar">
       <div className="mt-bar__song">
-        {st.now ? <img src={coverOf(st.now.id)} alt="" /> : <span className="mt-bar__ph">♪</span>}
+        {st.now ? <Cover id={st.now.id} className="mt-bar__img" /> : <span className="mt-bar__ph">♪</span>}
         <span>
           <b>{st.notice ?? st.now?.title ?? t("music.nothing")}</b>
           <small>{st.now?.author}</small>

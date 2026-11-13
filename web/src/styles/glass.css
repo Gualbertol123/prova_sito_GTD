@@ -695,3 +695,30 @@ html[data-skin="glass"] .qa-field:focus {
 }
 html[data-skin="glass"] .qa-field::before { content: none !important; }
 html[data-skin="glass"] .qa-field:focus { border-color: var(--ios-blue) !important; }
+
+/* ---------------------------------------------------------------------------
+   10. One live blur per stack.
+   A blurred element inside another blurred element (a card in a column, a
+   pill in a panel, a button in the header) makes Chrome re-render the outer
+   blur in tiles whenever anything inside repaints — even a hover highlight —
+   and the tile edges show as thin, straight light lines that come and go with
+   the mouse. So only the outermost glass surface blurs; everything inside it
+   keeps its tint, rim and sheen, which over an already blurred surface looks
+   the same. (Specificity beats the header pills' !important rule.)
+   --------------------------------------------------------------------------- */
+html[data-skin="glass"]
+  :is(
+    header,
+    .bg-white,
+    .bg-\[\#FAF9F6\],
+    .bg-\[\#FBF6EC\],
+    .bg-\[\#FFFBF2\],
+    .bg-\[\#F0EDE8\],
+    .bg-\[\#EFECE6\],
+    .bg-\[\#0A1931\],
+    .bg-\[\#112040\]
+  )
+  [class] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

@@ -329,12 +329,12 @@ export function MusicPlayer({ mobile }: { mobile: boolean }) {
       </div>
 
       {!inTab && audio && view === "open" && (
-        <div className="mp-cover">{st.now ? <img src={coverOf(st.now.id, true)} alt="" /> : <div className="mp-cover__ph">♪</div>}</div>
+        <div className="mp-cover">{st.now ? <Cover id={st.now.id} big /> : <div className="mp-cover__ph">♪</div>}</div>
       )}
 
       {!inTab && (
         <div className="mp-strip">
-          {audio && view === "mini" && <span className="mp-thumb">{st.now ? <img src={coverOf(st.now.id)} alt="" /> : "♪"}</span>}
+          {audio && view === "mini" && <span className="mp-thumb">{st.now ? <Cover id={st.now.id} /> : "♪"}</span>}
           <div className="mp-now">
             <div className="mp-now__title">{st.notice ?? st.now?.title ?? (st.source ? "…" : t("music.nothing"))}</div>
             {(view === "open" || audio) && st.now?.author && <div className="mp-now__author">{st.now.author}</div>}
@@ -374,6 +374,15 @@ export function MusicPlayer({ mobile }: { mobile: boolean }) {
       {!inTab && view === "open" && <MusicBrowser />}
     </div>
   );
+}
+
+/** A song's picture; ♪ when there is none or it does not load. */
+export function Cover({ id, src, big, className }: { id?: string; src?: string; big?: boolean; className?: string }) {
+  const url = src || coverOf(id, big);
+  const [bad, setBad] = useState(false);
+  useEffect(() => setBad(false), [url]);
+  if (!url || bad) return <span className={`mp-noimg ${className ?? ""}`}>♪</span>;
+  return <img className={className} src={url} alt="" loading="lazy" onError={() => setBad(true)} />;
 }
 
 /** Video or music only. */
@@ -522,7 +531,7 @@ function MusicBrowser() {
               className={`mp-result${st.now?.id === tr.id ? " is-on" : ""}`}
               onClick={() => music.play({ kind: "videos", label: q, tracks: results, start: i })}
             >
-              {tr.thumb ? <img src={tr.thumb} alt="" loading="lazy" /> : <span className="mp-result__ph" />}
+              <Cover id={tr.id} src={tr.thumb} className="mp-result__img" />
               <span>
                 <b>{tr.title}</b>
                 <small>{tr.channel}</small>

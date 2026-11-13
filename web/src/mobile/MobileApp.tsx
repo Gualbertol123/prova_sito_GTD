@@ -8,6 +8,7 @@ import { boardTasks } from "../lib/projects";
 import { daysUntil } from "../lib/dates";
 import { readPref, writePref } from "../lib/prefs";
 import { goBackTo, navigate, useRoute } from "../lib/history";
+import { music } from "../lib/music";
 import { MailModal } from "../components/MailModal";
 import { Avatar, ToastProvider, setAvatarMembers } from "./ui";
 import { NavCtx, type MobileNav, type MobileTab } from "./nav";
@@ -83,6 +84,7 @@ function mobileRoute(tab: string, sub?: string): { tab: MobileTab; page: MorePag
   if (tab === "more") return { tab, page: sub && MORE_PAGES.has(sub) ? (sub as MorePage) : null };
   if (TABS.some((x) => x.id === tab)) return { tab: tab as MobileTab, page: null };
   if (tab === "calendario") return { tab: "agenda", page: null };
+  if (tab === "music") return { tab: "more", page: null }; // the desktop MUSICA tab: the player opens on top
   if (MORE_PAGES.has(tab)) return { tab: "more", page: tab as MorePage };
   if (tab === "board" || tab === "projects") return { tab, page: null };
   return { tab: savedTab(), page: null };
@@ -128,6 +130,8 @@ function Shell({
   const route = useRoute();
   const { tab, page: morePage } = mobileRoute(route.tab, route.sub);
   useEffect(() => {
+    // A link to the desktop's MUSICA tab opens the music player here.
+    if (route.tab === "music") music.open();
     if (route.tab !== tab || (route.sub ?? null) !== (morePage ?? null))
       navigate({ tab, sub: morePage ?? undefined }, { replace: true });
   }, [route.tab, route.sub, tab, morePage]);
