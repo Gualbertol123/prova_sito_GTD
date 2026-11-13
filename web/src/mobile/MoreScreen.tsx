@@ -3,7 +3,7 @@ import type { Board, Weekly } from "../lib/types";
 import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
 import { useT } from "../lib/i18n";
 import { useMe } from "../lib/identity";
-import { readAppearance, readSkin, writeAppearance, writeSkin, type Appearance } from "../lib/skin";
+import { readAppearanceChoice, readSkin, writeAppearance, writeSkin, type AppearanceChoice } from "../lib/skin";
 import { WeeklyItemField } from "../components/WeeklyView";
 import { DailyReflection } from "../components/DailyReflection";
 import { SettingsView } from "../components/SettingsView";
@@ -11,7 +11,7 @@ import { ReportView } from "../components/ReportView";
 import { ProductTreeView } from "../components/ProductTreeView";
 import { Avatar, Sheet } from "./ui";
 import { useInstall } from "../lib/pwa";
-import { IconBack, IconChevron, IconClose, IconDesktop, IconDownload, IconGear, IconLeaf, IconMail, IconReport, IconTree, IconUser, IconWeekly } from "./icons";
+import { IconBack, IconChevron, IconClose, IconAuto, IconDesktop, IconDownload, IconMoon, IconSun, IconGear, IconLeaf, IconMail, IconReport, IconTree, IconUser, IconWeekly } from "./icons";
 import type { Send } from "./actions";
 import type { LayoutChoice } from "./useLayout";
 
@@ -103,7 +103,12 @@ export function MoreScreen({
         <IconChevron size={18} />
       </button>
 
-      <div className="m-panel m-list" style={{ marginTop: 14 }}>
+      <div className="m-label" style={{ marginTop: 18 }}>
+        {t("skin.appearance")}
+      </div>
+      <AppearanceControl />
+
+      <div className="m-panel m-list" style={{ marginTop: 18 }}>
         {rows.map((r) => (
           <button key={r.title} className="m-row" onClick={r.onClick}>
             <span className="m-row__icon" style={{ ["--tile" as string]: r.tile }}>
@@ -265,14 +270,6 @@ export function MeSheet({
 }) {
   const { t, lang, setLang } = useT();
   const { me, setMe } = useMe();
-  const [appearance, setAppearanceState] = useState<Appearance>(() =>
-    readSkin() === "glass" ? readAppearance() : "light"
-  );
-  const pickAppearance = (a: Appearance) => {
-    writeSkin("glass");
-    writeAppearance(a);
-    setAppearanceState(a);
-  };
 
   return (
     <Sheet title={t("m.me")} onClose={onClose}>
@@ -302,14 +299,7 @@ export function MeSheet({
 
       <div className="m-field">
         <span className="m-label">{t("skin.appearance")}</span>
-        <div className="m-seg">
-          <button aria-pressed={appearance === "dark"} onClick={() => pickAppearance("dark")}>
-            {t("skin.dark")}
-          </button>
-          <button aria-pressed={appearance === "light"} onClick={() => pickAppearance("light")}>
-            {t("skin.light")}
-          </button>
-        </div>
+        <AppearanceControl />
       </div>
 
       <InstallRow />
@@ -340,6 +330,36 @@ function InstallRow() {
           {t("m.installIos")}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Dark, light, or automatic (follows the phone's own setting, live). Picking
+ * one also turns the Liquid Glass skin on, which is what the phone layout is
+ * designed for. Shared with the desktop's ☀ / ☾ / A control on this device.
+ */
+function AppearanceControl() {
+  const { t } = useT();
+  const [choice, setChoice] = useState<AppearanceChoice>(() =>
+    readSkin() === "glass" ? readAppearanceChoice() : "light"
+  );
+  const pick = (c: AppearanceChoice) => {
+    writeSkin("glass");
+    writeAppearance(c);
+    setChoice(c);
+  };
+  return (
+    <div className="m-seg" role="group" aria-label={t("skin.appearance")}>
+      <button aria-pressed={choice === "dark"} onClick={() => pick("dark")}>
+        <IconMoon size={16} /> {t("skin.dark")}
+      </button>
+      <button aria-pressed={choice === "light"} onClick={() => pick("light")}>
+        <IconSun size={16} /> {t("skin.light")}
+      </button>
+      <button aria-pressed={choice === "auto"} onClick={() => pick("auto")}>
+        <IconAuto size={16} /> {t("m.auto")}
+      </button>
     </div>
   );
 }

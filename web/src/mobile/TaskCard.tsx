@@ -7,7 +7,9 @@ import { daysSince } from "../lib/dates";
 import { Avatars, DueChip, PRIO_VAR, STATUS_VAR } from "./ui";
 import { IconArrowRight, IconCheck, IconHourglass } from "./icons";
 
-const SWIPE_AT = 88; // px past which a swipe acts
+// A swipe must be clearly sideways (twice as much across as down) and long
+// before it acts, so scrolling past a card never completes it by accident.
+const SWIPE_AT = 110; // px past which a swipe acts
 
 /**
  * One task in a list. Tap opens it; the round check marks it done (or
@@ -20,12 +22,15 @@ export function TaskCard({
   onToggleDone,
   onMove,
   showStatus,
+  swipe = true,
 }: {
   task: Task;
   onOpen: () => void;
   onToggleDone: () => void;
   onMove: () => void;
   showStatus?: boolean;
+  /** Swipe right = done, left = move. Off where sideways swipes scroll (the Board). */
+  swipe?: boolean;
 }) {
   const { t } = useT();
   const { projects, tasks } = useProjects();
@@ -61,8 +66,14 @@ export function TaskCard({
     const dx = e.clientX - s.x0;
     const dy = e.clientY - s.y0;
     if (s.mode === "?") {
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-      s.mode = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
+      if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+      // A press that moved is a drag or a scroll, never a tap.
+      swallowClick.current = true;
+      if (!swipe) {
+        s.mode = "y";
+        return;
+      }
+      s.mode = Math.abs(dx) > Math.abs(dy) * 2 ? "x" : "y";
       if (s.mode === "x") (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     }
     if (s.mode !== "x") return;
@@ -73,9 +84,8 @@ export function TaskCard({
   const end = () => {
     const s = g.current;
     g.current = null;
+    if (s && s.mode !== "?") setTimeout(() => (swallowClick.current = false), 60);
     if (!s || s.mode !== "x") return;
-    swallowClick.current = true;
-    setTimeout(() => (swallowClick.current = false), 60);
     if (s.dx >= SWIPE_AT) {
       try {
         navigator.vibrate?.(8);
@@ -93,15 +103,19 @@ export function TaskCard({
 
   return (
     <div className="m-swipe">
+{swipe && (
+        <>
       <div className="m-swipe__under m-swipe__under--done" style={{ opacity: 0 }}>
         <IconCheck size={20} /> {done ? t("m.reopen") : t("m.markDone")}
       </div>
       <div className="m-swipe__under m-swipe__under--move" style={{ opacity: 0 }}>
         {t("m.move")} <IconArrowRight size={20} />
       </div>
+        </>
+      )}
       <div
         ref={card}
-        className={`m-card${done ? " m-card--done" : ""}`}
+        className={`m-card${done ? " m-card--done" : ""}${swipe ? "" : " m-card--noswipe"}`}
         role="button"
         tabIndex={0}
         onClick={() => !swallowClick.current && onOpen()}

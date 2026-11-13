@@ -18,6 +18,8 @@ import { readPref, writePref } from "./prefs";
 
 export type Skin = "glass" | "classic";
 export type Appearance = "light" | "dark";
+/** What the person picked: a fixed appearance, or "auto" = follow the device. */
+export type AppearanceChoice = Appearance | "auto";
 
 export const DEFAULT_SKIN: Skin = "glass";
 export const DEFAULT_APPEARANCE: Appearance = "dark";
@@ -52,20 +54,35 @@ function writeCookie(name: string, value: string): void {
 
 const asSkin = (v: string | null): Skin | null =>
   v === "glass" || v === "classic" ? v : null;
-const asAppearance = (v: string | null): Appearance | null =>
-  v === "light" || v === "dark" ? v : null;
+const asAppearance = (v: string | null): AppearanceChoice | null =>
+  v === "light" || v === "dark" || v === "auto" ? v : null;
+
+function systemAppearance(): Appearance {
+  try {
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {
+    return DEFAULT_APPEARANCE;
+  }
+}
 
 /** Cookie first, then the localStorage mirror, then the default. */
 export function readSkin(): Skin {
   return asSkin(readCookie(SKIN_COOKIE)) ?? asSkin(readPref("skin")) ?? DEFAULT_SKIN;
 }
 
-export function readAppearance(): Appearance {
+/** The stored choice: light, dark or auto. */
+export function readAppearanceChoice(): AppearanceChoice {
   return (
     asAppearance(readCookie(APPEARANCE_COOKIE)) ??
     asAppearance(readPref("appearance")) ??
     DEFAULT_APPEARANCE
   );
+}
+
+/** The appearance in effect now ("auto" resolved from the device setting). */
+export function readAppearance(): Appearance {
+  const c = readAppearanceChoice();
+  return c === "auto" ? systemAppearance() : c;
 }
 
 /** Both choices land on <html>, so CSS can scope every rule to them. */
@@ -80,10 +97,10 @@ export function writeSkin(skin: Skin): void {
   applySkin(skin, readAppearance());
 }
 
-export function writeAppearance(appearance: Appearance): void {
-  writeCookie(APPEARANCE_COOKIE, appearance);
-  writePref("appearance", appearance);
-  applySkin(readSkin(), appearance);
+export function writeAppearance(choice: AppearanceChoice): void {
+  writeCookie(APPEARANCE_COOKIE, choice);
+  writePref("appearance", choice);
+  applySkin(readSkin(), readAppearance());
 }
 
 /**
@@ -96,6 +113,15 @@ export function initSkin(): { skin: Skin; appearance: Appearance } {
   const appearance = readAppearance();
   applySkin(skin, appearance);
   writeCookie(SKIN_COOKIE, skin);
-  writeCookie(APPEARANCE_COOKIE, appearance);
+  writeCookie(APPEARANCE_COOKIE, readAppearanceChoice());
+  // "Auto" follows the device live: switch the phone or computer to light or
+  // dark and the open app (installed or in a tab) follows.
+  try {
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+      if (readAppearanceChoice() === "auto") applySkin(readSkin(), readAppearance());
+    });
+  } catch {
+    /* very old browser: auto is read at start-up only */
+  }
   return { skin, appearance };
 }

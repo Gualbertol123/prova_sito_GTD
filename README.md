@@ -42,14 +42,15 @@ and sheets move up above the on-screen keyboard. The screens:
 | Tab | What it does |
 | --- | --- |
 | **Oggi / Today** | What needs *you*: your overdue and due-today tasks, what you are in the middle of, the next 7 days, what you are waiting on (longest first), the week's done count, and the canteen's dish of the day (tap for the full menu). The tab shows a badge with your overdue + due-today count. |
-| **Board** | One column per page: swipe sideways, or tap a column pill (with counts). Cards are sorted by priority, then due date. Search, **Only mine** and P1–P4 filters. DONE shows this week; archived ones are one tap away. Each column has **Add here**. |
+| **Board** | As many columns side by side as the screen fits (about 300 px each: one on a phone held upright, two or three in landscape or on a tablet); swipe sideways to move along them, column by column, or tap a column pill (with counts). **Colonne** hides and shows columns (at least one stays; the same per-device setting as the desktop's Columns editor). A sideways swipe here always changes column, even over a card: cards are completed with their round check. Cards are sorted by priority, then due date. Search, **Only mine** and P1–P4 filters. DONE shows this week; archived ones are one tap away. Each column has **Add here**. |
 | **Progetti / Projects** | Ongoing / Completed. Cards with a progress ring, a bar of tasks by status, health, target date, open and overdue counts. A project opens as a sheet: its tasks by column, add a task to it, notes. Dates, colour, leads and step order are edited on the desktop. |
 | **Agenda** | A week strip (dots = tasks due), the chosen day's tasks, overdue ones on today, then the next two weeks. Add a task straight onto a day. Shows every dated task, like the desktop calendar. |
 | **Altro / More** | Weekly review (stacked, mobile-native), Mail update, and the desktop Report, Reflection, Products and Settings screens. |
 
 On any task card the round check on the left (its ring is the priority
 colour: red P1, orange P2, grey P3) marks it done; **swipe right** does the
-same; **swipe left** opens *Move to…*; **tap** opens the task as a
+same and **swipe left** opens *Move to…* (on Oggi, Agenda and project
+lists; on the Board a sideways swipe changes column); **tap** opens the task as a
 full-height sheet: the title with its check, then the details as a grouped
 list (Status, Priority, Due, Assigned to, Project), where each row opens its
 own chooser. The project chooser shows every project with its colour, a
@@ -69,6 +70,9 @@ or `desktop`). The mobile app wears the same **Liquid Glass** as the desktop
 sheen, Apple's system colours, label steps — so it follows light / dark with
 it. The tab bar floats as a glass capsule with the + beside it, as on iOS 26.
 With the classic skin it falls back to the cream / navy / gold look.
+**Aspetto** (Altro, right under your name) is Scuro, Chiaro or **Auto**:
+Auto follows the phone's or computer's own light / dark setting, live, which
+suits the installed app. The desktop header has the same choice (☀ ☾ A).
 
 ### 1c. Addresses and the Back button
 

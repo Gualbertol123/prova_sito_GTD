@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useT } from "../lib/i18n";
 import {
-  readAppearance,
+  readAppearanceChoice,
   readSkin,
   writeAppearance,
   writeSkin,
-  type Appearance,
+  type AppearanceChoice,
   type Skin,
 } from "../lib/skin";
 
@@ -15,7 +15,7 @@ import {
 export function GlassToggle() {
   const { t } = useT();
   const [skin, setSkin] = useState<Skin>(() => readSkin());
-  const [appearance, setAppearance] = useState<Appearance>(() => readAppearance());
+  const [appearance, setAppearance] = useState<AppearanceChoice>(() => readAppearanceChoice());
   const on = skin === "glass";
 
   const toggleSkin = () => {
@@ -24,7 +24,7 @@ export function GlassToggle() {
     setSkin(next);
   };
 
-  const pickAppearance = (next: Appearance) => {
+  const pickAppearance = (next: AppearanceChoice) => {
     writeAppearance(next);
     setAppearance(next);
   };
@@ -63,19 +63,20 @@ export function GlassToggle() {
           aria-label={t("skin.appearance")}
           className="glass-appearance inline-flex items-center h-9 p-0.5 rounded-full border border-white/30 bg-white/10"
         >
-          {(["light", "dark"] as Appearance[]).map((mode) => {
+          {(["light", "dark", "auto"] as AppearanceChoice[]).map((mode) => {
             const active = appearance === mode;
             return (
               <button
                 key={mode}
                 onClick={() => pickAppearance(mode)}
                 aria-pressed={active}
-                title={t(mode === "light" ? "skin.light" : "skin.dark")}
+                title={t(`skin.${mode}`)}
+                aria-label={t(`skin.${mode}`)}
                 className={`h-8 w-8 rounded-full text-[13px] leading-none flex items-center justify-center transition-colors ${
                   active ? "bg-white/85 text-[#1c1c1e]" : "text-white/70 hover:text-white"
                 }`}
               >
-                {mode === "light" ? "☀" : "☾"}
+                {mode === "light" ? "☀" : mode === "dark" ? "☾" : "A"}
               </button>
             );
           })}

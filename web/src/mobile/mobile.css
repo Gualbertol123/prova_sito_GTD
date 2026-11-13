@@ -1242,3 +1242,39 @@ html[data-layout="mobile"] textarea:not(.m-title-input) {
 }
 /* A card's check sits level with the title, not centred on the card. */
 .m-card > .m-hit--check { align-self: flex-start; margin-top: -10px; }
+/* On the Board a sideways swipe scrolls between columns, even over a card. */
+.m-card--noswipe { touch-action: pan-x pan-y; }
+
+/* Several columns side by side when the screen fits them (BoardScreen sets
+   --cols): each column snaps to the left edge as you swipe. */
+.m-pager--multi { padding: 0 10px; scroll-padding: 0 10px; }
+.m-pager--multi .m-pager__page {
+  flex: 0 0 calc(100% / var(--cols, 1));
+  padding: 4px 6px 8px;
+}
+
+/* An iOS-style switch, for a row with role="switch". */
+.m-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 51px;
+  height: 31px;
+  border-radius: 16px;
+  background: var(--m-fill-2);
+  transition: background 0.2s ease;
+}
+.m-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+[aria-checked="true"] > .m-switch { background: var(--m-green); }
+[aria-checked="true"] > .m-switch::after { transform: translateX(20px); }
+.m-row:disabled { opacity: 0.55; }
