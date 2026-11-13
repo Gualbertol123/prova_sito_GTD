@@ -125,6 +125,34 @@ function Shell({
     };
   }, []);
 
+  // The phone's status bar / app switcher takes the page colour, light or dark.
+  useEffect(() => {
+    const html = document.documentElement;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) return;
+    const initial = meta.content;
+    const sync = () => {
+      const canvas = getComputedStyle(html).getPropertyValue("--canvas").trim();
+      meta.content = canvas || (html.dataset.skin === "glass" ? "#0b1020" : "#f5f3ef");
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(html, { attributes: true, attributeFilter: ["data-skin", "data-appearance"] });
+    return () => {
+      mo.disconnect();
+      meta.content = initial;
+    };
+  }, []);
+
+  // The home-screen shortcut "New task" opens the app with ?new=1.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("new")) return;
+    url.searchParams.delete("new");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    setAdding({});
+  }, []);
+
   const setTab = useCallback(
     (next: MobileTab) => {
       // Tapping the tab you are on scrolls to the top (and leaves a More page).

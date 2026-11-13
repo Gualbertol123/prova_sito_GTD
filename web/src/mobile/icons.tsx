@@ -181,3 +181,8 @@ export const IconNote = (p: P) => (
     <path d="M9 9h6M9 13h6M9 17h3" />
   </Svg>
 );
+export const IconDownload = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+  </Svg>
+);

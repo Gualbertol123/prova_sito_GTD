@@ -32,6 +32,20 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# The service worker must be re-checked on every visit, or an update to it
+# would wait for the browser's own cache to expire. Same for the manifest.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Content-Type = "application/manifest+json"
+
 # Never let the browser cache the HTML shell — everything is remote/live.
 [[headers]]
   for = "/index.html"

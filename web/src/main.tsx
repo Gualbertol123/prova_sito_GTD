@@ -5,12 +5,15 @@ import { LangProvider } from "./lib/i18n";
 import { IdentityProvider } from "./lib/identity";
 import { AuthGate } from "./components/AuthGate";
 import { initSkin } from "./lib/skin";
+import { initPwa } from "./lib/pwa";
 import { IdleOpener } from "./components/IdleOpener";
 import "./index.css";
 import "./styles/glass.css";
 
 // Set the skin on <html> before React paints, so the first frame is correct.
 initSkin();
+// Installable app: service worker (code only, never data) + install prompt.
+initPwa();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -10,7 +10,8 @@ import { SettingsView } from "../components/SettingsView";
 import { ReportView } from "../components/ReportView";
 import { ProductTreeView } from "../components/ProductTreeView";
 import { Avatar, Sheet } from "./ui";
-import { IconBack, IconChevron, IconClose, IconDesktop, IconGear, IconLeaf, IconMail, IconReport, IconTree, IconUser, IconWeekly } from "./icons";
+import { useInstall } from "../lib/pwa";
+import { IconBack, IconChevron, IconClose, IconDesktop, IconDownload, IconGear, IconLeaf, IconMail, IconReport, IconTree, IconUser, IconWeekly } from "./icons";
 import type { Send } from "./actions";
 import type { LayoutChoice } from "./useLayout";
 
@@ -311,9 +312,34 @@ export function MeSheet({
         </div>
       </div>
 
-      <button className="m-btn m-btn--block" style={{ marginTop: 22 }} onClick={() => setLayout("desktop")}>
+      <InstallRow />
+
+      <button className="m-btn m-btn--block" style={{ marginTop: 12 }} onClick={() => setLayout("desktop")}>
         <IconDesktop size={18} /> {t("m.useDesktop")}
       </button>
     </Sheet>
+  );
+}
+
+/** "Install the app": the browser's prompt where there is one, a hint on iOS. */
+function InstallRow() {
+  const { t } = useT();
+  const install = useInstall();
+  const [hint, setHint] = useState(false);
+  if (install.installed || (!install.canPrompt && !install.iosHint)) return null;
+  return (
+    <div style={{ marginTop: 22 }}>
+      <button
+        className="m-btn m-btn--primary m-btn--block"
+        onClick={() => (install.canPrompt ? void install.prompt() : setHint((v) => !v))}
+      >
+        <IconDownload size={18} /> {t("m.install")}
+      </button>
+      {hint && (
+        <div className="m-panel" style={{ marginTop: 10, padding: "12px 14px", fontSize: 14, lineHeight: 1.45 }}>
+          {t("m.installIos")}
+        </div>
+      )}
+    </div>
   );
 }

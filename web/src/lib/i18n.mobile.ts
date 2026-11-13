@@ -160,6 +160,8 @@ export const M_IT: Dict = {
   "m.whoAmIHint": "Serve per «Oggi», «Solo mie» e come assegnatario predefinito. Resta su questo dispositivo.",
   "m.language": "Lingua",
   "m.useDesktop": "Usa la versione desktop",
+  "m.install": "Installa l'app",
+  "m.installIos": "In Safari tocca Condividi (il quadrato con la freccia), poi «Aggiungi alla schermata Home». L'app si apre a schermo intero; la prima volta chiede di nuovo la password del team.",
   "m.useMobile": "Versione mobile",
   "m.syncIssue": "problema di sincronizzazione",
 };
@@ -310,6 +312,8 @@ export const M_EN: Dict = {
   "m.whoAmIHint": "Used for Today, Only mine and as the default assignee. It stays on this device.",
   "m.language": "Language",
   "m.useDesktop": "Use the desktop version",
+  "m.install": "Install the app",
+  "m.installIos": "In Safari tap Share (the square with the arrow), then “Add to Home Screen”. The app opens full screen; the first time it asks for the team password again.",
   "m.useMobile": "Mobile version",
   "m.syncIssue": "sync problem",
 };

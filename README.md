@@ -80,6 +80,27 @@ Sheets and pop-ups (the task, project, add and chooser sheets on a phone, the
 mail pop-up on the desktop) add a step of their own: Back closes the one on
 top first. Closing one with ×, a swipe or Escape removes its step again.
 
+### 1d. Install it as an app (PWA)
+
+The site is an installable app. On Android / Chrome / Edge: the **Install the
+app** button in the phone's *You* sheet (or the browser's own install icon on
+a computer). On iPhone / iPad: Safari → **Share → Add to Home Screen** (the
+same button shows these steps). It then opens full screen from its own icon,
+with long-press shortcuts **New task**, **Today** and **Agenda**. On iOS the
+installed app keeps its own login, so the team password is asked once more.
+
+`public/manifest.webmanifest` describes it (name, colours, icons in
+`public/icons/`, shortcuts); `public/sw.js` is the service worker, registered
+in production only (`lib/pwa.ts`). It caches the app's **code only** — the
+HTML shell, the hashed `/assets` files, icons, fonts — so it opens fast and
+still opens offline (it then says it cannot reach the server). It never
+caches board data: Supabase is on another origin and is never intercepted,
+and only GET requests to the site itself are handled, so tasks, notes and
+reflections still live in memory only. Page loads go to the network first,
+so a new deploy shows up at once. To throw away every cached file, change
+`VERSION` in `sw.js`. Netlify serves `sw.js` and the manifest with
+`Cache-Control: no-cache` (`netlify.toml`).
+
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
 switch (§10, on by default), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
@@ -309,6 +330,7 @@ prova_sito_GTD/
     ├── netlify/lib/reportPdf.mts ← the PDF layout (@react-pdf/renderer)
     ├── scripts/gen-pdf-fonts.mjs ← embeds Inter into the function at build time
     ├── public/robots.txt         ← Disallow: / (noindex)
+    ├── public/manifest.webmanifest · public/sw.js · public/icons/ ← the installable app (§1d)
     ├── public/report-template.docx ← the Intesa Sanpaolo Word template the report is built on
     ├── public/fonts/             ← EB Garamond + Cinzel TTFs embedded in the PDF (OFL)
     ├── vite.config.ts            ← manualChunks (Supabase cached separately); fails a build without VITE_TEAM_EMAIL
@@ -328,6 +350,7 @@ prova_sito_GTD/
         │   ├── useBoard.ts       ← load + realtime + poll + optimistic send()  (core hook)
         │   ├── rowSync.ts        ← folds one changed row (from realtime) into the board
         │   ├── history.ts        ← tabs / project / More page in the URL; Back closes sheets
+        │   ├── pwa.ts            ← service worker registration + the install prompt
         │   ├── i18n.mobile.ts    ← the mobile app's IT/EN strings (merged into i18n.tsx)
         │   ├── __tests__/        ← Vitest: reducer, live sync, projects, subtask writes, i18n parity
         │   ├── seed.ts           ← initial data for a brand-new empty project
