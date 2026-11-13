@@ -108,6 +108,60 @@ so a new deploy shows up at once. To throw away every cached file, change
 `VERSION` in `sw.js`. Netlify serves `sw.js` and the manifest with
 `Cache-Control: no-cache` (`netlify.toml`).
 
+### 1e. Music
+
+A music player for the team, on desktop and phone, built on **YouTube's
+official embedded player** (the same source as freefy.app): free, and the app
+adds no ads. YouTube itself may show ads on some videos (none with YouTube
+Premium). Nothing is downloaded or stored: only video ids and titles.
+
+- **Defaults:** *Mix preferiti* shuffles **Enrique Iglesias, Ricky Martin and
+  Tiziano Ferro** (their official VEVO channels' uploads, `lib/music.ts`),
+  moving to the next artist when one runs out; each artist plays alone too.
+  No key needed for these.
+- **Anything else:** search (YouTube Data API, see setup), or paste any
+  YouTube song or playlist link.
+- **Solo musica / Video:** music only by default (the song's cover is shown,
+  the video is hidden); Video shows it. Note: YouTube's rules for embedded
+  players ask for a visible player of at least 200 × 200 px, which only Video
+  mode does.
+- **One player everywhere:** the YouTube player is mounted once at the app's
+  root (`components/MusicPlayer.tsx`), so it keeps playing across tabs and
+  layouts, and every view — the ♪ panel, the small player, the phone's
+  *Altro → Musica*, the MUSICA tab — shows the same song, position, play /
+  pause, queue, shuffle, repeat and volume (`lib/music.ts` is the one state).
+- **MUSICA tab (desktop):** a full music app — Home (mix, artists, team
+  playlists), Search, artist pages (play all, *Popolari* by views), playlist
+  pages (play, shuffle, rename by clicking the title, reorder, remove,
+  delete), *In riproduzione* with the queue, and a player bar with seek,
+  shuffle, repeat, volume and the music / video switch.
+- **Team playlists:** stored in Supabase (`music_playlists`, migration 018),
+  shared by everyone on the team and live-updated; **+** on any song adds it
+  to a playlist or a new one. Also playable from the ♪ panel and on a phone.
+- On a phone the music stops when the screen locks or the app goes to the
+  background (a limit of YouTube embeds on iOS / Android).
+
+**Setup (once):**
+1. Supabase → SQL Editor: run `supabase/migration-018-music-playlists.sql`.
+2. Netlify → Site configuration → Environment variables: add
+   `YOUTUBE_API_KEY` = your YouTube Data API v3 key, then redeploy. The key is
+   only read by the server function `netlify/functions/music-search.mts`
+   (team login required), never sent to browsers, and **must never be put in
+   the code** — this repository is public.
+3. Google Cloud → Credentials → the key → *API restrictions*: allow only
+   *YouTube Data API v3*. (Leave *Application restrictions* on None: the
+   calls come from Netlify's servers, which have no fixed address.)
+   The free quota is 10,000 units a day; a search costs 100, so about 100
+   searches a day for the whole team. When it runs out the player says so and
+   offers YouTube's own search until the next day.
+
+**Why the player frame sends a referrer:** since 2025 YouTube refuses to play
+an embed whose page sends none ("Error 153"), and this site sends
+`Referrer-Policy: no-referrer`. The player's own frame therefore uses
+`strict-origin-when-cross-origin` (YouTube sees the site's address, no path);
+everything else still sends nothing. The CSP allows YouTube's script and
+frame (`netlify.toml`).
+
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
 switch (§10, on by default), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
@@ -180,6 +234,9 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
 | `gtd-projects-view` | PROJECTS overview as `cards` or `timeline` |
 | `gtd-project-tasks-view` | a project's tasks as `list` or `board` |
+| `gtd-music-mode` | music player: `audio` (music only, default) / `video` |
+| `gtd-music-volume` | music player volume (0–100) |
+| `gtd-music-side` | the small video player's corner (`right` / `left`) |
 | `gtd-layout` | `auto` (phone-sized → mobile) / `mobile` / `desktop` |
 | `gtd-m-tab` | the mobile tab left open |
 | `gtd-m-board-col` | the mobile board's column left open |
@@ -289,12 +346,14 @@ SQL files in `supabase/`:
   `subtask_update`, `subtask_delete` and `subtask_reorder`, so concurrent
   subtask edits no longer overwrite each other. Adds functions only; no data
   changes. Re-runnable.
+- `migration-018-music-playlists.sql` — adds `music_playlists` (the music
+  player's team playlists, §1e). Additive, re-runnable.
 - `migration-012-auth-step2-lockdown.sql` — **real login, step 2.** Closes all
   tables to the anon key, hides `reflection_access`, deletes the clear-text
   password columns. Run only after the new site is live and you have logged in
   with it. See §11.
 
-Migrations 002–011, 013, 015, 016 and 017 are additive and safe on live data; run any you haven't yet.
+Migrations 002–011, 013 and 015–018 are additive and safe on live data; run any you haven't yet.
 012 changes access rules (not data) and must follow the order in §11. The
 app degrades gracefully before they're applied (settings can't save, reflections
 stay empty, tasks stay single-assignee) thanks to tolerant reads and fallbacks —
@@ -323,7 +382,8 @@ prova_sito_GTD/
 │   ├── migration-013-report-projects.sql · migration-014-remove-ideas-tracking.sql
 │   ├── migration-015-projects-v2.sql         ← project details + notes, tasks.project_id
 │   ├── migration-016-project-board-mode.sql  ← how project tasks reach the BOARD, step order
-│   └── migration-017-subtask-functions.sql   ← subtasks changed one at a time (no lost edits)
+│   ├── migration-017-subtask-functions.sql   ← subtasks changed one at a time (no lost edits)
+│   └── migration-018-music-playlists.sql     ← the music player's team playlists
 ├── .github/workflows/ci.yml      ← on every push / PR: npm test + production build
 ├── menu/                        ← the canteen menu: monthly PDF → web/src/data/menu.json (§8)
 │   ├── menu_from_pdf.py
@@ -334,6 +394,8 @@ prova_sito_GTD/
     ├── vite.config.ts · tailwind.config.js · postcss.config.js · tsconfig.json
     ├── .env.example              ← VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_TEAM_EMAIL
     ├── netlify/functions/report-pdf.mts ← POST → the weekly report PDF (team login only)
+    ├── netlify/functions/music-search.mts ← GET → YouTube search for the music player (team login only; YOUTUBE_API_KEY)
+    ├── netlify/lib/teamAuth.mts  ← the functions' shared "is this the team login?" check
     ├── netlify/lib/reportPdf.mts ← the PDF layout (@react-pdf/renderer)
     ├── scripts/gen-pdf-fonts.mjs ← embeds Inter into the function at build time
     ├── public/robots.txt         ← Disallow: / (noindex)
@@ -358,6 +420,8 @@ prova_sito_GTD/
         │   ├── rowSync.ts        ← folds one changed row (from realtime) into the board
         │   ├── history.ts        ← tabs / project / More page in the URL; Back closes sheets
         │   ├── pwa.ts            ← service worker registration + the install prompt
+        │   ├── music.ts          ← the music player's state, defaults, link parsing, search
+        │   ├── musicDb.ts        ← team playlists (music_playlists), live
         │   ├── i18n.mobile.ts    ← the mobile app's IT/EN strings (merged into i18n.tsx)
         │   ├── __tests__/        ← Vitest: reducer, live sync, projects, subtask writes, i18n parity
         │   ├── seed.ts           ← initial data for a brand-new empty project
@@ -398,6 +462,8 @@ prova_sito_GTD/
             ├── WeeklyView.tsx    ← recap + 5 retro columns
             ├── DailyReflection.tsx ← reflection form + recent + spaced review
             ├── SettingsView.tsx  ← branding upload, team password change, login duration
+            ├── MusicPlayer.tsx   ← the one YouTube player + ♪ panel / small player (§1e)
+            ├── MusicTab.tsx      ← the MUSICA tab: library, search, artists, playlists, player bar
             └── MailModal.tsx     ← mail-update text generator
         └── mobile/               ← the phone version (§1b), its own lazy-loaded chunk
             ├── MobileApp.tsx     ← shell: header, bottom tab bar, add button, sheets, toasts

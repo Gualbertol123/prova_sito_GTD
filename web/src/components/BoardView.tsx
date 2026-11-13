@@ -221,7 +221,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
           <button
             onClick={() => setFilters((f) => ({ ...f, focusP1: !f.focusP1 }))}
             className={`h-9 px-4 rounded-full text-[12px] font-semibold border transition-colors ${
-              filters.focusP1 ? "bg-[#DC2626] text-white border-[#DC2626]" : "bg-white text-[#DC2626] border-[#FECACA] hover:border-[#DC2626]"
+              filters.focusP1 ? "bg-[#DC2626] text-white border-[#DC2626]" : "bg-[#FEF2F2] text-[#DC2626] border-[#FECACA] hover:border-[#DC2626]"
             }`}
           >
             {t("filters.focusP1")}

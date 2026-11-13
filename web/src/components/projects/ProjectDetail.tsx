@@ -208,7 +208,7 @@ export function ProjectDetail({ board, project: p, stats: s, send, v2, onBack, p
                       role="radio"
                       aria-checked={color === c}
                       onClick={() => patch({ color: c })}
-                      className="w-5 h-5 rounded-full transition-transform hover:scale-110"
+                      className="w-5 h-5 rounded-full hover:ring-2 hover:ring-white/70"
                       style={{ background: c, boxShadow: color === c ? `0 0 0 2px #fff, 0 0 0 4px ${c}` : undefined }}
                       title={c}
                     />

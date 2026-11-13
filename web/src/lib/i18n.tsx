@@ -37,6 +37,7 @@ const IT: Dict = {
   "tabs.projects": "PROGETTI",
   "tabs.calendario": "CALENDARIO",
   "tabs.reflection": "RIFLESSIONE",
+  "tabs.music": "MUSICA",
   "tabs.settings": "IMPOSTAZIONI",
 
   "filters.title": "Filtri",
@@ -571,6 +572,7 @@ const EN: Dict = {
   "tabs.products": "PRODUCTS",
   "tabs.projects": "PROJECTS",
   "tabs.calendario": "CALENDAR",
+  "tabs.music": "MUSIC",
   "tabs.reflection": "REFLECTION",
   "tabs.settings": "SETTINGS",
 

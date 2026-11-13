@@ -13,15 +13,17 @@ import { readPref, writePref } from "./prefs";
 
 export interface Artist {
   name: string;
+  /** The official channel, for "most popular" on the artist page (needs the API key). */
+  channel: string;
   /** The artist's official channel's uploads playlist ("UU…"): plays without an API key. */
   list: string;
 }
 
 /** The defaults: each artist's official VEVO channel (checked to exist and embed). */
 export const ARTISTS: Artist[] = [
-  { name: "Enrique Iglesias", list: "UUVttQE6tS_agDSAU61Q65aA" },
-  { name: "Ricky Martin", list: "UUNpY5DI8KO-ROA2BxgGWrXg" },
-  { name: "Tiziano Ferro", list: "UUvBz3n23YgAvAHfoZtdqZCA" },
+  { name: "Enrique Iglesias", channel: "UCVttQE6tS_agDSAU61Q65aA", list: "UUVttQE6tS_agDSAU61Q65aA" },
+  { name: "Ricky Martin", channel: "UCNpY5DI8KO-ROA2BxgGWrXg", list: "UUNpY5DI8KO-ROA2BxgGWrXg" },
+  { name: "Tiziano Ferro", channel: "UCvBz3n23YgAvAHfoZtdqZCA", list: "UUvBz3n23YgAvAHfoZtdqZCA" },
 ];
 
 export interface Track {
@@ -67,6 +69,8 @@ export function parseYouTube(input: string): { video?: string; list?: string } |
 
 export type View = "closed" | "open" | "mini";
 export type Side = "right" | "left";
+/** Music only (the video is not shown; the default) or the video too. */
+export type Mode = "audio" | "video";
 
 export interface NowPlaying {
   id: string;
@@ -82,6 +86,21 @@ export interface MusicState {
   /** Which corner the small player sits in. */
   side: Side;
   notice: string | null;
+  mode: Mode;
+  /** Seconds played / total, while something is loaded. */
+  time: number;
+  duration: number;
+  volume: number;
+  muted: boolean;
+  shuffle: boolean;
+  repeat: boolean;
+  /** The songs queued, when known (search results, playlists). */
+  queue: Track[];
+  index: number;
+  /** The Music tab is on screen: it shows the controls, the floating player steps back. */
+  tab: boolean;
+  /** In video mode on the Music tab: where the video sits (page coordinates). */
+  dock: { x: number; y: number; w: number; h: number } | null;
 }
 
 /** What the player component exposes to the controls. */
@@ -91,6 +110,12 @@ export interface MusicController {
   next: () => void;
   prev: () => void;
   stop: () => void;
+  seek: (seconds: number) => void;
+  setVolume: (v: number) => void;
+  setMuted: (m: boolean) => void;
+  setShuffle: (on: boolean) => void;
+  setRepeat: (on: boolean) => void;
+  playAt: (i: number) => void;
 }
 
 let state: MusicState = {
@@ -100,6 +125,17 @@ let state: MusicState = {
   now: null,
   side: readPref("music") === "left" ? "left" : "right",
   notice: null,
+  mode: readPref("musicMode") === "video" ? "video" : "audio",
+  time: 0,
+  duration: 0,
+  volume: Number(readPref("musicVolume") ?? 80) || 80,
+  muted: false,
+  shuffle: false,
+  repeat: false,
+  queue: [],
+  index: -1,
+  tab: false,
+  dock: null,
 };
 const listeners = new Set<() => void>();
 let controller: MusicController | null = null;
@@ -113,6 +149,8 @@ export function getMusic(): MusicState {
 export function setMusic(patch: Partial<MusicState>): void {
   state = { ...state, ...patch };
   if (patch.side) writePref("music", patch.side);
+  if (patch.mode) writePref("musicMode", patch.mode);
+  if (patch.volume !== undefined) writePref("musicVolume", String(patch.volume));
   listeners.forEach((l) => l());
 }
 
@@ -145,25 +183,60 @@ export const music = {
     setMusic({ view: "closed", playing: false });
   },
   play: (s: Source) => {
-    setMusic({ source: s, view: state.view === "closed" ? "open" : state.view, notice: null });
+    // From the Music tab the tab is the player: the floating one stays as it is.
+    setMusic({ source: s, view: state.tab ? state.view : state.view === "closed" ? "open" : state.view, notice: null });
     if (controller) controller.play(s);
     else pending = s;
   },
   toggle: () => controller?.toggle(),
   next: () => controller?.next(),
   prev: () => controller?.prev(),
+  seek: (sec: number) => controller?.seek(sec),
+  setVolume: (v: number) => {
+    setMusic({ volume: v, muted: v === 0 });
+    controller?.setVolume(v);
+  },
+  setMuted: (m: boolean) => {
+    setMusic({ muted: m });
+    controller?.setMuted(m);
+  },
+  setShuffle: (on: boolean) => {
+    setMusic({ shuffle: on });
+    controller?.setShuffle(on);
+  },
+  setRepeat: (on: boolean) => {
+    setMusic({ repeat: on });
+    controller?.setRepeat(on);
+  },
+  playAt: (i: number) => controller?.playAt(i),
+  setMode: (m: Mode) => setMusic({ mode: m }),
 };
+
+/** A YouTube video's picture, used as the song's cover. */
+export function coverOf(id: string | undefined, big = false): string {
+  return id ? `https://i.ytimg.com/vi/${id}/${big ? "hqdefault" : "mqdefault"}.jpg` : "";
+}
+
+export function formatTime(sec: number): string {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 // ---- Search -----------------------------------------------------------------
 
 export type SearchResult = { tracks: Track[] } | { error: "no-key" | "quota" | "login" | string };
 
-export async function searchMusic(q: string): Promise<SearchResult> {
+export async function searchMusic(q: string, opts: { channelId?: string; order?: "relevance" | "viewCount" } = {}): Promise<SearchResult> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) return { error: "login" };
   try {
-    const res = await fetch(`/.netlify/functions/music-search?q=${encodeURIComponent(q)}`, {
+    const params = new URLSearchParams({ q });
+    if (opts.channelId) params.set("channelId", opts.channelId);
+    if (opts.order) params.set("order", opts.order);
+    const res = await fetch(`/.netlify/functions/music-search?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const body = (await res.json().catch(() => ({}))) as { tracks?: Track[]; error?: string };

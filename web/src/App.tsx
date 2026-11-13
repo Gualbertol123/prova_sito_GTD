@@ -21,6 +21,7 @@ import { GlassToggle } from "./components/GlassToggle";
 import { ProjectsProvider } from "./lib/projectsContext";
 import { useLayout } from "./mobile/useLayout";
 import { MusicButton, MusicPlayer } from "./components/MusicPlayer";
+import { MusicTab } from "./components/MusicTab";
 import { navigate, useRoute } from "./lib/history";
 
 // The phone layout is its own chunk: desktop visitors never download it.
@@ -187,6 +188,7 @@ export default function App() {
           </div>
         )}
         {tab === "settings" && <SettingsView board={board} send={send} />}
+        {tab === "music" && <MusicTab />}
       </div>
 
       {mailOpen && <MailModal board={board} onClose={() => setMailOpen(false)} />}

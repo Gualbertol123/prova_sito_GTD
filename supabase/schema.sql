@@ -503,13 +503,24 @@ grant execute on function public.subtask_update(text, text, jsonb) to authentica
 grant execute on function public.subtask_delete(text, text)        to authenticated;
 grant execute on function public.subtask_reorder(text, jsonb)      to authenticated;
 
+-- ---- Music playlists (migration 018) ----------------------------------------
+create table if not exists public.music_playlists (
+  id          text   primary key,
+  name        text   not null default '',
+  owner       text   not null default '',
+  tracks      jsonb  not null default '[]'::jsonb,
+  created_at  bigint not null default (extract(epoch from now()) * 1000)::bigint,
+  updated_at  bigint not null default (extract(epoch from now()) * 1000)::bigint
+);
+select private.lock_table('music_playlists');
+
 -- ---- Realtime --------------------------------------------------------------
 -- Change events for the board tables (they respect the policies above).
 -- reflection_access is deliberately NOT published.
 
 alter publication supabase_realtime add table
   public.board_meta, public.tasks, public.weekly, public.reflections,
-  public.projects, public.personal_notes;
+  public.projects, public.personal_notes, public.music_playlists;
 
 -- ---- The team account -------------------------------------------------------
 -- >>> Replace the e-mail below with the team user you created. <<<

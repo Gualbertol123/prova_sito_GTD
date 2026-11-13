@@ -310,7 +310,10 @@ html[data-skin="glass"] .bg-\[\#FBF6EC\]::before {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(140deg, var(--sheen) 0%, var(--sheen-2) 16%, transparent 38%);
+  /* Fixed distances, not percentages: a percentage sheen grows with the panel,
+     so a wide, short bar (new task, filters) got a bright wash across a
+     third of it. This gives every panel the same corner highlight. */
+  background: linear-gradient(140deg, var(--sheen) 0, var(--sheen-2) 70px, transparent 220px);
   z-index: 0;
 }
 html[data-skin="glass"] .bg-white > *,
@@ -549,19 +552,28 @@ html[data-skin="glass"] .border-\[\#1E335E\] {
 /* ---------------------------------------------------------------------------
    7. Motion.
    --------------------------------------------------------------------------- */
-html[data-skin="glass"] button,
-html[data-skin="glass"] .rounded-\[12px\],
-html[data-skin="glass"] .rounded-\[14px\] {
+/* Hover and press never MOVE anything: moving an element with a live blur
+   (backdrop-filter) makes the browser redraw the blur and leaves a thin light
+   seam across the panel, which came and went with the mouse. So hover lights
+   the rim (an outline, which follows the corners and touches neither the
+   blur, the shadows nor the background) and a press dims briefly. */
+html[data-skin="glass"] button {
   transition:
-    transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1),
-    box-shadow 200ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    outline-color 160ms ease,
+    opacity 120ms ease,
     background-color 200ms ease;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
 }
 html[data-skin="glass"] button:not(:disabled):hover {
-  transform: translateY(-1px);
+  outline-color: var(--rim-top);
 }
 html[data-skin="glass"] button:not(:disabled):active {
-  transform: translateY(0) scale(0.97);
+  opacity: 0.8;
+}
+html[data-skin="glass"] button:focus-visible {
+  outline: 2px solid var(--ios-blue);
+  outline-offset: 2px;
 }
 
 /* The modal scrim: Control Center's dim-and-blur over everything behind it. */

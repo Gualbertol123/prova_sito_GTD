@@ -1,5 +1,6 @@
 // -----------------------------------------------------------------------------
-// GET /.netlify/functions/music-search?q=… — finds songs for the music player.
+// GET /.netlify/functions/music-search?q=…[&channelId=UC…&order=viewCount]
+// — finds songs for the music player (or an artist's most watched ones).
 //
 // Asks YouTube's official Data API for music videos that may be embedded, and
 // answers with just what the player needs (id, title, channel, thumbnail).
@@ -40,22 +41,30 @@ interface ApiItem {
 
 export default async (req: Request): Promise<Response> => {
   if (req.method !== "GET") return json(405, { error: "GET only" });
-  const q = (new URL(req.url).searchParams.get("q") ?? "").trim().slice(0, 120);
-  if (!q) return json(400, { error: "Empty search" });
+  const params = new URL(req.url).searchParams;
+  const q = (params.get("q") ?? "").trim().slice(0, 120);
+  // An artist page: one channel, most watched first.
+  const channelId = params.get("channelId") ?? "";
+  const order = params.get("order") === "viewCount" ? "viewCount" : "relevance";
+  if (channelId && !/^UC[\w-]{22}$/.test(channelId)) return json(400, { error: "Bad channel" });
+  if (!q && !channelId) return json(400, { error: "Empty search" });
   if (!(await isTeamMember(req.headers.get("authorization") ?? ""))) return json(403, { error: "Log in first." });
   if (!KEY) return json(501, { error: "no-key" });
 
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
-  url.search = new URLSearchParams({
+  const search = new URLSearchParams({
     part: "snippet",
     type: "video",
     videoEmbeddable: "true",
-    videoCategoryId: "10", // Music
-    maxResults: "20",
+    maxResults: "25",
     safeSearch: "moderate",
-    q,
+    order,
     key: KEY,
-  }).toString();
+  });
+  if (q) search.set("q", q);
+  if (channelId) search.set("channelId", channelId);
+  else search.set("videoCategoryId", "10"); // Music (an artist's own channel needs no filter)
+  url.search = search.toString();
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
