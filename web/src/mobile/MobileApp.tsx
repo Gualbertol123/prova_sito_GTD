@@ -23,13 +23,19 @@ import { IconBoard, IconCalendar, IconMore, IconPlus, IconProjects, IconToday, I
 import type { LayoutChoice } from "./useLayout";
 import "./mobile.css";
 
-const TABS: { id: MobileTab; icon: (p: { size?: number }) => JSX.Element }[] = [
+type TabDef = { id: MobileTab; icon: (p: { size?: number }) => JSX.Element };
+
+// The bar: two tabs, the add button in the middle, two tabs. "More" is the
+// avatar button in the header (its page starts with your profile row).
+const BAR_LEFT: TabDef[] = [
   { id: "today", icon: IconToday },
   { id: "board", icon: IconBoard },
+];
+const BAR_RIGHT: TabDef[] = [
   { id: "projects", icon: IconProjects },
   { id: "agenda", icon: IconCalendar },
-  { id: "more", icon: IconMore },
 ];
+const TABS: TabDef[] = [...BAR_LEFT, ...BAR_RIGHT, { id: "more", icon: IconMore }];
 
 const CONN_COLOR: Record<ConnState, string> = {
   online: "var(--m-green)",
@@ -37,6 +43,29 @@ const CONN_COLOR: Record<ConnState, string> = {
   reconnecting: "var(--m-orange)",
   offline: "var(--m-red)",
 };
+
+function TabButton({
+  def: { id, icon: Icon },
+  current,
+  onPick,
+  badge,
+}: {
+  def: TabDef;
+  current: MobileTab;
+  onPick: (t: MobileTab) => void;
+  badge: number;
+}) {
+  const { t } = useT();
+  return (
+    <button className="m-tab" aria-current={current === id ? "page" : undefined} onClick={() => onPick(id)}>
+      <span className="m-tab__icon">
+        <Icon size={23} />
+        {badge > 0 && <span className="m-tab__badge">{badge > 9 ? "9+" : badge}</span>}
+      </span>
+      <span className="m-tab__label">{t(`m.tab.${id}`)}</span>
+    </button>
+  );
+}
 
 function savedTab(): MobileTab {
   const v = readPref("mTab");
@@ -125,6 +154,49 @@ function Shell({
     };
   }, []);
 
+  // While you type in the page, the bar steps aside (on Android it would ride
+  // up on the keyboard over the field). Sheets follow the keyboard instead:
+  // --m-kb is the part of the screen it covers, --m-vvh what is left.
+  useEffect(() => {
+    const html = document.documentElement;
+    const editable = (el: EventTarget | null) =>
+      el instanceof HTMLElement &&
+      (el.isContentEditable ||
+        el.tagName === "TEXTAREA" ||
+        el.tagName === "SELECT" ||
+        (el.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "range", "color", "file"].includes((el as HTMLInputElement).type)));
+    const onIn = (e: FocusEvent) => {
+      if (editable(e.target)) html.dataset.typing = "1";
+    };
+    const onOut = () => {
+      // Moving focus straight to another field keeps it hidden.
+      setTimeout(() => {
+        if (!editable(document.activeElement)) delete html.dataset.typing;
+      }, 60);
+    };
+    const vv = window.visualViewport;
+    const onVV = () => {
+      if (!vv) return;
+      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      html.style.setProperty("--m-kb", `${kb > 60 ? kb : 0}px`);
+      html.style.setProperty("--m-vvh", `${Math.round(vv.height)}px`);
+    };
+    document.addEventListener("focusin", onIn);
+    document.addEventListener("focusout", onOut);
+    vv?.addEventListener("resize", onVV);
+    vv?.addEventListener("scroll", onVV);
+    onVV();
+    return () => {
+      document.removeEventListener("focusin", onIn);
+      document.removeEventListener("focusout", onOut);
+      vv?.removeEventListener("resize", onVV);
+      vv?.removeEventListener("scroll", onVV);
+      delete html.dataset.typing;
+      html.style.removeProperty("--m-kb");
+      html.style.removeProperty("--m-vvh");
+    };
+  }, []);
+
   // The phone's status bar / app switcher takes the page colour, light or dark.
   useEffect(() => {
     const html = document.documentElement;
@@ -206,6 +278,7 @@ function Shell({
   return (
     <NavCtx.Provider value={nav}>
       <div className="m-wall" aria-hidden="true" />
+      <div className="m-sbscrim" aria-hidden="true" />
       <div className="m-app" lang={lang}>
         <header className="m-header">
           <div className="m-header__logo">
@@ -219,8 +292,16 @@ function Shell({
               {error && conn !== "online" ? ` · ${t("m.syncIssue")}` : ""}
             </p>
           </div>
-          <button className="m-iconbtn" onClick={() => setMeOpen(true)} aria-label={t("m.me")} style={{ padding: 0 }}>
+          <button
+            className="m-menubtn"
+            onClick={() => setTab("more")}
+            aria-label={t("m.tab.more")}
+            aria-current={tab === "more" ? "page" : undefined}
+          >
             {known ? <Avatar name={me} large /> : <IconUser size={19} />}
+            <span className="m-menubtn__dots" aria-hidden="true">
+              <IconMore size={12} />
+            </span>
           </button>
         </header>
 
@@ -241,22 +322,21 @@ function Shell({
           )}
         </main>
 
-        <div className="m-dock">
-          <nav className="m-tabbar" aria-label={t("m.nav")}>
-            {TABS.map(({ id, icon: Icon }) => (
-              <button key={id} className="m-tab" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
-                <Icon size={22} />
-                {t(`m.tab.${id}`)}
-                {id === "today" && urgent > 0 && <span className="m-tab__badge">{urgent}</span>}
-              </button>
+        <nav className="m-dock" aria-label={t("m.nav")}>
+          <div className="m-tabbar">
+            {BAR_LEFT.map((d) => (
+              <TabButton key={d.id} def={d} current={tab} onPick={setTab} badge={d.id === "today" ? urgent : 0} />
             ))}
-          </nav>
-          {tab !== "more" && (
-            <button className="m-fab" aria-label={t("m.newTask")} onClick={() => nav.add()}>
-              <IconPlus size={28} />
+            <button className="m-tab m-tab--add" aria-label={t("m.newTask")} onClick={() => nav.add()}>
+              <span className="m-tab__plus">
+                <IconPlus size={26} />
+              </span>
             </button>
-          )}
-        </div>
+            {BAR_RIGHT.map((d) => (
+              <TabButton key={d.id} def={d} current={tab} onPick={setTab} badge={0} />
+            ))}
+          </div>
+        </nav>
 
         {project && <ProjectSheet board={board} project={project} send={send} onClose={() => setProjectId(null)} />}
         {task && (

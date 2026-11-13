@@ -34,7 +34,10 @@ full file map, how to run and deploy it, and how to extend it.
 
 A phone-sized screen (767 px wide or less) gets a separate **mobile version**
 built for one hand, on the same board, live sync, data and operations; nothing
-about the desktop changes. Five tabs at the bottom:
+about the desktop changes. A floating glass bar at the bottom holds **Oggi ·
+Board · ＋ · Progetti · Agenda** (the + in the middle adds a task); **Altro**
+is the avatar button at the top right. The bar steps aside while you type,
+and sheets move up above the on-screen keyboard. The screens:
 
 | Tab | What it does |
 | --- | --- |
@@ -53,11 +56,11 @@ own chooser. The project chooser shows every project with its colour, a
 progress ring, open tasks, target date and health, completed ones apart.
 Then subtasks, description, notes, file folder, and Delete / Mark as done.
 Done, move and delete each show a toast with **Undo** instead of an "are you
-sure?". The blue **+** next to the tab bar adds a task: type a title; the
+sure?". The blue **+** in the middle of the bar adds a task: type a title; the
 other properties (priority, due, people, status, project) start from
 defaults and sit below it as tokens, each one tap from the same choosers.
 
-The avatar in the header (or **More → you**) sets who you are on this device,
+**Altro → your name** (the first row) sets who you are on this device,
 the language, light or dark, and **Use the desktop version**. The desktop
 layout on a phone then shows a **Mobile version →** bar at the top to switch
 back. The choice is per device (`gtd-layout` in localStorage: `auto`, `mobile`

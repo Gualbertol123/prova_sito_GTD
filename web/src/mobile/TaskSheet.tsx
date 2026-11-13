@@ -107,14 +107,16 @@ export function TaskSheet({
       {/* Title, with the check that finishes it */}
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginTop: 4 }}>
         <button
-          className="m-check"
+          className="m-hit m-hit--check"
           role="checkbox"
           aria-checked={done}
           aria-label={done ? t("m.reopen") : t("m.markDone")}
-          style={{ ["--ring" as string]: PRIO_VAR[task.priority], width: 30, height: 30, marginTop: 2 }}
+          style={{ marginTop: -5 }}
           onClick={() => toggleDone(task)}
         >
-          <IconCheck size={17} />
+          <span className="m-check" style={{ ["--ring" as string]: PRIO_VAR[task.priority], width: 30, height: 30 }}>
+            <IconCheck size={17} />
+          </span>
         </button>
         <AutoTextarea
           className="m-title-input"
@@ -225,7 +227,7 @@ export function TaskSheet({
           {task.subtasks.map((s) => (
             <div key={s.id} className="m-sub-row">
               <button
-                className="m-check"
+                className="m-hit m-hit--check"
                 role="checkbox"
                 aria-checked={s.done}
                 aria-label={s.text}
@@ -241,12 +243,14 @@ export function TaskSheet({
                   )
                 }
               >
-                <IconCheck size={13} />
+                <span className="m-check">
+                  <IconCheck size={13} />
+                </span>
               </button>
               <span className={`m-sub-row__text${s.done ? " m-sub-row__text--done" : ""}`}>{s.text}</span>
               <button
+                className="m-hit"
                 aria-label={t("m.delete")}
-                style={{ color: "var(--m-text-3)", padding: 2 }}
                 onClick={() => send({ type: "deleteSubtask", taskId: task.id, subtaskId: s.id }, fail)}
               >
                 <IconClose size={16} />

@@ -97,6 +97,29 @@ export function shortDay(iso: string, lang: "it" | "en"): string {
 
 // ---- Bottom sheet -------------------------------------------------------------
 
+// While a sheet is open the page behind it must not move. iOS Safari ignores
+// overflow:hidden on <body>, so the page is pinned with position:fixed at its
+// current offset, and put back where it was when the last sheet closes.
+let lockedY = 0;
+function lockScroll(): void {
+  lockedY = window.scrollY;
+  const b = document.body.style;
+  b.position = "fixed";
+  b.top = `-${lockedY}px`;
+  b.left = "0";
+  b.right = "0";
+  b.overflow = "hidden";
+}
+function unlockScroll(): void {
+  const b = document.body.style;
+  b.position = "";
+  b.top = "";
+  b.left = "";
+  b.right = "";
+  b.overflow = "";
+  window.scrollTo(0, lockedY);
+}
+
 // Open sheets, oldest first: Escape and the page scroll lock act on the top one.
 const sheetStack: number[] = [];
 let sheetSeq = 0;
@@ -135,8 +158,8 @@ export function Sheet({
 
   useEffect(() => {
     const id = ++sheetSeq;
+    if (sheetStack.length === 0) lockScroll();
     sheetStack.push(id);
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && sheetStack[sheetStack.length - 1] === id) close.current();
     };
@@ -144,7 +167,7 @@ export function Sheet({
     return () => {
       window.removeEventListener("keydown", onKey);
       sheetStack.splice(sheetStack.indexOf(id), 1);
-      if (sheetStack.length === 0) document.body.style.overflow = "";
+      if (sheetStack.length === 0) unlockScroll();
     };
   }, []);
 

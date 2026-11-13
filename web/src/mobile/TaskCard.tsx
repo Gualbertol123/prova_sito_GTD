@@ -42,6 +42,7 @@ export function TaskCard({
     const el = card.current;
     if (!el) return;
     el.style.transition = animate ? "transform 0.22s ease" : "none";
+    el.style.willChange = x ? "transform" : "";
     el.style.transform = x ? `translateX(${x}px)` : "";
     const under = el.parentElement?.querySelectorAll<HTMLElement>(".m-swipe__under");
     under?.forEach((u) => {
@@ -111,18 +112,19 @@ export function TaskCard({
         onPointerCancel={end}
       >
         <button
-          className="m-check"
+          className="m-hit m-hit--check"
           role="checkbox"
           aria-checked={done}
           aria-label={`${done ? t("m.reopen") : t("m.markDone")} · ${task.priority}`}
-          style={{ ["--ring" as string]: PRIO_VAR[task.priority] }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleDone();
           }}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <IconCheck size={14} />
+          <span className="m-check" style={{ ["--ring" as string]: PRIO_VAR[task.priority] }}>
+            <IconCheck size={14} />
+          </span>
         </button>
         <div className="m-card__body">
           <div className="m-card__title">{task.title || t("m.untitled")}</div>

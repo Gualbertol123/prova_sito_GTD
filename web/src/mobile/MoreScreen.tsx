@@ -224,8 +224,8 @@ function WeeklyBucket({
               className="m-sub-row__text"
             />
             <button
+              className="m-hit"
               aria-label={t("m.delete")}
-              style={{ color: "var(--m-text-3)", padding: 2 }}
               onClick={() => send({ type: "weeklyDelete", column: bucket, id: it.id })}
             >
               <IconClose size={16} />
