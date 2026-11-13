@@ -14,32 +14,15 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { ReportDocument, fitPlanner } from "../lib/reportPdf.mts";
 import type { ReportDoc } from "../../src/lib/reportDoc";
+import { isTeamMember, supabaseConfigured } from "../lib/teamAuth.mts";
 
 const MAX_BODY = 1_000_000; // 1 MB of JSON is far more than any report
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "";
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
 
 function reply(status: number, message: string): Response {
   return new Response(message, {
     status,
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
   });
-}
-
-async function isTeamMember(authorization: string): Promise<boolean> {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
-  const res = await fetch(`${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/rpc/is_team_member`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: authorization,
-      "Content-Type": "application/json",
-    },
-    body: "{}",
-  });
-  if (!res.ok) return false;
-  return (await res.json()) === true;
 }
 
 // Just enough checking that a malformed body gives a clear error, not a crash.
@@ -64,7 +47,7 @@ export default async (req: Request): Promise<Response> => {
 
   const authorization = req.headers.get("authorization") ?? "";
   if (!/^Bearer\s+\S+$/.test(authorization)) return reply(401, "Log in first.");
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  if (!supabaseConfigured()) {
     return reply(500, "The server is missing VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.");
   }
   try {

@@ -71,7 +71,7 @@ export function QuickAdd({ members, send, showNames = true, multiAssign = true }
   };
 
   const field =
-    "h-11 rounded-full bg-white border border-[#E8E6E1] text-[13px] outline-none focus:border-[#C9A96E]";
+    "qa-field h-11 rounded-full bg-white border border-[#E8E6E1] text-[13px] outline-none focus:border-[#C9A96E]";
 
   return (
     <div className="space-y-2">
@@ -102,7 +102,21 @@ export function QuickAdd({ members, send, showNames = true, multiAssign = true }
             ))}
           </span>
           <span>{ownersLabel({ owner: owners[0] ?? UNASSIGNED, assignees: owners }, memberLabel)}</span>
-          <span className="text-[9px] text-[#8A8A8A]">{pickOpen ? "▾" : "▸"}</span>
+          {/* The same down chevron as the dropdowns next to it. */}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={`ml-1 opacity-70 transition-transform ${pickOpen ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
         </button>
       ) : (
         // Screenshot mode: the selected owner is still used on submit, just not shown.

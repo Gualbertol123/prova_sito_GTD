@@ -20,6 +20,7 @@ import { IdentityPicker } from "./components/IdentityPicker";
 import { GlassToggle } from "./components/GlassToggle";
 import { ProjectsProvider } from "./lib/projectsContext";
 import { useLayout } from "./mobile/useLayout";
+import { MusicButton, MusicPlayer } from "./components/MusicPlayer";
 import { navigate, useRoute } from "./lib/history";
 
 // The phone layout is its own chunk: desktop visitors never download it.
@@ -86,16 +87,24 @@ export default function App() {
 
   const projectsValue = { projects: board.projects, tasks: board.tasks, available: !!board.projectsV2Available };
 
-  if (layout.mobile) {
-    return (
-      <ProjectsProvider value={projectsValue}>
-        <Suspense fallback={<div className="min-h-screen bg-[#0A1931]" />}>
-          <MobileApp board={board} conn={conn} error={error} send={send} setLayout={layout.setChoice} />
-        </Suspense>
-      </ProjectsProvider>
-    );
-  }
+  // The music player sits first, outside both layouts, so it keeps playing
+  // when the layout switches (it is never re-mounted).
+  return (
+    <>
+      <MusicPlayer mobile={layout.mobile} />
+      {layout.mobile ? (
+        <ProjectsProvider value={projectsValue}>
+          <Suspense fallback={<div className="min-h-screen bg-[#0A1931]" />}>
+            <MobileApp board={board} conn={conn} error={error} send={send} setLayout={layout.setChoice} />
+          </Suspense>
+        </ProjectsProvider>
+      ) : (
+        renderDesktop(board)
+      )}
+    </>
+  );
 
+  function renderDesktop(board: import("./lib/types").Board) {
   return (
     <ProjectsProvider value={projectsValue}>
     <div className="min-h-screen bg-[#F5F3EF] text-[#0A1931] pb-16">
@@ -116,6 +125,7 @@ export default function App() {
         send={send}
         rightSlot={
           <>
+            <MusicButton />
             <IdentityPicker members={members} />
             <ConnBadge conn={conn} />
             <LangToggle />
@@ -184,6 +194,7 @@ export default function App() {
     </div>
     </ProjectsProvider>
   );
+  }
 }
 
 const DESKTOP_TABS = new Set<string>(TABS.map((x) => x.id));

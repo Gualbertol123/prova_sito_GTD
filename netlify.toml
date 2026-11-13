@@ -55,8 +55,9 @@
 # Keep the whole site out of search engines, and apply browser security headers
 # to every response: HTTPS-only (HSTS), no framing (clickjacking), no MIME
 # sniffing, no referrer leaks to third parties, and a Content Security Policy
-# that only allows this site's own scripts, Supabase (REST + realtime) and
-# Google Fonts. img-src allows https: because the logo may be an external link;
+# that only allows this site's own scripts, Supabase (REST + realtime),
+# Google Fonts, and YouTube's official player (script + frame) for the music
+# player. img-src allows https: because the logo may be an external link;
 # data:/blob: fonts and images are used when the report is captured as a PDF.
 [[headers]]
   for = "/*"
@@ -68,4 +69,4 @@
     Referrer-Policy = "no-referrer"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
     Cross-Origin-Opener-Policy = "same-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; worker-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube-nocookie.com https://www.youtube.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; worker-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"

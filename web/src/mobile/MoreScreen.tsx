@@ -11,6 +11,7 @@ import { ReportView } from "../components/ReportView";
 import { ProductTreeView } from "../components/ProductTreeView";
 import { Avatar, Sheet } from "./ui";
 import { useInstall } from "../lib/pwa";
+import { music } from "../lib/music";
 import { IconBack, IconChevron, IconClose, IconAuto, IconDesktop, IconDownload, IconMoon, IconSun, IconGear, IconLeaf, IconMail, IconReport, IconTree, IconUser, IconWeekly } from "./icons";
 import type { Send } from "./actions";
 import type { LayoutChoice } from "./useLayout";
@@ -76,6 +77,7 @@ export function MoreScreen({
   }
 
   const rows: { icon: React.ReactNode; tile: string; title: string; hint: string; onClick: () => void }[] = [
+    { icon: <span style={{ fontSize: 17, lineHeight: 1 }}>♪</span>, tile: "var(--m-red)", title: t("music.title"), hint: t("music.more"), onClick: () => music.open() },
     { icon: <IconWeekly size={18} />, tile: "var(--m-indigo)", title: t("m.page.weekly"), hint: t("m.more.weekly"), onClick: () => setPage("weekly") },
     { icon: <IconMail size={18} />, tile: "var(--m-blue)", title: t("app.mail"), hint: t("m.more.mail"), onClick: onMail },
     { icon: <IconReport size={18} />, tile: "var(--m-orange)", title: t("m.page.report"), hint: t("m.more.report"), onClick: () => setPage("report") },

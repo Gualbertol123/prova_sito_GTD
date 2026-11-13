@@ -668,3 +668,18 @@ html[data-skin="glass"] [class*="superdoc-"]::before {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The new-task bar: every control is a field, so the assignee button (a
+   button, not an input) gets the same fill as the inputs and dropdowns next
+   to it instead of the raised-pill look. */
+html[data-skin="glass"] .qa-field,
+html[data-skin="glass"] .qa-field:focus {
+  background-color: var(--fill-3) !important;
+  border-color: var(--separator) !important;
+  box-shadow: none !important;
+  color: var(--label) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-skin="glass"] .qa-field::before { content: none !important; }
+html[data-skin="glass"] .qa-field:focus { border-color: var(--ios-blue) !important; }

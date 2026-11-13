@@ -18,6 +18,7 @@ const KEYS = {
   projView: "gtd-projects-view",
   projTasksView: "gtd-project-tasks-view",
   layout: "gtd-layout",
+  music: "gtd-music-side",
   mTab: "gtd-m-tab",
   mBoardCol: "gtd-m-board-col",
 } as const;

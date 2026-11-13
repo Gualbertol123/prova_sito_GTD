@@ -323,7 +323,7 @@ export function BoardView({ board, members, send, filters, setFilters }: Props) 
       )}
 
       {/* New-task row — visually distinct from the search/filter row above */}
-      <div className="rounded-[14px] border border-[#C9A96E]/40 bg-[#FBF6EC] p-3">
+      <div className="rounded-[14px] border border-[#E8E6E1] bg-white p-3">
         <div className="font-trajan text-[10px] uppercase tracking-widest text-[#8B6F3E] mb-2 flex items-center gap-1.5">
           <span>＋</span> {t("quick.section")}
         </div>

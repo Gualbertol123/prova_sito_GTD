@@ -1,0 +1,66 @@
+// Strings for the music player (components/MusicPlayer.tsx). Merged into the
+// main dictionaries in i18n.tsx; both languages must have the same keys.
+
+type Dict = Record<string, string>;
+
+export const MUSIC_IT: Dict = {
+  "music.title": "Musica",
+  "music.mix": "Mix preferiti",
+  "music.nothing": "Scegli cosa ascoltare",
+  "music.play": "Riproduci",
+  "music.pause": "Pausa",
+  "music.next": "Successivo",
+  "music.prev": "Precedente",
+  "music.minimize": "Riduci",
+  "music.expand": "Apri il player",
+  "music.close": "Chiudi (ferma la musica)",
+  "music.side": "Sposta nell'altro angolo",
+  "music.searchTitle": "Cerca qualsiasi brano",
+  "music.searchPh": "Brano, artista, album…",
+  "music.search": "Cerca",
+  "music.noResults": "Nessun risultato.",
+  "music.noKey": "La ricerca non è ancora attiva su questo sito (manca la chiave YouTube su Netlify).",
+  "music.quota": "Ricerche esaurite per oggi (limite gratuito di YouTube): riprova domani.",
+  "music.searchError": "Ricerca non riuscita:",
+  "music.openYt": "Cerca su YouTube",
+  "music.linkTitle": "Oppure incolla un link",
+  "music.linkPh": "Link YouTube di un brano o di una playlist",
+  "music.link": "Link",
+  "music.badLink": "Non è un link YouTube riconosciuto.",
+  "music.unavailable": "Video non riproducibile qui: passo al successivo…",
+  "music.failed": "YouTube non è raggiungibile in questo momento.",
+  "music.adsNote":
+    "La musica arriva dal player ufficiale di YouTube: gratis, e l'app non aggiunge pubblicità. YouTube però può mostrarne su alcuni video (non con YouTube Premium). Con il telefono bloccato o l'app in background la musica si ferma.",
+  "music.more": "Mix dei preferiti, ricerca, link",
+};
+
+export const MUSIC_EN: Dict = {
+  "music.title": "Music",
+  "music.mix": "Favourites mix",
+  "music.nothing": "Choose something to play",
+  "music.play": "Play",
+  "music.pause": "Pause",
+  "music.next": "Next",
+  "music.prev": "Previous",
+  "music.minimize": "Minimise",
+  "music.expand": "Open the player",
+  "music.close": "Close (stop the music)",
+  "music.side": "Move to the other corner",
+  "music.searchTitle": "Search any song",
+  "music.searchPh": "Song, artist, album…",
+  "music.search": "Search",
+  "music.noResults": "No results.",
+  "music.noKey": "Search is not switched on for this site yet (the YouTube key is missing on Netlify).",
+  "music.quota": "No searches left today (YouTube's free limit): try again tomorrow.",
+  "music.searchError": "Search failed:",
+  "music.openYt": "Search on YouTube",
+  "music.linkTitle": "Or paste a link",
+  "music.linkPh": "YouTube link to a song or a playlist",
+  "music.link": "Link",
+  "music.badLink": "That is not a YouTube link I recognise.",
+  "music.unavailable": "This video cannot play here: skipping…",
+  "music.failed": "YouTube cannot be reached right now.",
+  "music.adsNote":
+    "The music comes from YouTube's official player: free, and the app adds no ads. YouTube may show some on certain videos (not with YouTube Premium). With the phone locked or the app in the background the music stops.",
+  "music.more": "Favourites mix, search, links",
+};

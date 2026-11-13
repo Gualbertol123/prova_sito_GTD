@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 import { readPref, writePref } from "./prefs";
 import type { Priority, Status } from "./types";
 import { M_EN, M_IT } from "./i18n.mobile";
+import { MUSIC_EN, MUSIC_IT } from "./i18n.music";
 
 export type Lang = "it" | "en";
 
@@ -1077,7 +1078,7 @@ const EN: Dict = {
   "common.close": "Close",
 };
 
-const DICTS: Record<Lang, Dict> = { it: { ...IT, ...M_IT }, en: { ...EN, ...M_EN } };
+const DICTS: Record<Lang, Dict> = { it: { ...IT, ...M_IT, ...MUSIC_IT }, en: { ...EN, ...M_EN, ...MUSIC_EN } };
 
 /** For tests: every key of each language. */
 export const DICT_KEYS: Record<Lang, string[]> = { it: Object.keys(DICTS.it), en: Object.keys(DICTS.en) };
