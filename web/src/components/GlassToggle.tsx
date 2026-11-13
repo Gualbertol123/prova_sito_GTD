@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useT } from "../lib/i18n";
 import {
   readAppearanceChoice,
+  readBlur,
   readSkin,
+  writeBlur,
   writeAppearance,
   writeSkin,
   type AppearanceChoice,
@@ -16,6 +18,7 @@ export function GlassToggle() {
   const { t } = useT();
   const [skin, setSkin] = useState<Skin>(() => readSkin());
   const [appearance, setAppearance] = useState<AppearanceChoice>(() => readAppearanceChoice());
+  const [blur, setBlur] = useState<boolean>(() => readBlur());
   const on = skin === "glass";
 
   const toggleSkin = () => {
@@ -81,6 +84,34 @@ export function GlassToggle() {
             );
           })}
         </div>
+      )}
+
+      {on && (
+        <button
+          onClick={() => {
+            writeBlur(!blur);
+            setBlur(!blur);
+          }}
+          role="switch"
+          aria-checked={blur}
+          aria-label={t("skin.blur")}
+          title={t(blur ? "skin.blurOn" : "skin.blurOff")}
+          className={`h-9 w-9 rounded-full border flex items-center justify-center transition-colors ${
+            blur ? "border-white/30 bg-white/10 text-white" : "border-white/20 bg-transparent text-white/50"
+          }`}
+        >
+          {/* a soft dot when blur is on, a crisp ring when off */}
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            {blur ? (
+              <>
+                <circle cx="8" cy="8" r="6" fill="currentColor" opacity="0.25" />
+                <circle cx="8" cy="8" r="3.5" fill="currentColor" opacity="0.7" />
+              </>
+            ) : (
+              <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            )}
+          </svg>
+        </button>
       )}
     </div>
   );

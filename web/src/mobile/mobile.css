@@ -1210,6 +1210,15 @@ html[data-layout="mobile"] input[type="date"].m-input { min-height: 50px; -webki
   }
   html[data-layout="mobile"] * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 }
+html[data-layout="mobile"][data-skin="glass"][data-blur="off"] {
+  --m-wall: var(--wallpaper-flat);
+  --m-mat: var(--panel-opaque);
+  --m-mat-thin: var(--panel-opaque);
+  --m-mat-thick: var(--panel-opaque);
+  --m-chrome-top: var(--panel-opaque);
+  --m-chrome-bottom: var(--panel-opaque);
+}
+html[data-layout="mobile"][data-blur="off"] * { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .m-sheet, .m-backdrop, .m-toast { animation: none; }
   .m-progress > span, .m-dots span { transition: none; }

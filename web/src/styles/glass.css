@@ -671,6 +671,22 @@ html[data-skin="glass"] [class*="superdoc-"]::before {
   }
 }
 
+/* The same, chosen in the app ("Sfocatura" off). */
+html[data-skin="glass"][data-blur="off"] * {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-skin="glass"][data-blur="off"] body {
+  background-image: var(--wallpaper-flat);
+}
+html[data-skin="glass"][data-blur="off"] .bg-white,
+html[data-skin="glass"][data-blur="off"] .bg-\[\#FAF9F6\] {
+  background-color: var(--panel-opaque) !important;
+}
+html[data-skin="glass"][data-blur="off"] .bg-\[\#EFECE6\] {
+  background-color: var(--tray-opaque) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html[data-skin="glass"] button:hover,
   html[data-skin="glass"] button:active {

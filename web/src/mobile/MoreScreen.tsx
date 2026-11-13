@@ -3,7 +3,7 @@ import type { Board, Weekly } from "../lib/types";
 import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
 import { useT } from "../lib/i18n";
 import { useMe } from "../lib/identity";
-import { readAppearanceChoice, readSkin, writeAppearance, writeSkin, type AppearanceChoice } from "../lib/skin";
+import { readAppearanceChoice, readBlur, readSkin, writeAppearance, writeBlur, writeSkin, type AppearanceChoice } from "../lib/skin";
 import { WeeklyItemField } from "../components/WeeklyView";
 import { DailyReflection } from "../components/DailyReflection";
 import { SettingsView } from "../components/SettingsView";
@@ -109,6 +109,7 @@ export function MoreScreen({
         {t("skin.appearance")}
       </div>
       <AppearanceControl />
+      <BlurControl />
 
       <div className="m-panel m-list" style={{ marginTop: 18 }}>
         {rows.map((r) => (
@@ -302,6 +303,7 @@ export function MeSheet({
       <div className="m-field">
         <span className="m-label">{t("skin.appearance")}</span>
         <AppearanceControl />
+      <BlurControl />
       </div>
 
       <InstallRow />
@@ -362,6 +364,25 @@ function AppearanceControl() {
       <button aria-pressed={choice === "auto"} onClick={() => pick("auto")}>
         <IconAuto size={16} /> {t("m.auto")}
       </button>
+    </div>
+  );
+}
+
+/** Glass blur on/off (same as the desktop toggle). */
+function BlurControl() {
+  const { t } = useT();
+  const [on, setOn] = useState<boolean>(() => readBlur());
+  const pick = (v: boolean) => {
+    writeBlur(v);
+    setOn(v);
+  };
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div className="m-row__hint" style={{ margin: "0 4px 6px" }}>{t("skin.blur")}</div>
+      <div className="m-seg" role="group" aria-label={t("skin.blur")}>
+        <button aria-pressed={on} onClick={() => pick(true)}>{t("m.on")}</button>
+        <button aria-pressed={!on} onClick={() => pick(false)}>{t("m.off")}</button>
+      </div>
     </div>
   );
 }

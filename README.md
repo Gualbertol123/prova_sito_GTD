@@ -232,6 +232,7 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-report-draft:<period>` | that week's report edits, kept 7 days; removed on logout |
 | `gtd-skin` | mirror of the skin cookie (`glass` default / `classic`) |
 | `gtd-appearance` | mirror of the appearance cookie (`dark` default / `light`) |
+| `gtd-blur` | glass blur `on` (default) / `off` — off drops every backdrop blur (same as the OS "Reduce transparency"); fixes seams/lines some GPUs draw in blurred panels |
 | `gtd-projects-view` | PROJECTS overview as `cards` or `timeline` |
 | `gtd-project-tasks-view` | a project's tasks as `list` or `board` |
 | `gtd-music-mode` | music player: `audio` (music only, default) / `video` |
@@ -722,6 +723,11 @@ is **on by default**, dark is the default appearance, and both choices are
 remembered in **cookies** (`gtd-skin` and `gtd-appearance`, one year,
 `SameSite=Lax`, `Secure` on https), mirrored into `localStorage` so they
 survive cookies being cleared or blocked.
+
+A round **blur** button after ☀ ☾ A (on the phone: Altro → *Sfocatura vetro*)
+switches the frosted blur off while keeping the glass colours: panels turn
+opaque. Use it if a browser or graphics card draws thin lines or seams in the
+glass, or on a slow computer. It is stored per browser (`gtd-blur`).
 
 ### The design
 

@@ -97,6 +97,26 @@ export function writeSkin(skin: Skin): void {
   applySkin(skin, readAppearance());
 }
 
+/**
+ * Glass blur on/off. Off keeps the glass colours but drops backdrop-filter
+ * everywhere: an escape hatch for GPUs/browsers that draw seams or lines in
+ * blurred surfaces, and lighter on slow machines. Same effect as the OS
+ * "Reduce transparency" setting.
+ */
+export function readBlur(): boolean {
+  return readPref("blur") !== "off";
+}
+
+export function writeBlur(on: boolean): void {
+  writePref("blur", on ? "on" : "off");
+  applyBlur(on);
+}
+
+function applyBlur(on: boolean): void {
+  if (on) delete document.documentElement.dataset.blur;
+  else document.documentElement.dataset.blur = "off";
+}
+
 export function writeAppearance(choice: AppearanceChoice): void {
   writeCookie(APPEARANCE_COOKIE, choice);
   writePref("appearance", choice);
@@ -112,6 +132,7 @@ export function initSkin(): { skin: Skin; appearance: Appearance } {
   const skin = readSkin();
   const appearance = readAppearance();
   applySkin(skin, appearance);
+  applyBlur(readBlur());
   writeCookie(SKIN_COOKIE, skin);
   writeCookie(APPEARANCE_COOKIE, readAppearanceChoice());
   // "Auto" follows the device live: switch the phone or computer to light or

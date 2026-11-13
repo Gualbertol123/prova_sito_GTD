@@ -27,6 +27,9 @@ const IT: Dict = {
   "skin.dark": "Scuro",
   "skin.auto": "Automatico (come il dispositivo)",
   "skin.label": "Vetro",
+  "skin.blur": "Sfocatura vetro",
+  "skin.blurOn": "Sfocatura attiva \u2014 clicca per spegnerla (se vedi linee strane o il computer \u00e8 lento)",
+  "skin.blurOff": "Sfocatura spenta \u2014 clicca per riaccenderla",
   "skin.onHint": "Liquid Glass attivo \u2014 clicca per tornare al tema classico",
   "skin.offHint": "Tema classico \u2014 clicca per attivare Liquid Glass",
 
@@ -563,6 +566,9 @@ const EN: Dict = {
   "skin.dark": "Dark",
   "skin.auto": "Automatic (follows the device)",
   "skin.label": "Glass",
+  "skin.blur": "Glass blur",
+  "skin.blurOn": "Blur on \u2014 click to turn it off (if you see odd lines or the computer is slow)",
+  "skin.blurOff": "Blur off \u2014 click to turn it back on",
   "skin.onHint": "Liquid Glass on \u2014 click for the classic theme",
   "skin.offHint": "Classic theme \u2014 click for Liquid Glass",
 
