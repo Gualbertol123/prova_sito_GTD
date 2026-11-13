@@ -1,0 +1,317 @@
+import { useState } from "react";
+import type { Board, Weekly } from "../lib/types";
+import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
+import { useT } from "../lib/i18n";
+import { useMe } from "../lib/identity";
+import { readAppearance, readSkin, writeAppearance, writeSkin, type Appearance } from "../lib/skin";
+import { WeeklyItemField } from "../components/WeeklyView";
+import { DailyReflection } from "../components/DailyReflection";
+import { SettingsView } from "../components/SettingsView";
+import { ReportView } from "../components/ReportView";
+import { ProductTreeView } from "../components/ProductTreeView";
+import { Avatar, Sheet } from "./ui";
+import { IconBack, IconChevron, IconClose, IconDesktop, IconGear, IconLeaf, IconMail, IconReport, IconTree, IconUser, IconWeekly } from "./icons";
+import type { Send } from "./actions";
+import type { LayoutChoice } from "./useLayout";
+
+export type MorePage = "weekly" | "report" | "reflection" | "products" | "settings" | null;
+
+/** Everything that is not one of the four main tabs. */
+export function MoreScreen({
+  board,
+  send,
+  page,
+  setPage,
+  onMail,
+  onMe,
+}: {
+  board: Board;
+  send: Send;
+  page: MorePage;
+  setPage: (p: MorePage) => void;
+  onMail: () => void;
+  onMe: () => void;
+}) {
+  const { t } = useT();
+  const { me } = useMe();
+
+  if (page) {
+    const back = (
+      <div className="m-embed__bar">
+        <button className="m-iconbtn" aria-label={t("m.back")} onClick={() => setPage(null)}>
+          <IconBack size={18} />
+        </button>
+      </div>
+    );
+    if (page === "weekly")
+      return (
+        <div className="m-page" style={{ paddingTop: 8 }}>
+          {back}
+          <WeeklyPage board={board} send={send} />
+        </div>
+      );
+    return (
+      <div className="m-embed">
+        {back}
+        {page === "report" && (
+          <>
+            <p className="m-sub" style={{ margin: "0 4px 12px" }}>
+              {t("m.reportHint")}
+            </p>
+            <div className="m-scroll-x">
+              <ReportView board={board} send={send} />
+            </div>
+          </>
+        )}
+        {page === "reflection" && <DailyReflection board={board} members={board.members} send={send} />}
+        {page === "products" && (
+          <div className="m-scroll-x">
+            <ProductTreeView />
+          </div>
+        )}
+        {page === "settings" && <SettingsView board={board} send={send} />}
+      </div>
+    );
+  }
+
+  const rows: { icon: React.ReactNode; title: string; hint: string; onClick: () => void }[] = [
+    { icon: <IconWeekly size={18} />, title: t("m.page.weekly"), hint: t("m.more.weekly"), onClick: () => setPage("weekly") },
+    { icon: <IconMail size={18} />, title: t("app.mail"), hint: t("m.more.mail"), onClick: onMail },
+    { icon: <IconReport size={18} />, title: t("m.page.report"), hint: t("m.more.report"), onClick: () => setPage("report") },
+    { icon: <IconLeaf size={18} />, title: t("m.page.reflection"), hint: t("m.more.reflection"), onClick: () => setPage("reflection") },
+    { icon: <IconTree size={18} />, title: t("m.page.products"), hint: t("m.more.products"), onClick: () => setPage("products") },
+    { icon: <IconGear size={18} />, title: t("m.page.settings"), hint: t("m.more.settings"), onClick: () => setPage("settings") },
+  ];
+
+  return (
+    <div className="m-page">
+      <button className="m-panel m-row" onClick={onMe}>
+        {me ? (
+          <Avatar name={me} large />
+        ) : (
+          <span className="m-row__icon">
+            <IconUser size={18} />
+          </span>
+        )}
+        <span className="m-row__main">
+          <span className="m-row__title">{me || t("m.pickMe")}</span>
+          <span className="m-row__hint" style={{ display: "block" }}>
+            {t("m.meHint")}
+          </span>
+        </span>
+        <IconChevron size={18} />
+      </button>
+
+      <div className="m-panel m-list" style={{ marginTop: 14 }}>
+        {rows.map((r) => (
+          <button key={r.title} className="m-row" onClick={r.onClick}>
+            <span className="m-row__icon">{r.icon}</span>
+            <span className="m-row__main">
+              <span className="m-row__title">{r.title}</span>
+              <span className="m-row__hint" style={{ display: "block" }}>
+                {r.hint}
+              </span>
+            </span>
+            <span className="m-row__end">
+              <IconChevron size={18} />
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The weekly review, stacked: this week's wins from the board, then the five lists. */
+function WeeklyPage({ board, send }: { board: Board; send: Send }) {
+  const { t } = useT();
+  const done = board.tasks.filter((tk) => tk.status === "DONE" && !isArchived(tk));
+  const [confirm, setConfirm] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+
+  return (
+    <>
+      <button className="m-panel m-row" onClick={() => setShowDone((v) => !v)}>
+        <span className="m-row__icon" style={{ background: "var(--m-green-soft)", color: "var(--m-green)", fontWeight: 800 }}>
+          {done.length}
+        </span>
+        <span className="m-row__main">
+          <span className="m-row__title">{t("weekly.doneThisWeek")}</span>
+          <span className="m-row__hint" style={{ display: "block" }}>
+            {t("m.weeklyFromBoard")}
+          </span>
+        </span>
+        <IconChevron size={18} className={showDone ? "rotate-90" : ""} />
+      </button>
+      {showDone && done.length > 0 && (
+        <div className="m-panel m-list" style={{ marginTop: 8 }}>
+          {done.map((tk) => (
+            <div key={tk.id} className="m-row" style={{ minHeight: 0, padding: "10px 14px" }}>
+              <Avatar name={tk.owner} />
+              <span className="m-row__main" style={{ fontSize: 14 }}>
+                {tk.title}
+              </span>
+              <span className="m-chip">{tk.priority}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {WEEKLY_COLUMNS.map((col) => (
+        <WeeklyBucket key={col.key} bucket={col.key} label={t(`m.weekly.${col.key}`)} items={board.weekly[col.key]} send={send} />
+      ))}
+
+      <div style={{ marginTop: 26 }}>
+        {confirm ? (
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="m-btn" style={{ flex: 1 }} onClick={() => setConfirm(false)}>
+              {t("task.no")}
+            </button>
+            <button
+              className="m-btn m-btn--danger"
+              style={{ flex: 1.4 }}
+              onClick={() => {
+                send({ type: "weeklyClear" });
+                setConfirm(false);
+              }}
+            >
+              {t("m.clearYes")}
+            </button>
+          </div>
+        ) : (
+          <button className="m-btn m-btn--block" onClick={() => setConfirm(true)}>
+            {t("weekly.clear")}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function WeeklyBucket({
+  bucket,
+  label,
+  items,
+  send,
+}: {
+  bucket: keyof Weekly;
+  label: string;
+  items: { id: string; text: string }[];
+  send: Send;
+}) {
+  const { t } = useT();
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    send({ type: "weeklyAdd", column: bucket, item: { id: genId(), text: v } });
+    setDraft("");
+  };
+  return (
+    <>
+      <h2 className="m-h2">
+        {label} <span className="m-count">{items.length}</span>
+      </h2>
+      <div className="m-panel m-list">
+        {items.map((it) => (
+          <div key={it.id} className="m-sub-row" style={{ alignItems: "center" }}>
+            <WeeklyItemField
+              text={it.text}
+              onSave={(v) => send({ type: "weeklyUpdate", column: bucket, id: it.id, text: v })}
+              className="m-sub-row__text"
+            />
+            <button
+              aria-label={t("m.delete")}
+              style={{ color: "var(--m-text-3)", padding: 2 }}
+              onClick={() => send({ type: "weeklyDelete", column: bucket, id: it.id })}
+            >
+              <IconClose size={16} />
+            </button>
+          </div>
+        ))}
+        <div className="m-sub-row" style={{ alignItems: "center" }}>
+          <input
+            className="m-sub-row__text"
+            style={{ background: "transparent", border: 0, outline: "none", color: "var(--m-text)", fontSize: 16 }}
+            placeholder={t("weekly.add")}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            enterKeyHint="done"
+          />
+          {draft.trim() && (
+            <button style={{ color: "var(--m-gold)", fontWeight: 700, fontSize: 14 }} onClick={add}>
+              {t("m.add")}
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Who you are on this device, language, light/dark, and the desktop layout. */
+export function MeSheet({
+  members,
+  onClose,
+  setLayout,
+}: {
+  members: string[];
+  onClose: () => void;
+  setLayout: (c: LayoutChoice) => void;
+}) {
+  const { t, lang, setLang } = useT();
+  const { me, setMe } = useMe();
+  const [appearance, setAppearanceState] = useState<Appearance>(() =>
+    readSkin() === "glass" ? readAppearance() : "light"
+  );
+  const pickAppearance = (a: Appearance) => {
+    writeSkin("glass");
+    writeAppearance(a);
+    setAppearanceState(a);
+  };
+
+  return (
+    <Sheet title={t("m.me")} onClose={onClose}>
+      <div className="m-label">{t("m.whoAmI")}</div>
+      <div className="m-choices">
+        {members.map((m) => (
+          <button key={m} className="m-choice" aria-pressed={me === m} onClick={() => setMe(m)}>
+            <Avatar name={m} /> {m}
+          </button>
+        ))}
+      </div>
+      <p className="m-sub" style={{ marginTop: 8 }}>
+        {t("m.whoAmIHint")}
+      </p>
+
+      <div className="m-field">
+        <span className="m-label">{t("m.language")}</span>
+        <div className="m-seg">
+          <button aria-pressed={lang === "it"} onClick={() => setLang("it")}>
+            Italiano
+          </button>
+          <button aria-pressed={lang === "en"} onClick={() => setLang("en")}>
+            English
+          </button>
+        </div>
+      </div>
+
+      <div className="m-field">
+        <span className="m-label">{t("skin.appearance")}</span>
+        <div className="m-seg">
+          <button aria-pressed={appearance === "dark"} onClick={() => pickAppearance("dark")}>
+            {t("skin.dark")}
+          </button>
+          <button aria-pressed={appearance === "light"} onClick={() => pickAppearance("light")}>
+            {t("skin.light")}
+          </button>
+        </div>
+      </div>
+
+      <button className="m-btn m-btn--block" style={{ marginTop: 22 }} onClick={() => setLayout("desktop")}>
+        <IconDesktop size={18} /> {t("m.useDesktop")}
+      </button>
+    </Sheet>
+  );
+}

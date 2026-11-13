@@ -30,6 +30,35 @@ full file map, how to run and deploy it, and how to extend it.
 | **REFLECTION** | **Personal**, behind a per-user password (initial password `password`; choose your name + password to enter, with a "remember on this device for" duration incl. Forever). Log one entry per day with 4 fields (Done today · What went well · What to improve · Learning notes); see only **your own** recent entries and a **spaced-repetition review** (1/3/7/14/30-day intervals + random). Inside you can change your own password (the current one is required). Passwords are stored as **bcrypt hashes** and checked by the database (`reflection_login`); 5 wrong tries lock that name for 5 minutes; an admin resets a forgotten one from Supabase (§11). A **Diary / Notes** switch at the top of the tab, behind the same password, holds **Personal notes**: free-form notes only you see, in the `personal_notes` table (the chip carries their count, and the tab reopens on whichever half you used last). Private from outsiders, but *within the team* the privacy is in the interface only — see §11. |
 | **SETTINGS** | Custom logo (round header box) + favicon upload (rasterised & downscaled, ≤5 MB input); change the shared team password (current one required; logs every other device out); login duration; log out this device. Subtitle is edited **inline** by double-clicking it in the header. |
 
+### 1b. On a phone
+
+A phone-sized screen (767 px wide or less) gets a separate **mobile version**
+built for one hand, on the same board, live sync, data and operations; nothing
+about the desktop changes. Five tabs at the bottom:
+
+| Tab | What it does |
+| --- | --- |
+| **Oggi / Today** | What needs *you*: your overdue and due-today tasks, what you are in the middle of, the next 7 days, what you are waiting on (longest first), the week's done count, and the canteen's dish of the day (tap for the full menu). The tab shows a badge with your overdue + due-today count. |
+| **Board** | One column per page: swipe sideways, or tap a column pill (with counts). Cards are sorted by priority, then due date. Search, **Only mine** and P1–P4 filters. DONE shows this week; archived ones are one tap away. Each column has **Add here**. |
+| **Progetti / Projects** | Ongoing / Completed. Cards with a progress ring, a bar of tasks by status, health, target date, open and overdue counts. A project opens as a sheet: its tasks by column, add a task to it, notes. Dates, colour, leads and step order are edited on the desktop. |
+| **Agenda** | A week strip (dots = tasks due), the chosen day's tasks, overdue ones on today, then the next two weeks. Add a task straight onto a day. Shows every dated task, like the desktop calendar. |
+| **Altro / More** | Weekly review (stacked, mobile-native), Mail update, and the desktop Report, Reflection, Products and Settings screens. |
+
+On any task card: **tap** opens it as a full-height sheet (status, priority,
+quick due dates, people, project, subtasks, description, notes, file folder,
+delete); the **round check** marks it done; **swipe right** does the same;
+**swipe left** opens *Move to…*. Done, move and delete each show a toast with
+**Undo** instead of an "are you sure?". The big gold **+** adds a task: only a
+title is needed, and it starts assigned to you.
+
+The avatar in the header (or **More → you**) sets who you are on this device,
+the language, light or dark, and **Use the desktop version**. The desktop
+layout on a phone then shows a **Mobile version →** bar at the top to switch
+back. The choice is per device (`gtd-layout` in localStorage: `auto`, `mobile`
+or `desktop`). The mobile app follows the Glass appearance setting (dark by
+default; light when Glass is light or off) and the brand navy, gold, cream and
+Cinzel.
+
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
 switch (§10, on by default), and a **Mail update** generator (Completed = DONE, Next steps = FOCUS + NEXT, → clipboard /
@@ -60,11 +89,19 @@ Supabase project (free tier)
 2. `writeOp(op, board)` (`db.ts`) translates the op into the matching Supabase
    write(s), mapping camelCase app fields to snake_case columns.
 3. Supabase Postgres realtime broadcasts the change; **every** client (including
-   the sender) refetches the whole board (`fetchBoard`) and re-renders, so the
-   optimistic state reconciles with the authoritative rows.
+   the sender) re-reads **just the changed row** (`fetchChange` in `db.ts`;
+   for reflections, personal notes and settings, just that table) and folds it
+   in (`applyRowChange`, `rowSync.ts`), so the optimistic state reconciles with
+   the authoritative rows without re-downloading the board. A burst of more
+   than 20 changed rows takes one full `fetchBoard` instead.
+4. Subtask edits (add, tick, edit, reorder, delete) go through database
+   functions (migration 017) that change only that one subtask against the
+   row as it is now, so two people editing the same task's subtasks at once
+   do not overwrite each other. Before 017 runs, the app falls back to writing
+   the whole array.
 
 **Live-sync robustness** (`useBoard.ts`): realtime is the primary path, backed
-by a 12s safety-net poll while the tab is visible, plus a refetch on tab-focus
+by a 30s safety-net full reload while the tab is visible, plus a refetch on tab-focus
 and on network `online`, and a full re-pull on every (re)subscribe. So clients
 converge even if a realtime packet is missed.
 
@@ -95,6 +132,9 @@ the **login session** (Supabase access + refresh token, never the password; key
 | `gtd-project-open` | the project page left open in the PROJECTS tab |
 | `gtd-projects-view` | PROJECTS overview as `cards` or `timeline` |
 | `gtd-project-tasks-view` | a project's tasks as `list` or `board` |
+| `gtd-layout` | `auto` (phone-sized → mobile) / `mobile` / `desktop` |
+| `gtd-m-tab` | the mobile tab left open |
+| `gtd-m-board-col` | the mobile board's column left open |
 
 ---
 
@@ -197,12 +237,16 @@ SQL files in `supabase/`:
 - `migration-016-project-board-mode.sql` — adds `projects.board_mode` and
   `projects.task_order` (how a project's tasks reach the BOARD, and their step
   order). Additive; run after 015. Before it, every project task is on the BOARD.
+- `migration-017-subtask-functions.sql` — adds `subtask_add`,
+  `subtask_update`, `subtask_delete` and `subtask_reorder`, so concurrent
+  subtask edits no longer overwrite each other. Adds functions only; no data
+  changes. Re-runnable.
 - `migration-012-auth-step2-lockdown.sql` — **real login, step 2.** Closes all
   tables to the anon key, hides `reflection_access`, deletes the clear-text
   password columns. Run only after the new site is live and you have logged in
   with it. See §11.
 
-Migrations 002–011, 013, 015 and 016 are additive and safe on live data; run any you haven't yet.
+Migrations 002–011, 013, 015, 016 and 017 are additive and safe on live data; run any you haven't yet.
 012 changes access rules (not data) and must follow the order in §11. The
 app degrades gracefully before they're applied (settings can't save, reflections
 stay empty, tasks stay single-assignee) thanks to tolerant reads and fallbacks —
@@ -230,7 +274,9 @@ prova_sito_GTD/
 │   ├── migration-012-auth-step2-lockdown.sql ← real login, step 2 (lockdown)
 │   ├── migration-013-report-projects.sql · migration-014-remove-ideas-tracking.sql
 │   ├── migration-015-projects-v2.sql         ← project details + notes, tasks.project_id
-│   └── migration-016-project-board-mode.sql  ← how project tasks reach the BOARD, step order
+│   ├── migration-016-project-board-mode.sql  ← how project tasks reach the BOARD, step order
+│   └── migration-017-subtask-functions.sql   ← subtasks changed one at a time (no lost edits)
+├── .github/workflows/ci.yml      ← on every push / PR: npm test + production build
 ├── menu/                        ← the canteen menu: monthly PDF → web/src/data/menu.json (§8)
 │   ├── menu_from_pdf.py
 │   └── README.md
@@ -260,6 +306,9 @@ prova_sito_GTD/
         │   ├── db.ts             ← row<->type mapping, fetchBoard, seedIfEmpty, writeOp
         │   ├── localReducer.ts   ← applyOpLocal (optimistic in-memory updates)
         │   ├── useBoard.ts       ← load + realtime + poll + optimistic send()  (core hook)
+        │   ├── rowSync.ts        ← folds one changed row (from realtime) into the board
+        │   ├── i18n.mobile.ts    ← the mobile app's IT/EN strings (merged into i18n.tsx)
+        │   ├── __tests__/        ← Vitest: reducer, live sync, projects, subtask writes, i18n parity
         │   ├── seed.ts           ← initial data for a brand-new empty project
         │   ├── i18n.tsx          ← LangProvider + full IT/EN dictionary + label helpers
         │   ├── identity.tsx      ← IdentityProvider ("who am I", cached per device)
@@ -299,6 +348,15 @@ prova_sito_GTD/
             ├── DailyReflection.tsx ← reflection form + recent + spaced review
             ├── SettingsView.tsx  ← branding upload, team password change, login duration
             └── MailModal.tsx     ← mail-update text generator
+        └── mobile/               ← the phone version (§1b), its own lazy-loaded chunk
+            ├── MobileApp.tsx     ← shell: header, bottom tab bar, add button, sheets, toasts
+            ├── useLayout.ts      ← phone or desktop: screen width + the per-device choice
+            ├── TodayScreen.tsx · BoardScreen.tsx · ProjectsScreen.tsx · AgendaScreen.tsx · MoreScreen.tsx
+            ├── TaskCard.tsx      ← swipeable card (right = done, left = move)
+            ├── TaskSheet.tsx · AddSheet.tsx ← edit a task / add one, as bottom sheets
+            ├── actions.tsx       ← done / move / delete with Undo; the Move sheet
+            ├── ui.tsx · icons.tsx · nav.ts  ← sheet, toast, avatars, chips, ring; icons; navigation
+            └── mobile.css        ← every mobile style, scoped to html[data-layout="mobile"]
 ```
 
 Rough size: ~7.1k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),
@@ -413,8 +471,13 @@ cd web
 cp .env.example .env      # fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_TEAM_EMAIL
 npm install
 npm run dev               # http://localhost:5173
+npm test                  # Vitest unit tests (no Supabase needed)
 npm run build             # type-check (tsc -b) + production build to web/dist
 ```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm test` and `npm run build`
+on every push and pull request, so a change that breaks either shows up there
+before Netlify deploys it.
 
 You need a Supabase project (the app talks to it directly). Point `.env` at any
 project set up as in §7 / §11 and log in with the team password.
@@ -529,8 +592,6 @@ Because everything flows through the `Op` union, most changes follow one path:
   note; only the Reflection password in the interface keeps them apart (§11).
 - Merge `claude/hopeful-noether-u6oblf` into `main` and point Netlify at `main`.
 - Drag-to-reorder for weekly items / members (subtasks already have it).
-- Weekly items are still uncontrolled `defaultValue` textareas, so another
-  person's edit to an existing weekly item only shows after a reload.
 - A weekly "learning digest" and per-member reflection streaks.
 
 ---

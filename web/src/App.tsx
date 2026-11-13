@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useBoard } from "./lib/useBoard";
 import { TABS, type TabId } from "./lib/constants";
 import { useT } from "./lib/i18n";
@@ -19,10 +19,15 @@ import { LangToggle } from "./components/LangToggle";
 import { IdentityPicker } from "./components/IdentityPicker";
 import { GlassToggle } from "./components/GlassToggle";
 import { ProjectsProvider } from "./lib/projectsContext";
+import { useLayout } from "./mobile/useLayout";
+
+// The phone layout is its own chunk: desktop visitors never download it.
+const MobileApp = lazy(() => import("./mobile/MobileApp").then((m) => ({ default: m.MobileApp })));
 
 export default function App() {
   const { board, conn, error, send } = useBoard();
   const { t } = useT();
+  const layout = useLayout();
   const [tab, setTab] = useState<TabId>("board");
   const [mailOpen, setMailOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -69,9 +74,30 @@ export default function App() {
     );
   }
 
+  const projectsValue = { projects: board.projects, tasks: board.tasks, available: !!board.projectsV2Available };
+
+  if (layout.mobile) {
+    return (
+      <ProjectsProvider value={projectsValue}>
+        <Suspense fallback={<div className="min-h-screen bg-[#0A1931]" />}>
+          <MobileApp board={board} conn={conn} error={error} send={send} setLayout={layout.setChoice} />
+        </Suspense>
+      </ProjectsProvider>
+    );
+  }
+
   return (
-    <ProjectsProvider value={{ projects: board.projects, tasks: board.tasks, available: !!board.projectsV2Available }}>
+    <ProjectsProvider value={projectsValue}>
     <div className="min-h-screen bg-[#F5F3EF] text-[#0A1931] pb-16">
+      {/* On a phone showing the desktop layout by choice: the way back. */}
+      {layout.choice === "desktop" && window.matchMedia?.("(max-width: 767px)").matches && (
+        <button
+          onClick={() => layout.setChoice("auto")}
+          style={{ display: "block", width: "100%", padding: "12px 16px", background: "#C9A96E", color: "#0A1931", fontSize: 14, fontWeight: 700 }}
+        >
+          {t("m.useMobile")} →
+        </button>
+      )}
       <TopBar
         board={board}
         conn={conn}
@@ -144,6 +170,7 @@ export default function App() {
       </div>
 
       {mailOpen && <MailModal board={board} onClose={() => setMailOpen(false)} />}
+
     </div>
     </ProjectsProvider>
   );
