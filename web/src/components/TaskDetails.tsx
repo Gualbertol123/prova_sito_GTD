@@ -241,7 +241,7 @@ export function TaskDetails({
         )}
         <SortableSubtasks
           items={task.subtasks}
-          onReorder={(subtasks) => patch({ subtasks })}
+          onReorder={(subtasks) => send({ type: "reorderSubtasks", taskId: task.id, ids: subtasks.map((s) => s.id) })}
           onToggle={(subtaskId, done) =>
             send({
               type: "updateSubtask",

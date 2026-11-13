@@ -88,6 +88,11 @@ export function applyOpLocal(board: Board, op: Op): Board {
       if (t) t.subtasks = t.subtasks.filter((s) => s.id !== op.subtaskId);
       break;
     }
+    case "reorderSubtasks": {
+      const t = find(op.taskId);
+      if (t) t.subtasks = reorderByIds(t.subtasks, op.ids);
+      break;
+    }
     case "setMembers":
       b.members = op.members;
       break;
@@ -158,4 +163,17 @@ export function applyOpLocal(board: Board, op: Op): Board {
   }
 
   return b;
+}
+
+/**
+ * Puts items in the order of `ids`. Items `ids` does not list (e.g. one a
+ * teammate just added) keep their relative order after the listed ones —
+ * the same rule as the database's subtask_reorder (migration 017).
+ */
+export function reorderByIds<T extends { id: string }>(items: T[], ids: string[]): T[] {
+  const pos = new Map(ids.map((id, i) => [id, i]));
+  return items
+    .map((it, i) => ({ it, k: pos.has(it.id) ? pos.get(it.id)! : ids.length + i }))
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.it);
 }

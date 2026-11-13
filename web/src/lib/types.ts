@@ -153,6 +153,7 @@ export type Op =
   | { type: "addSubtask"; taskId: string; subtask: Subtask }
   | { type: "updateSubtask"; taskId: string; subtaskId: string; patch: Partial<Subtask> }
   | { type: "deleteSubtask"; taskId: string; subtaskId: string }
+  | { type: "reorderSubtasks"; taskId: string; ids: string[] }
   | { type: "setMembers"; members: string[] }
   | { type: "renameBoard"; name: string }
   | { type: "setSubtitle"; lang: "it" | "en"; text: string }

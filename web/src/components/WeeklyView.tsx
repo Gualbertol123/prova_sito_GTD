@@ -3,6 +3,8 @@ import type { Board, Op, Task, Weekly } from "../lib/types";
 import { WEEKLY_COLUMNS, genId, isArchived } from "../lib/constants";
 import { ownersLabel } from "../lib/owners";
 import { useT } from "../lib/i18n";
+import { useSyncedField } from "../lib/useSyncedField";
+import { AutoTextarea } from "./AutoTextarea";
 
 interface Props {
   board: Board;
@@ -173,15 +175,9 @@ function WeeklyColumn({
       <div className="space-y-1.5">
         {items.map((it) => (
           <div key={it.id} className="group flex items-start gap-1">
-            <textarea
-              rows={1}
-              defaultValue={it.text}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== it.text)
-                  send({ type: "weeklyUpdate", column: colKey, id: it.id, text: v });
-              }}
-              className="flex-1 text-[12px] text-[#0A1931] bg-[#F5F3EF] rounded-lg border border-[#E8E6E1] p-2 outline-none focus:border-[#C9A96E] resize-none"
+            <WeeklyItemField
+              text={it.text}
+              onSave={(v) => send({ type: "weeklyUpdate", column: colKey, id: it.id, text: v })}
             />
             <button
               onClick={() => send({ type: "weeklyDelete", column: colKey, id: it.id })}
@@ -208,5 +204,35 @@ function WeeklyColumn({
         </button>
       </div>
     </div>
+  );
+}
+
+// Follows teammates' edits live, except while this person is typing in it.
+export function WeeklyItemField({
+  text,
+  onSave,
+  className,
+}: {
+  text: string;
+  onSave: (text: string) => void;
+  className?: string;
+}) {
+  const f = useSyncedField(text);
+  return (
+    <AutoTextarea
+      value={f.value}
+      onChange={(e) => f.setValue(e.target.value)}
+      onFocus={f.onFocus}
+      onBlur={() => {
+        f.onBlur();
+        const v = f.value.trim();
+        if (v && v !== text) onSave(v);
+        else f.setValue(text); // emptied or unchanged: show the saved text
+      }}
+      className={
+        className ??
+        "flex-1 text-[12px] text-[#0A1931] bg-[#F5F3EF] rounded-lg border border-[#E8E6E1] p-2 outline-none focus:border-[#C9A96E]"
+      }
+    />
   );
 }

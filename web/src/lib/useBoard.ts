@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Board, Op } from "./types";
-import { fetchBoard, seedIfEmpty, writeOp } from "./db";
+import { fetchBoard, fetchChange, seedIfEmpty, writeOp, type ChangedTable } from "./db";
+import { applyRowChange, type RowChange } from "./rowSync";
 import { applyOpLocal } from "./localReducer";
 import { supabase } from "./supabaseClient";
 import { isConfigured } from "./supabaseConfig";
@@ -19,8 +20,16 @@ export interface UseBoard {
 
 // How often to re-pull the whole board as a safety net, in case a realtime
 // event is ever missed (dropped socket, sleeping laptop, etc). Realtime is the
-// primary path; this just guarantees convergence.
-const POLL_MS = 12000;
+// primary path — and it now moves one row at a time — so this can be slow.
+const POLL_MS = 30000;
+
+// More changed rows than this in one burst (e.g. clearing the weekly review)
+// and one full reload is cheaper than re-reading each row.
+const MAX_ROW_FETCHES = 20;
+
+const TABLES: ChangedTable[] = ["tasks", "weekly", "board_meta", "reflections", "projects", "personal_notes"];
+// Tables re-read whole on any change (small, or one row): no id needed.
+const WHOLE: ReadonlySet<ChangedTable> = new Set(["reflections", "personal_notes", "board_meta"]);
 
 // Marks a reload skipped for lack of a session (not an error to show).
 const SKIP = Symbol("no-session");
@@ -85,22 +94,57 @@ export function useBoard(): UseBoard {
       }
     })();
 
-    // Debounced authoritative refresh on any realtime change.
+    // Realtime: collect the changed rows for a moment, then re-read only those
+    // rows and fold them in. A deleted row needs no read at all.
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleReload = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => reload(), 80);
+    const pending = new Map<string, { table: ChangedTable; id?: string }>();
+    const deleted: RowChange[] = [];
+
+    const flush = async () => {
+      timer = null;
+      const jobs = [...pending.values()];
+      const gone = deleted.splice(0);
+      pending.clear();
+      if (!boardRef.current || jobs.length > MAX_ROW_FETCHES) {
+        reload();
+        return;
+      }
+      let changes: RowChange[];
+      try {
+        changes = [...gone, ...(await Promise.all(jobs.map((j) => fetchChange(j.table, j.id))))];
+      } catch {
+        reload(); // a refused or failed read: fall back to the full path
+        return;
+      }
+      if (cancelled || changes.length === 0) return;
+      // These rows are newer than any full reload already in flight.
+      ++loadSeq.current;
+      setBoard((prev) => (prev ? changes.reduce(applyRowChange, prev) : prev));
     };
 
-    const channel = supabase
-      .channel("board-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "weekly" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "board_meta" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "reflections" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "personal_notes" }, scheduleReload)
-      .subscribe((status) => {
+    const onChange = (table: ChangedTable) => (payload: { eventType: string; new: unknown; old: unknown }) => {
+      const id =
+        ((payload.new as { id?: string } | null)?.id ?? (payload.old as { id?: string } | null)?.id) || undefined;
+      if (WHOLE.has(table)) {
+        pending.set(table, { table });
+      } else if (!id) {
+        reload(); // cannot tell which row: take the full path
+        return;
+      } else if (payload.eventType === "DELETE") {
+        pending.delete(`${table}:${id}`);
+        deleted.push({ table, id, row: null } as RowChange);
+      } else {
+        pending.set(`${table}:${id}`, { table, id });
+      }
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => void flush(), 80);
+    };
+
+    let channel = supabase.channel("board-realtime");
+    for (const table of TABLES) {
+      channel = channel.on("postgres_changes", { event: "*", schema: "public", table }, onChange(table));
+    }
+    channel.subscribe((status) => {
         if (cancelled) return;
         if (status === "SUBSCRIBED") {
           setConn("online");

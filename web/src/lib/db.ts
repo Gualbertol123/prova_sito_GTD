@@ -1,5 +1,7 @@
 import { supabase } from "./supabaseClient";
-import type { BoardMode, Board, PersonalNote, Op, Priority, Project, Reflection, Task, Weekly, WeeklyItem } from "./types";
+import type { BoardMode, Board, PersonalNote, Op, Priority, Project, Reflection, Subtask, Task, Weekly, WeeklyItem } from "./types";
+import { reorderByIds } from "./localReducer";
+import type { RowChange } from "./rowSync";
 import {
   SEED_BOARD_NAME,
   SEED_MEMBERS,
@@ -373,11 +375,9 @@ export async function fetchBoard(): Promise<Board> {
     if (weeklyGrouped[row.bucket]) weeklyGrouped[row.bucket].push(item);
   }
 
-  const m = meta.data as Record<string, unknown> | null;
   return {
     id: "board",
-    boardName: (m?.board_name as string) ?? SEED_BOARD_NAME,
-    members: (m?.members as string[]) ?? SEED_MEMBERS,
+    ...metaFields(meta.data as Record<string, unknown>),
     tasks: ((tasks.data ?? []) as TaskRow[]).map(rowToTask),
     weekly: weeklyGrouped,
     reflections: reflectionList,
@@ -388,12 +388,65 @@ export async function fetchBoard(): Promise<Board> {
     projectsV2Available: projectsV2,
     boardModeAvailable: boardMode,
     updatedAt: Date.now(),
+  };
+}
+
+type MetaFields = Pick<
+  Board,
+  "boardName" | "members" | "subtitleIt" | "subtitleEn" | "loginDays" | "logoUrl" | "faviconUrl"
+>;
+
+function metaFields(m: Record<string, unknown> | null): MetaFields {
+  return {
+    boardName: (m?.board_name as string) ?? SEED_BOARD_NAME,
+    members: (m?.members as string[]) ?? SEED_MEMBERS,
     subtitleIt: (m?.subtitle_it as string) ?? undefined,
     subtitleEn: (m?.subtitle_en as string) ?? undefined,
     loginDays: (m?.login_days as number) ?? undefined,
     logoUrl: (m?.logo_url as string) ?? undefined,
     faviconUrl: (m?.favicon_url as string) ?? undefined,
   };
+}
+
+// ---- Read one change (realtime) ----------------------------------------------
+// A realtime event names one row; re-read just that row (or, for the small
+// per-person tables, just that table) instead of the whole board. The row is
+// re-read rather than taken from the event because the event can leave out
+// large unchanged values, and to see it exactly as this login may see it.
+
+export type ChangedTable = "tasks" | "weekly" | "projects" | "reflections" | "personal_notes" | "board_meta";
+
+export async function fetchChange(table: ChangedTable, id: string | undefined): Promise<RowChange> {
+  switch (table) {
+    case "tasks": {
+      const { data, error } = await supabase.from("tasks").select("*").eq("id", id!).maybeSingle();
+      if (error) throw error;
+      return { table, id: id!, row: data ? rowToTask(data as TaskRow) : null };
+    }
+    case "weekly": {
+      const { data, error } = await supabase.from("weekly").select("*").eq("id", id!).maybeSingle();
+      if (error) throw error;
+      const r = data as { id: string; bucket: keyof Weekly; body: string } | null;
+      return { table, id: id!, row: r ? { bucket: r.bucket, item: { id: r.id, text: r.body } } : null };
+    }
+    case "projects": {
+      const { data, error } = await supabase.from("projects").select("*").eq("id", id!).maybeSingle();
+      if (error) throw error;
+      return { table, id: id!, row: data ? rowToProject(data as ProjectRow) : null };
+    }
+    case "reflections":
+      return { table, list: await fetchReflections() };
+    case "personal_notes": {
+      const res = await fetchPersonalNotes();
+      return { table, list: res.list, error: res.error };
+    }
+    case "board_meta": {
+      const { data, error } = await supabase.from("board_meta").select("*").eq("id", "main").maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("Board not readable with this login.");
+      return { table, meta: metaFields(data as Record<string, unknown>) };
+    }
+  }
 }
 
 // ---- Seed (first run) -------------------------------------------------------
@@ -488,41 +541,42 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
           .eq("id", op.id)
       );
       break;
-    case "addSubtask": {
-      const cur = board.tasks.find((t) => t.id === op.taskId);
-      const next = [...(cur?.subtasks ?? []), op.subtask];
-      await must(
-        supabase
-          .from("tasks")
-          .update({ subtasks: next, updated_at: Date.now() })
-          .eq("id", op.taskId)
+    case "addSubtask":
+      await subtaskWrite(
+        "subtask_add",
+        { p_task: op.taskId, p_subtask: op.subtask },
+        board,
+        op.taskId,
+        (subs) => (subs.some((s) => s.id === op.subtask.id) ? subs : [...subs, op.subtask])
       );
       break;
-    }
-    case "updateSubtask": {
-      const cur = board.tasks.find((t) => t.id === op.taskId);
-      const next = (cur?.subtasks ?? []).map((s) =>
-        s.id === op.subtaskId ? { ...s, ...op.patch } : s
-      );
-      await must(
-        supabase
-          .from("tasks")
-          .update({ subtasks: next, updated_at: Date.now() })
-          .eq("id", op.taskId)
+    case "updateSubtask":
+      await subtaskWrite(
+        "subtask_update",
+        { p_task: op.taskId, p_id: op.subtaskId, p_patch: nullsForUndefined(op.patch) },
+        board,
+        op.taskId,
+        (subs) => subs.map((s) => (s.id === op.subtaskId ? { ...s, ...op.patch } : s))
       );
       break;
-    }
-    case "deleteSubtask": {
-      const cur = board.tasks.find((t) => t.id === op.taskId);
-      const next = (cur?.subtasks ?? []).filter((s) => s.id !== op.subtaskId);
-      await must(
-        supabase
-          .from("tasks")
-          .update({ subtasks: next, updated_at: Date.now() })
-          .eq("id", op.taskId)
+    case "deleteSubtask":
+      await subtaskWrite(
+        "subtask_delete",
+        { p_task: op.taskId, p_id: op.subtaskId },
+        board,
+        op.taskId,
+        (subs) => subs.filter((s) => s.id !== op.subtaskId)
       );
       break;
-    }
+    case "reorderSubtasks":
+      await subtaskWrite(
+        "subtask_reorder",
+        { p_task: op.taskId, p_ids: op.ids },
+        board,
+        op.taskId,
+        (subs) => reorderByIds(subs, op.ids)
+      );
+      break;
     case "setMembers":
       await must(
         supabase.from("board_meta").update({ members: op.members }).eq("id", "main")
@@ -626,6 +680,50 @@ export async function writeOp(op: Op, board: Board): Promise<void> {
       await must(supabase.from("personal_notes").delete().eq("id", op.id));
       break;
   }
+}
+
+// ---- Subtasks: one change at a time, in the database (migration 017) --------
+// The database functions apply the change to the row as it is now, so two
+// people editing subtasks of the same task at once do not undo each other.
+// Before the migration runs, fall back to writing the whole array as built
+// from this browser's copy (the old behaviour).
+
+let hasSubtaskFns: boolean | null = null; // null = not known yet
+
+async function subtaskWrite(
+  fn: string,
+  args: Record<string, unknown>,
+  board: Board,
+  taskId: string,
+  fallback: (subs: Subtask[]) => Subtask[]
+): Promise<void> {
+  if (hasSubtaskFns !== false) {
+    const { error } = await supabase.rpc(fn, args);
+    if (!error) {
+      hasSubtaskFns = true;
+      return;
+    }
+    if (!isMissingFunction(error)) throw error;
+    hasSubtaskFns = false;
+  }
+  const cur = board.tasks.find((t) => t.id === taskId);
+  await must(
+    supabase
+      .from("tasks")
+      .update({ subtasks: fallback(cur?.subtasks ?? []), updated_at: Date.now() })
+      .eq("id", taskId)
+  );
+}
+
+function isMissingFunction(e: { code?: string; message?: string }): boolean {
+  return e.code === "PGRST202" || e.code === "42883" || /could not find the function/i.test(e.message ?? "");
+}
+
+/** JSON drops undefined; the database needs null to remove a field (doneAt). */
+export function nullsForUndefined(patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) out[k] = v === undefined ? null : v;
+  return out;
 }
 
 // Throw on a Supabase error result.
