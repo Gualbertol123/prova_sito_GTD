@@ -74,13 +74,13 @@ export function MoreScreen({
     );
   }
 
-  const rows: { icon: React.ReactNode; title: string; hint: string; onClick: () => void }[] = [
-    { icon: <IconWeekly size={18} />, title: t("m.page.weekly"), hint: t("m.more.weekly"), onClick: () => setPage("weekly") },
-    { icon: <IconMail size={18} />, title: t("app.mail"), hint: t("m.more.mail"), onClick: onMail },
-    { icon: <IconReport size={18} />, title: t("m.page.report"), hint: t("m.more.report"), onClick: () => setPage("report") },
-    { icon: <IconLeaf size={18} />, title: t("m.page.reflection"), hint: t("m.more.reflection"), onClick: () => setPage("reflection") },
-    { icon: <IconTree size={18} />, title: t("m.page.products"), hint: t("m.more.products"), onClick: () => setPage("products") },
-    { icon: <IconGear size={18} />, title: t("m.page.settings"), hint: t("m.more.settings"), onClick: () => setPage("settings") },
+  const rows: { icon: React.ReactNode; tile: string; title: string; hint: string; onClick: () => void }[] = [
+    { icon: <IconWeekly size={18} />, tile: "var(--m-indigo)", title: t("m.page.weekly"), hint: t("m.more.weekly"), onClick: () => setPage("weekly") },
+    { icon: <IconMail size={18} />, tile: "var(--m-blue)", title: t("app.mail"), hint: t("m.more.mail"), onClick: onMail },
+    { icon: <IconReport size={18} />, tile: "var(--m-orange)", title: t("m.page.report"), hint: t("m.more.report"), onClick: () => setPage("report") },
+    { icon: <IconLeaf size={18} />, tile: "var(--m-green)", title: t("m.page.reflection"), hint: t("m.more.reflection"), onClick: () => setPage("reflection") },
+    { icon: <IconTree size={18} />, tile: "var(--m-teal)", title: t("m.page.products"), hint: t("m.more.products"), onClick: () => setPage("products") },
+    { icon: <IconGear size={18} />, tile: "var(--m-grey)", title: t("m.page.settings"), hint: t("m.more.settings"), onClick: () => setPage("settings") },
   ];
 
   return (
@@ -105,7 +105,9 @@ export function MoreScreen({
       <div className="m-panel m-list" style={{ marginTop: 14 }}>
         {rows.map((r) => (
           <button key={r.title} className="m-row" onClick={r.onClick}>
-            <span className="m-row__icon">{r.icon}</span>
+            <span className="m-row__icon" style={{ ["--tile" as string]: r.tile }}>
+              {r.icon}
+            </span>
             <span className="m-row__main">
               <span className="m-row__title">{r.title}</span>
               <span className="m-row__hint" style={{ display: "block" }}>
@@ -132,7 +134,7 @@ function WeeklyPage({ board, send }: { board: Board; send: Send }) {
   return (
     <>
       <button className="m-panel m-row" onClick={() => setShowDone((v) => !v)}>
-        <span className="m-row__icon" style={{ background: "var(--m-green-soft)", color: "var(--m-green)", fontWeight: 800 }}>
+        <span className="m-row__icon" style={{ ["--tile" as string]: "var(--m-green)", fontWeight: 800 }}>
           {done.length}
         </span>
         <span className="m-row__main">

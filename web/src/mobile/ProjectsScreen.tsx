@@ -64,7 +64,7 @@ export function ProjectsScreen({ board, send }: { board: Board; send: Send }) {
         </div>
       )}
 
-      <button className="m-btn m-btn--block" style={{ marginTop: 14 }} onClick={() => setNaming(true)}>
+      <button className="m-btn m-btn--block m-btn--ghost" style={{ marginTop: 14 }} onClick={() => setNaming(true)}>
         <IconPlus size={18} /> {t("m.newProject")}
       </button>
 
@@ -88,7 +88,8 @@ function ProjectCard({ project: p, stats: s, onOpen }: { project: Project; stats
   const color = projectColor(p);
   const open = s.total - s.done;
   return (
-    <button className="m-panel m-project" onClick={onOpen}>
+    <button className="m-project" onClick={onOpen}>
+      <span className="m-project__glow" style={{ ["--tint" as string]: color }} />
       <div className="m-project__top">
         <Ring share={s.share} color={color} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -170,7 +171,7 @@ export function ProjectSheet({
   for (const tk of s.tasks) byStatus.set(tk.status, [...(byStatus.get(tk.status) ?? []), tk]);
 
   return (
-    <Sheet full title={t("m.project")} onClose={onClose}>
+    <Sheet full title={t("m.project")} onClose={onClose} tint={color}>
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <Ring share={s.share} color={color} size={62} />
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -188,7 +189,7 @@ export function ProjectSheet({
       {p.description && <p style={{ marginTop: 14, color: "var(--m-text-2)", lineHeight: 1.45 }}>{p.description}</p>}
 
       {v2 && (p.startDate || p.targetDate || (p.owners ?? []).length > 0) && (
-        <div className="m-panel m-list" style={{ marginTop: 14 }}>
+        <div className="m-panel m-list m-list--flat" style={{ marginTop: 14 }}>
           {(p.startDate || p.targetDate) && (
             <div className="m-row">
               <span className="m-row__main m-row__hint" style={{ marginTop: 0 }}>

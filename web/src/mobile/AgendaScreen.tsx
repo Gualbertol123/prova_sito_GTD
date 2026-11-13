@@ -77,7 +77,7 @@ export function AgendaScreen({ board, send }: { board: Board; send: Send }) {
         <button className="m-iconbtn" aria-label={t("m.prevWeek")} onClick={() => setWeekStart((w) => plus(w, -7))}>
           <IconBack size={18} />
         </button>
-        <div className="m-display" style={{ flex: 1, textAlign: "center", fontSize: 16, textTransform: "capitalize" }}>
+        <div style={{ flex: 1, textAlign: "center", fontSize: 18, fontWeight: 700, textTransform: "capitalize" }}>
           {monthLabel}
         </div>
         <button className="m-iconbtn" aria-label={t("m.nextWeek")} onClick={() => setWeekStart((w) => plus(w, 7))}>
@@ -85,7 +85,7 @@ export function AgendaScreen({ board, send }: { board: Board; send: Send }) {
         </button>
       </div>
 
-      <div className="m-week">
+      <div className="m-week m-glass">
         {week.map((d) => {
           const iso = toISODate(d);
           const n = (byDay.get(iso) ?? []).filter((tk) => tk.status !== "DONE").length;
@@ -103,7 +103,7 @@ export function AgendaScreen({ board, send }: { board: Board; send: Send }) {
         })}
       </div>
 
-      <div className="m-pills" style={{ marginBottom: 4 }}>
+      <div className="m-pills" style={{ marginTop: 12, marginBottom: 4 }}>
         <button
           className="m-pill"
           aria-pressed={day === todayIso && weekStart.getTime() === mondayOf(new Date()).getTime()}

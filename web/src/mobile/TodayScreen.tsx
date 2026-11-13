@@ -10,7 +10,7 @@ import { loadMenu, upcomingMenu, type MenuDay } from "../lib/menu";
 import { Sheet } from "./ui";
 import { TaskList } from "./TaskList";
 import { useNav } from "./nav";
-import { IconChevron, IconFork, IconUser } from "./icons";
+import { IconCheck, IconChevron, IconClock, IconFork, IconToday, IconUser } from "./icons";
 import type { Send } from "./actions";
 
 const byPriorityThenDue = (a: Task, b: Task) =>
@@ -63,7 +63,7 @@ export function TodayScreen({ board, send }: { board: Board; send: Send }) {
   const section = (key: string, list: Task[], showStatus?: boolean) =>
     list.length > 0 && (
       <>
-        <h2 className="m-h2">
+        <h2 className="m-h2" id={`m-sec-${key.split(".").pop()}`} style={{ scrollMarginTop: 80 }}>
           {t(key)} <span className="m-count">{list.length}</span>
         </h2>
         <TaskList tasks={list} send={send} showStatus={showStatus} />
@@ -72,38 +72,43 @@ export function TodayScreen({ board, send }: { board: Board; send: Send }) {
 
   return (
     <div className="m-page">
+      <div className="m-eyebrow">{dateLine}</div>
       <div className="m-greeting">
         {hello}
-        {known ? `, ${me}` : ""}
-      </div>
-      <div className="m-sub" style={{ textTransform: "capitalize" }}>
-        {dateLine}
+        {known && (
+          <>
+            , <em>{me}</em>
+          </>
+        )}
       </div>
 
       <div className="m-stats">
-        <div className="m-panel m-stat">
-          <div className="m-stat__v" style={{ color: groups.late.length ? "var(--m-red)" : undefined }}>
-            {groups.late.length}
-          </div>
+        <button className="m-glass m-stat" onClick={() => groups.late.length && document.getElementById("m-sec-late")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+          <span className="m-stat__icon" style={{ ["--tile" as string]: "var(--m-red)" }}>
+            <IconClock size={16} />
+          </span>
+          <div className="m-stat__v">{groups.late.length}</div>
           <div className="m-stat__k">{t("m.stat.late")}</div>
-        </div>
-        <div className="m-panel m-stat">
-          <div className="m-stat__v" style={{ color: groups.today.length ? "var(--m-amber)" : undefined }}>
-            {groups.today.length}
-          </div>
+        </button>
+        <button className="m-glass m-stat" onClick={() => groups.today.length && document.getElementById("m-sec-today")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+          <span className="m-stat__icon" style={{ ["--tile" as string]: "var(--m-orange)" }}>
+            <IconToday size={16} />
+          </span>
+          <div className="m-stat__v">{groups.today.length}</div>
           <div className="m-stat__k">{t("m.stat.today")}</div>
-        </div>
-        <button className="m-panel m-stat" onClick={() => nav.go("board")}>
-          <div className="m-stat__v" style={{ color: "var(--m-green)" }}>
-            {doneWeek}
-          </div>
+        </button>
+        <button className="m-glass m-stat" onClick={() => nav.go("board")}>
+          <span className="m-stat__icon" style={{ ["--tile" as string]: "var(--m-green)" }}>
+            <IconCheck size={16} />
+          </span>
+          <div className="m-stat__v">{doneWeek}</div>
           <div className="m-stat__k">{t("m.stat.doneWeek")}</div>
         </button>
       </div>
 
       {!known && (
         <button className="m-panel m-row" style={{ marginTop: 14 }} onClick={nav.openMe}>
-          <span className="m-row__icon">
+          <span className="m-row__icon" style={{ ["--tile" as string]: "var(--m-blue)" }}>
             <IconUser size={18} />
           </span>
           <span className="m-row__main">
@@ -162,7 +167,7 @@ function CanteenCard() {
     <>
       <h2 className="m-h2">{t("menuBar.title")}</h2>
       <button className="m-panel m-row" onClick={() => setOpen(true)} style={{ alignItems: "flex-start" }}>
-        <span className="m-row__icon">
+        <span className="m-row__icon" style={{ ["--tile" as string]: "var(--m-orange)" }}>
           <IconFork size={18} />
         </span>
         <span className="m-row__main">
@@ -179,7 +184,7 @@ function CanteenCard() {
         <Sheet title={t("menuBar.title")} onClose={() => setOpen(false)}>
           {(days ?? []).slice(0, 5).map((d) => (
             <div key={d.date} className="m-panel" style={{ padding: "12px 14px", marginBottom: 10 }}>
-              <div className="m-display" style={{ fontSize: 14, color: "var(--m-gold)", textTransform: "capitalize" }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--m-warm)", textTransform: "capitalize" }}>
                 {new Date(d.date + "T00:00:00").toLocaleDateString(lang === "it" ? "it-IT" : "en-GB", {
                   weekday: "long",
                   day: "numeric",

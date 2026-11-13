@@ -1,34 +1,59 @@
 import { useState } from "react";
-import type { Priority, Task } from "../lib/types";
-import { STATUS_ORDER, UNASSIGNED, genId } from "../lib/constants";
+import type { Task } from "../lib/types";
+import { UNASSIGNED, genId } from "../lib/constants";
 import { useT } from "../lib/i18n";
 import { useSyncedField } from "../lib/useSyncedField";
 import { ownersPatch, taskOwners } from "../lib/owners";
 import { useProjects } from "../lib/projectsContext";
-import { projectColor } from "../lib/projects";
-import { daysSince, toISODate } from "../lib/dates";
+import { projectColor, stepOf } from "../lib/projects";
+import { daysSince, daysUntil } from "../lib/dates";
 import { AutoTextarea } from "../components/AutoTextarea";
-import { Avatar, Sheet, STATUS_VAR } from "./ui";
-import { IconCheck, IconClose, IconTrash } from "./icons";
+import { Avatar, PRIO_VAR, STATUS_VAR, Sheet, shortDay } from "./ui";
+import { DuePicker, PeoplePicker, PriorityPicker, ProjectPicker, StatusPicker } from "./pickers";
+import { IconCalendar, IconCheck, IconChevron, IconClose, IconFlag, IconFolder, IconHourglass, IconStatus, IconTrash, IconUser } from "./icons";
 import { useTaskActions, type Send } from "./actions";
 
-const PRIOS: Priority[] = ["P1", "P2", "P3", "P4"];
+type Picker = "status" | "priority" | "due" | "people" | "project" | null;
 
-function addDays(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return toISODate(d);
+/** One detail of the task: a tinted icon, its name, its value, and a chevron. */
+function PropRow({
+  icon,
+  tile,
+  label,
+  value,
+  valueColor,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  tile: string;
+  label: string;
+  value: React.ReactNode;
+  valueColor?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button className="m-row" onClick={onClick} disabled={!onClick} style={{ minHeight: 54 }}>
+      <span className="m-row__icon" style={{ ["--tile" as string]: tile }}>
+        {icon}
+      </span>
+      <span className="m-row__main m-row__title" style={{ fontWeight: 500, flex: "0 0 auto" }}>
+        {label}
+      </span>
+      <span className="m-row__end" style={{ flex: 1 }}>
+        <span className="m-row__value" style={valueColor ? { color: valueColor } : undefined}>
+          {value}
+        </span>
+        {onClick && <IconChevron size={16} />}
+      </span>
+    </button>
+  );
 }
 
-/** Next Monday (or the one after, if today is Monday). */
-function nextMonday(): string {
-  const d = new Date();
-  const add = ((8 - d.getDay()) % 7) || 7;
-  d.setDate(d.getDate() + add);
-  return toISODate(d);
-}
-
-/** Everything about one task, editable, in a full-height sheet. */
+/**
+ * Everything about one task, in a full-height sheet: the title with its
+ * check, then the details as a grouped list (each row opens a chooser), the
+ * subtasks, the notes, and the actions.
+ */
 export function TaskSheet({
   task,
   members,
@@ -42,25 +67,25 @@ export function TaskSheet({
   send: Send;
   onClose: () => void;
 }) {
-  const { t } = useT();
-  const { moveTo, remove, fail } = useTaskActions(send);
-  const { projects, available: projectsOn } = useProjects();
+  const { t, lang } = useT();
+  const { moveTo, toggleDone, remove, fail } = useTaskActions(send);
+  const { projects, tasks, available: projectsOn } = useProjects();
   const title = useSyncedField(task.title);
   const desc = useSyncedField(task.desc);
   const notes = useSyncedField(task.notes);
   const fileDir = useSyncedField(task.fileDir ?? "");
   const [newSub, setNewSub] = useState("");
   const [copied, setCopied] = useState(false);
+  const [picker, setPicker] = useState<Picker>(null);
 
   const patch = (p: Partial<Task>) => send({ type: "updateTask", id: task.id, patch: p }, fail);
-  const owners = taskOwners(task);
+  const owners = taskOwners(task).filter((o) => o !== UNASSIGNED);
   const subDone = task.subtasks.filter((s) => s.done).length;
-
-  const toggleOwner = (name: string) => {
-    if (!multiAssign) return patch(ownersPatch([name]));
-    const next = owners.includes(name) ? owners.filter((o) => o !== name) : [...owners.filter((o) => o !== UNASSIGNED), name];
-    patch(ownersPatch(next.length ? next : [UNASSIGNED]));
-  };
+  const done = task.status === "DONE";
+  const project = task.projectId ? projects.find((p) => p.id === task.projectId) : undefined;
+  const step = stepOf(task, projects, tasks);
+  const tint = project ? projectColor(project) : undefined;
+  const due = daysUntil(task.dueDate);
 
   const addSub = () => {
     const v = newSub.trim();
@@ -69,118 +94,134 @@ export function TaskSheet({
     setNewSub("");
   };
 
-  const dueChoices: { k: string; v?: string }[] = [
-    { k: "m.when.today", v: addDays(0) },
-    { k: "m.when.tomorrow", v: addDays(1) },
-    { k: "m.when.monday", v: nextMonday() },
-    { k: "m.when.none", v: undefined },
-  ];
+  let dueText: string = t("m.when.none");
+  let dueColor: string | undefined;
+  if (task.dueDate && due !== null) {
+    const rel = due < 0 ? t("m.due.late").replace("{n}", String(-due)) : due === 0 ? t("m.due.today") : due === 1 ? t("m.due.tomorrow") : null;
+    dueText = rel ? `${rel} · ${shortDay(task.dueDate, lang)}` : shortDay(task.dueDate, lang);
+    if (!done) dueColor = due < 0 ? "var(--m-red)" : due === 0 ? "var(--m-orange)" : undefined;
+  }
 
   return (
-    <Sheet onClose={onClose} full title={t("m.task")}>
-      <AutoTextarea
-        className="m-title-input"
-        value={title.value}
-        placeholder={t("m.titlePh")}
-        onChange={(e) => title.setValue(e.target.value)}
-        onFocus={title.onFocus}
-        onBlur={() => {
-          title.onBlur();
-          const v = title.value.trim();
-          if (v && v !== task.title) patch({ title: v });
-          else title.setValue(task.title);
-        }}
-      />
-      {task.status === "WAITING" && task.waitingSince && (
-        <div className="m-sub" style={{ marginTop: 6 }}>
-          {t("m.waitingSince").replace("{n}", String(daysSince(task.waitingSince)))}
-        </div>
-      )}
-
-      <div className="m-field">
-        <span className="m-label">{t("m.f.status")}</span>
-        <div className="m-pills" role="radiogroup">
-          {STATUS_ORDER.map((s) => (
-            <button key={s} className="m-pill" aria-pressed={task.status === s} onClick={() => moveTo(task, s)}>
-              <span className="m-dot" style={{ background: STATUS_VAR[s] }} />
-              {t(`m.status.${s}`)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="m-field">
-        <span className="m-label">{t("m.f.priority")}</span>
-        <div className="m-seg">
-          {PRIOS.map((p) => (
-            <button key={p} aria-pressed={task.priority === p} onClick={() => patch({ priority: p })}>
-              {p} · {t(`prio.${p}short`)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="m-field">
-        <span className="m-label">{t("m.f.due")}</span>
-        <div className="m-choices">
-          {dueChoices.map((c) => (
-            <button
-              key={c.k}
-              className="m-choice"
-              aria-pressed={(task.dueDate ?? undefined) === c.v}
-              onClick={() => send({ type: "setDueDate", id: task.id, dueDate: c.v }, fail)}
-            >
-              {t(c.k)}
-            </button>
-          ))}
-        </div>
-        <input
-          type="date"
-          className="m-input"
-          style={{ marginTop: 8 }}
-          value={task.dueDate ?? ""}
-          onChange={(e) => send({ type: "setDueDate", id: task.id, dueDate: e.target.value || undefined }, fail)}
-          aria-label={t("m.f.due")}
+    <Sheet onClose={onClose} full title={t("m.task")} tint={tint}>
+      {/* Title, with the check that finishes it */}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginTop: 4 }}>
+        <button
+          className="m-check"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={done ? t("m.reopen") : t("m.markDone")}
+          style={{ ["--ring" as string]: PRIO_VAR[task.priority], width: 30, height: 30, marginTop: 2 }}
+          onClick={() => toggleDone(task)}
+        >
+          <IconCheck size={17} />
+        </button>
+        <AutoTextarea
+          className="m-title-input"
+          value={title.value}
+          placeholder={t("m.titlePh")}
+          style={done ? { textDecoration: "line-through", color: "var(--m-text-3)" } : undefined}
+          onChange={(e) => title.setValue(e.target.value)}
+          onFocus={title.onFocus}
+          onBlur={() => {
+            title.onBlur();
+            const v = title.value.trim();
+            if (v && v !== task.title) patch({ title: v });
+            else title.setValue(task.title);
+          }}
         />
       </div>
 
-      <div className="m-field">
-        <span className="m-label">{multiAssign ? t("m.f.people") : t("m.f.person")}</span>
-        <div className="m-choices">
-          {members.map((m) => (
-            <button key={m} className="m-choice" aria-pressed={owners.includes(m)} onClick={() => toggleOwner(m)}>
-              <Avatar name={m} /> {m}
-            </button>
-          ))}
-        </div>
+      {/* Details */}
+      <div className="m-panel m-list" style={{ marginTop: 18 }}>
+        <PropRow
+          icon={<IconStatus size={17} />}
+          tile={STATUS_VAR[task.status]}
+          label={t("m.f.status")}
+          value={t(`m.status.${task.status}`)}
+          onClick={() => setPicker("status")}
+        />
+        {task.status === "WAITING" && task.waitingSince && (
+          <PropRow
+            icon={<IconHourglass size={17} />}
+            tile="var(--m-orange)"
+            label={t("m.f.waiting")}
+            value={t("m.waitingDaysLong").replace("{n}", String(daysSince(task.waitingSince)))}
+            valueColor={daysSince(task.waitingSince) >= 7 ? "var(--m-red)" : undefined}
+          />
+        )}
+        <PropRow
+          icon={<IconFlag size={17} />}
+          tile={task.priority === "P4" ? "var(--m-grey)" : PRIO_VAR[task.priority]}
+          label={t("m.f.priority")}
+          value={`${task.priority} · ${t(`prio.${task.priority}short`)}`}
+          onClick={() => setPicker("priority")}
+        />
+        <PropRow
+          icon={<IconCalendar size={17} />}
+          tile="var(--m-red)"
+          label={t("m.f.due")}
+          value={dueText}
+          valueColor={dueColor}
+          onClick={() => setPicker("due")}
+        />
+        <PropRow
+          icon={<IconUser size={17} />}
+          tile="var(--m-blue)"
+          label={multiAssign ? t("m.f.people") : t("m.f.person")}
+          value={
+            owners.length ? (
+              <>
+                <span className="m-avatars">
+                  {owners.slice(0, 3).map((o) => (
+                    <Avatar key={o} name={o} />
+                  ))}
+                </span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{owners.join(", ")}</span>
+              </>
+            ) : (
+              t("members.unassigned")
+            )
+          }
+          onClick={() => setPicker("people")}
+        />
+        {projectsOn && (
+          <PropRow
+            icon={<IconFolder size={17} />}
+            tile={tint ?? "var(--m-indigo)"}
+            label={t("m.f.project")}
+            value={
+              project ? (
+                <>
+                  <span className="m-chip__dot" style={{ background: tint }} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{project.name}</span>
+                  {step && <span className="m-chip m-chip--blue">{t("m.step").replace("{n}", String(step.n)).replace("{total}", String(step.total))}</span>}
+                </>
+              ) : (
+                t("m.noProject")
+              )
+            }
+            onClick={() => setPicker("project")}
+          />
+        )}
       </div>
 
-      {projectsOn && projects.length > 0 && (
-        <div className="m-field">
-          <span className="m-label">{t("m.f.project")}</span>
-          <div className="m-choices">
-            <button className="m-choice" aria-pressed={!task.projectId} onClick={() => patch({ projectId: undefined })}>
-              {t("m.noProject")}
-            </button>
-            {projects.map((p) => (
-              <button key={p.id} className="m-choice" aria-pressed={task.projectId === p.id} onClick={() => patch({ projectId: p.id })}>
-                <span className="m-chip__dot" style={{ background: projectColor(p) }} /> {p.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* Subtasks */}
       <div className="m-field">
-        <span className="m-label">
-          {t("m.f.subtasks")} {task.subtasks.length ? `· ${subDone}/${task.subtasks.length}` : ""}
-        </span>
-        {task.subtasks.length > 0 && (
-          <div className="m-progress" style={{ marginBottom: 8 }}>
-            <span style={{ width: `${(subDone / task.subtasks.length) * 100}%` }} />
-          </div>
-        )}
+        <div className="m-label">
+          {t("m.f.subtasks")}
+          {task.subtasks.length > 0 && (
+            <span style={{ marginLeft: "auto", textTransform: "none", letterSpacing: 0 }}>
+              {subDone}/{task.subtasks.length}
+            </span>
+          )}
+        </div>
         <div className="m-panel m-list">
+          {task.subtasks.length > 0 && (
+            <div className="m-progress" style={{ margin: "12px 14px 2px", position: "relative" }}>
+              <span style={{ width: `${(subDone / task.subtasks.length) * 100}%` }} />
+            </div>
+          )}
           {task.subtasks.map((s) => (
             <div key={s.id} className="m-sub-row">
               <button
@@ -213,10 +254,10 @@ export function TaskSheet({
             </div>
           ))}
           <div className="m-sub-row" style={{ alignItems: "center" }}>
-            <span className="m-check" style={{ borderStyle: "dashed" }} />
+            <span className="m-check" style={{ width: 22, height: 22, borderStyle: "dashed" }} />
             <input
               className="m-sub-row__text"
-              style={{ background: "transparent", border: 0, outline: "none", color: "var(--m-text)", fontSize: 16 }}
+              style={{ fontSize: 16 }}
               placeholder={t("m.addSubtask")}
               value={newSub}
               onChange={(e) => setNewSub(e.target.value)}
@@ -224,7 +265,7 @@ export function TaskSheet({
               enterKeyHint="done"
             />
             {newSub.trim() && (
-              <button style={{ color: "var(--m-gold)", fontWeight: 700, fontSize: 14 }} onClick={addSub}>
+              <button className="m-btn m-btn--primary m-btn--sm" onClick={addSub}>
                 {t("m.add")}
               </button>
             )}
@@ -232,6 +273,7 @@ export function TaskSheet({
         </div>
       </div>
 
+      {/* Words */}
       <div className="m-field">
         <label htmlFor="m-desc">{t("m.f.desc")}</label>
         <AutoTextarea
@@ -247,7 +289,6 @@ export function TaskSheet({
           }}
         />
       </div>
-
       <div className="m-field">
         <label htmlFor="m-notes">{t("m.f.notes")}</label>
         <AutoTextarea
@@ -263,10 +304,9 @@ export function TaskSheet({
           }}
         />
       </div>
-
       <div className="m-field">
         <label htmlFor="m-file">{t("m.f.file")}</label>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             id="m-file"
             className="m-input"
@@ -298,16 +338,45 @@ export function TaskSheet({
         </div>
       </div>
 
-      <button
-        className="m-btn m-btn--danger m-btn--block"
-        style={{ marginTop: 28 }}
-        onClick={() => {
-          remove(task);
-          onClose();
-        }}
-      >
-        <IconTrash size={18} /> {t("m.deleteTask")}
-      </button>
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 10, marginTop: 28 }}>
+        <button
+          className="m-btn m-btn--danger"
+          aria-label={t("m.deleteTask")}
+          onClick={() => {
+            remove(task);
+            onClose();
+          }}
+        >
+          <IconTrash size={18} />
+        </button>
+        <button
+          className={`m-btn m-btn--block ${done ? "" : "m-btn--done"}`}
+          style={{ flex: 1 }}
+          onClick={() => {
+            toggleDone(task);
+            if (!done) onClose();
+          }}
+        >
+          <IconCheck size={18} /> {done ? t("m.reopen") : t("m.markDoneLong")}
+        </button>
+      </div>
+
+      {picker === "status" && <StatusPicker value={task.status} onPick={(s) => moveTo(task, s)} onClose={() => setPicker(null)} />}
+      {picker === "priority" && <PriorityPicker value={task.priority} onPick={(p) => patch({ priority: p })} onClose={() => setPicker(null)} />}
+      {picker === "due" && (
+        <DuePicker value={task.dueDate} onPick={(v) => send({ type: "setDueDate", id: task.id, dueDate: v }, fail)} onClose={() => setPicker(null)} />
+      )}
+      {picker === "people" && (
+        <PeoplePicker
+          members={members}
+          value={taskOwners(task)}
+          multi={multiAssign}
+          onChange={(list) => patch(ownersPatch(list))}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {picker === "project" && <ProjectPicker value={task.projectId} onPick={(id) => patch({ projectId: id })} onClose={() => setPicker(null)} />}
     </Sheet>
   );
 }

@@ -9,20 +9,22 @@ import { IconClose } from "./icons";
 
 // ---- Colours ------------------------------------------------------------------
 
+// Priority shows as the colour of a task's check ring (as in Reminders).
 export const PRIO_VAR: Record<Priority, string> = {
   P1: "var(--m-red)",
-  P2: "var(--m-gold-fill)",
+  P2: "var(--m-orange)",
   P3: "var(--m-grey)",
-  P4: "transparent",
+  P4: "var(--m-fill-2)",
 };
 
+// The same column colours as the desktop's project bars (lib/projects.ts).
 export const STATUS_VAR: Record<Status, string> = {
   BACKLOG: "var(--m-grey)",
   NEXT: "var(--m-blue)",
   "IN PROGRESS": "var(--m-purple)",
-  WAITING: "var(--m-amber)",
+  WAITING: "var(--m-orange)",
   DONE: "var(--m-green)",
-  MAYBE: "var(--m-text-3)",
+  MAYBE: "var(--m-teal)",
 };
 
 const AVATAR_COLORS = ["#2F5DA8", "#8E5BC9", "#C2563E", "#1F8A70", "#B07A1E", "#3C7DC4", "#A2456E", "#5C6B7E"];
@@ -79,7 +81,7 @@ export function DueChip({ task }: { task: Task }) {
     cls += " m-chip--amber";
     text = t("m.due.today");
   } else if (d === 1) {
-    cls += " m-chip--gold";
+    cls += " m-chip--blue";
     text = t("m.due.tomorrow");
   } else {
     text = shortDay(task.dueDate, lang);
@@ -94,12 +96,14 @@ export function shortDay(iso: string, lang: "it" | "en"): string {
 
 // ---- Bottom sheet -------------------------------------------------------------
 
-let openSheets = 0;
+// Open sheets, oldest first: Escape and the page scroll lock act on the top one.
+const sheetStack: number[] = [];
+let sheetSeq = 0;
 
 /**
- * A panel that rises from the bottom. Closes on the ×, a tap on the dimmed
- * page, Escape, or dragging the handle down. While any sheet is open the page
- * behind it does not scroll.
+ * A panel of thick glass that rises from the bottom. Closes on the ×, a tap
+ * on the dimmed page, Escape (top sheet only), or dragging the handle down.
+ * While any sheet is open the page behind it does not scroll.
  */
 export function Sheet({
   title,
@@ -107,30 +111,43 @@ export function Sheet({
   children,
   full,
   headEnd,
+  lead,
+  tint,
 }: {
   title?: string;
   onClose: () => void;
   children: React.ReactNode;
   full?: boolean;
+  /** Buttons before the close button. */
   headEnd?: React.ReactNode;
+  /** A button on the left of the header (e.g. Back). */
+  lead?: React.ReactNode;
+  /** A colour washed into the top of the sheet (a project's colour). */
+  tint?: string;
 }) {
   const { t } = useT();
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y0: number; dy: number } | null>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
 
   useEffect(() => {
-    openSheets += 1;
+    const id = ++sheetSeq;
+    sheetStack.push(id);
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && sheetStack[sheetStack.length - 1] === id) close.current();
+    };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      openSheets -= 1;
-      if (openSheets === 0) document.body.style.overflow = "";
+      sheetStack.splice(sheetStack.indexOf(id), 1);
+      if (sheetStack.length === 0) document.body.style.overflow = "";
     };
-  }, [onClose]);
+  }, []);
 
   const onDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
     drag.current = { y0: e.clientY, dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -144,10 +161,10 @@ export function Sheet({
     if (!drag.current || !ref.current) return;
     const { dy } = drag.current;
     drag.current = null;
-    ref.current.style.transition = "transform 0.2s ease";
+    ref.current.style.transition = "transform 0.22s ease";
     if (dy > 110) {
-      ref.current.style.transform = "translateY(100%)";
-      setTimeout(onClose, 180);
+      ref.current.style.transform = "translateY(105%)";
+      setTimeout(() => close.current(), 180);
     } else {
       ref.current.style.transform = "";
     }
@@ -158,16 +175,17 @@ export function Sheet({
     <>
       <div className="m-backdrop" onClick={onClose} />
       <div ref={ref} className={`m-sheet${full ? " m-sheet--full" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
+        {tint && <div className="m-sheet__tint" style={{ ["--tint" as string]: tint }} />}
         <div className="m-sheet__grab" {...handlers} />
-        {(title || headEnd) && (
-          <div className="m-sheet__head" {...handlers}>
-            <h3>{title}</h3>
-            {headEnd}
-            <button className="m-iconbtn" onClick={onClose} aria-label={t("m.close")} onPointerDown={(e) => e.stopPropagation()}>
-              <IconClose size={18} />
-            </button>
-          </div>
-        )}
+        <div className="m-sheet__head" {...handlers}>
+          {lead}
+          {title && <h3 className={headEnd ? "m-sheet__title--start" : undefined}>{title}</h3>}
+          <span className="m-spacer" />
+          {headEnd}
+          <button className="m-iconbtn" onClick={onClose} aria-label={t("m.close")}>
+            <IconClose size={18} />
+          </button>
+        </div>
         <div className="m-sheet__body">{children}</div>
       </div>
     </>,
@@ -232,7 +250,7 @@ export function Ring({ share, color, size = 44 }: { share: number; color: string
   const c = 2 * Math.PI * r;
   return (
     <svg className="m-ring" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-surface-3)" strokeWidth={5} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--m-fill-2)" strokeWidth={5} />
       <circle
         cx={size / 2}
         cy={size / 2}

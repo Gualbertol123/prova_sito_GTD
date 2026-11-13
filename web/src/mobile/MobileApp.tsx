@@ -32,8 +32,8 @@ const TABS: { id: MobileTab; icon: (p: { size?: number }) => JSX.Element }[] = [
 
 const CONN_COLOR: Record<ConnState, string> = {
   online: "var(--m-green)",
-  connecting: "var(--m-amber)",
-  reconnecting: "var(--m-amber)",
+  connecting: "var(--m-orange)",
+  reconnecting: "var(--m-orange)",
   offline: "var(--m-red)",
 };
 
@@ -149,13 +149,14 @@ function Shell({
 
   return (
     <NavCtx.Provider value={nav}>
+      <div className="m-wall" aria-hidden="true" />
       <div className="m-app" lang={lang}>
         <header className="m-header">
           <div className="m-header__logo">
             {board.logoUrl ? <img src={board.logoUrl} alt="" /> : (board.boardName.trim().charAt(0) || "G")}
           </div>
           <div className="m-header__title">
-            <h1>{title}</h1>
+            <h1 className={tab === "today" ? "m-display" : undefined}>{title}</h1>
             <p>
               <span className="m-dot" style={{ background: CONN_COLOR[conn] }} />
               {t(`conn.${conn === "online" ? "live" : conn}`)}
@@ -184,21 +185,22 @@ function Shell({
           )}
         </main>
 
-        {tab !== "more" && (
-          <button className="m-fab" aria-label={t("m.newTask")} onClick={() => nav.add()}>
-            <IconPlus size={28} />
-          </button>
-        )}
-
-        <nav className="m-tabbar" aria-label={t("m.nav")}>
-          {TABS.map(({ id, icon: Icon }) => (
-            <button key={id} className="m-tab" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
-              <Icon size={23} />
-              {t(`m.tab.${id}`)}
-              {id === "today" && urgent > 0 && <span className="m-tab__badge">{urgent}</span>}
+        <div className="m-dock">
+          <nav className="m-tabbar" aria-label={t("m.nav")}>
+            {TABS.map(({ id, icon: Icon }) => (
+              <button key={id} className="m-tab" aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
+                <Icon size={22} />
+                {t(`m.tab.${id}`)}
+                {id === "today" && urgent > 0 && <span className="m-tab__badge">{urgent}</span>}
+              </button>
+            ))}
+          </nav>
+          {tab !== "more" && (
+            <button className="m-fab" aria-label={t("m.newTask")} onClick={() => nav.add()}>
+              <IconPlus size={28} />
             </button>
-          ))}
-        </nav>
+          )}
+        </div>
 
         {project && <ProjectSheet board={board} project={project} send={send} onClose={() => setProjectId(null)} />}
         {task && (

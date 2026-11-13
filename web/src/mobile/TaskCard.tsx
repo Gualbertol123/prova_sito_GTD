@@ -4,7 +4,7 @@ import { useT } from "../lib/i18n";
 import { useProjects } from "../lib/projectsContext";
 import { projectColor, stepOf } from "../lib/projects";
 import { daysSince } from "../lib/dates";
-import { Avatars, DueChip, PRIO_VAR } from "./ui";
+import { Avatars, DueChip, PRIO_VAR, STATUS_VAR } from "./ui";
 import { IconArrowRight, IconCheck, IconHourglass } from "./icons";
 
 const SWIPE_AT = 88; // px past which a swipe acts
@@ -101,7 +101,6 @@ export function TaskCard({
       <div
         ref={card}
         className={`m-card${done ? " m-card--done" : ""}`}
-        style={{ ["--prio" as string]: PRIO_VAR[task.priority] }}
         role="button"
         tabIndex={0}
         onClick={() => !swallowClick.current && onOpen()}
@@ -111,44 +110,50 @@ export function TaskCard({
         onPointerUp={end}
         onPointerCancel={end}
       >
-        <div className="m-card__top">
+        <button
+          className="m-check"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={`${done ? t("m.reopen") : t("m.markDone")} · ${task.priority}`}
+          style={{ ["--ring" as string]: PRIO_VAR[task.priority] }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleDone();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <IconCheck size={14} />
+        </button>
+        <div className="m-card__body">
           <div className="m-card__title">{task.title || t("m.untitled")}</div>
-          <button
-            className="m-check"
-            role="checkbox"
-            aria-checked={done}
-            aria-label={done ? t("m.reopen") : t("m.markDone")}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleDone();
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <IconCheck size={15} />
-          </button>
-        </div>
-        {task.desc && <div className="m-card__desc">{task.desc}</div>}
-        <div className="m-card__meta">
-          {showStatus && <span className="m-chip">{t(`m.status.${task.status}`)}</span>}
-          <DueChip task={task} />
-          {waiting !== null && (
-            <span className={`m-chip ${waiting >= 7 ? "m-chip--red" : "m-chip--amber"}`}>
-              <IconHourglass size={12} /> {t("m.waitingDays").replace("{n}", String(waiting))}
-            </span>
-          )}
-          {project && (
-            <span className="m-chip">
-              <span className="m-chip__dot" style={{ background: projectColor(project) }} />
-              {project.name}
-              {step ? ` · ${step.n}/${step.total}` : ""}
-            </span>
-          )}
-          {task.subtasks.length > 0 && (
-            <span className={`m-chip${subDone === task.subtasks.length ? " m-chip--green" : ""}`}>
-              ☑ {subDone}/{task.subtasks.length}
-            </span>
-          )}
-          <Avatars task={task} />
+          {task.desc && <div className="m-card__desc">{task.desc}</div>}
+          <div className="m-card__meta">
+            {showStatus && (
+              <span className="m-chip" style={{ ["--c" as string]: STATUS_VAR[task.status] }}>
+                {t(`m.status.${task.status}`)}
+              </span>
+            )}
+            {task.priority === "P1" && !done && <span className="m-chip m-chip--red">P1</span>}
+            <DueChip task={task} />
+            {waiting !== null && (
+              <span className={`m-chip ${waiting >= 7 ? "m-chip--red" : "m-chip--amber"}`}>
+                <IconHourglass size={12} /> {t("m.waitingDays").replace("{n}", String(waiting))}
+              </span>
+            )}
+            {project && (
+              <span className="m-chip" style={{ ["--c" as string]: projectColor(project) }}>
+                <span className="m-chip__dot" style={{ background: projectColor(project) }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{project.name}</span>
+                {step ? <span style={{ opacity: 0.75 }}>· {step.n}/{step.total}</span> : null}
+              </span>
+            )}
+            {task.subtasks.length > 0 && (
+              <span className={`m-chip${subDone === task.subtasks.length ? " m-chip--green" : ""}`}>
+                <IconCheck size={11} /> {subDone}/{task.subtasks.length}
+              </span>
+            )}
+            <Avatars task={task} />
+          </div>
         </div>
       </div>
     </div>

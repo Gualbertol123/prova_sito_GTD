@@ -1,9 +1,8 @@
 import { useCallback } from "react";
 import type { Op, Status, Task } from "../lib/types";
-import { STATUS_ORDER } from "../lib/constants";
 import { useT } from "../lib/i18n";
-import { Sheet, STATUS_VAR, useToast } from "./ui";
-import { IconCheck } from "./icons";
+import { useToast } from "./ui";
+import { StatusPicker } from "./pickers";
 
 export type Send = (op: Op, onError?: (message: string) => void) => void;
 
@@ -48,34 +47,5 @@ export function useTaskActions(send: Send) {
 
 /** "Move to…": every column, the current one ticked. */
 export function MoveSheet({ task, onPick, onClose }: { task: Task; onPick: (s: Status) => void; onClose: () => void }) {
-  const { t } = useT();
-  return (
-    <Sheet title={t("m.moveTo")} onClose={onClose}>
-      <div className="m-panel m-list">
-        {STATUS_ORDER.map((s) => (
-          <button
-            key={s}
-            className="m-row"
-            onClick={() => {
-              onPick(s);
-              onClose();
-            }}
-          >
-            <span className="m-dot" style={{ background: STATUS_VAR[s], width: 10, height: 10 }} />
-            <span className="m-row__main">
-              <span className="m-row__title">{t(`m.status.${s}`)}</span>
-              <span className="m-row__hint" style={{ display: "block" }}>
-                {t(`m.statusHint.${s}`)}
-              </span>
-            </span>
-            {task.status === s && (
-              <span style={{ color: "var(--m-gold)" }}>
-                <IconCheck size={20} />
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-    </Sheet>
-  );
+  return <StatusPicker value={task.status} onPick={onPick} onClose={onClose} />;
 }

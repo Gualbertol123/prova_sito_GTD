@@ -157,8 +157,10 @@ export function BoardScreen({ board, send }: { board: Board; send: Send }) {
           const archived = s === "DONE" ? all.filter((tk) => isArchived(tk)) : [];
           return (
             <section key={s} className="m-pager__page" aria-label={t(`m.status.${s}`)}>
-              <div className="m-sub" style={{ margin: "6px 2px 10px" }}>
-                {t(`m.statusHint.${s}`)}
+              <div className="m-colhead">
+                <span className="m-dot" style={{ background: STATUS_VAR[s], width: 10, height: 10, alignSelf: "center" }} />
+                <h2>{t(`m.status.${s}`)}</h2>
+                <span>{t(`m.statusHint.${s}`)}</span>
               </div>
               {list.length ? (
                 <TaskList tasks={list} send={send} />
@@ -167,8 +169,8 @@ export function BoardScreen({ board, send }: { board: Board; send: Send }) {
               )}
               {s !== "DONE" ? (
                 <button
-                  className="m-btn m-btn--block"
-                  style={{ marginTop: 12, background: "transparent", border: "1.5px dashed var(--m-line-strong)", color: "var(--m-text-2)" }}
+                  className="m-btn m-btn--block m-btn--ghost"
+                  style={{ marginTop: 12 }}
                   onClick={() => nav.add({ status: s })}
                 >
                   <IconPlus size={18} /> {t("m.addHere")}

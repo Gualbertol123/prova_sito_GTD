@@ -44,20 +44,28 @@ about the desktop changes. Five tabs at the bottom:
 | **Agenda** | A week strip (dots = tasks due), the chosen day's tasks, overdue ones on today, then the next two weeks. Add a task straight onto a day. Shows every dated task, like the desktop calendar. |
 | **Altro / More** | Weekly review (stacked, mobile-native), Mail update, and the desktop Report, Reflection, Products and Settings screens. |
 
-On any task card: **tap** opens it as a full-height sheet (status, priority,
-quick due dates, people, project, subtasks, description, notes, file folder,
-delete); the **round check** marks it done; **swipe right** does the same;
-**swipe left** opens *Move to…*. Done, move and delete each show a toast with
-**Undo** instead of an "are you sure?". The big gold **+** adds a task: only a
-title is needed, and it starts assigned to you.
+On any task card the round check on the left (its ring is the priority
+colour: red P1, orange P2, grey P3) marks it done; **swipe right** does the
+same; **swipe left** opens *Move to…*; **tap** opens the task as a
+full-height sheet: the title with its check, then the details as a grouped
+list (Status, Priority, Due, Assigned to, Project), where each row opens its
+own chooser. The project chooser shows every project with its colour, a
+progress ring, open tasks, target date and health, completed ones apart.
+Then subtasks, description, notes, file folder, and Delete / Mark as done.
+Done, move and delete each show a toast with **Undo** instead of an "are you
+sure?". The blue **+** next to the tab bar adds a task: type a title; the
+other properties (priority, due, people, status, project) start from
+defaults and sit below it as tokens, each one tap from the same choosers.
 
 The avatar in the header (or **More → you**) sets who you are on this device,
 the language, light or dark, and **Use the desktop version**. The desktop
 layout on a phone then shows a **Mobile version →** bar at the top to switch
 back. The choice is per device (`gtd-layout` in localStorage: `auto`, `mobile`
-or `desktop`). The mobile app follows the Glass appearance setting (dark by
-default; light when Glass is light or off) and the brand navy, gold, cream and
-Cinzel.
+or `desktop`). The mobile app wears the same **Liquid Glass** as the desktop
+(§10): it reads the desktop skin's own tokens — wallpaper, glass film, rims,
+sheen, Apple's system colours, label steps — so it follows light / dark with
+it. The tab bar floats as a glass capsule with the + beside it, as on iOS 26.
+With the classic skin it falls back to the cream / navy / gold look.
 
 Header extras: editable board title + subtitle (double-click), a **"You"**
 identity picker, a live-connection badge, an **IT/EN** toggle, a **Glass**
@@ -354,9 +362,10 @@ prova_sito_GTD/
             ├── TodayScreen.tsx · BoardScreen.tsx · ProjectsScreen.tsx · AgendaScreen.tsx · MoreScreen.tsx
             ├── TaskCard.tsx      ← swipeable card (right = done, left = move)
             ├── TaskSheet.tsx · AddSheet.tsx ← edit a task / add one, as bottom sheets
+            ├── pickers.tsx       ← choosers: status, priority, due date, people, project
             ├── actions.tsx       ← done / move / delete with Undo; the Move sheet
             ├── ui.tsx · icons.tsx · nav.ts  ← sheet, toast, avatars, chips, ring; icons; navigation
-            └── mobile.css        ← every mobile style, scoped to html[data-layout="mobile"]
+            └── mobile.css        ← every mobile style (Liquid Glass via glass.css tokens), scoped to html[data-layout="mobile"]
 ```
 
 Rough size: ~7.1k lines of TS/TSX. Largest files: `i18n.tsx` (dictionary),

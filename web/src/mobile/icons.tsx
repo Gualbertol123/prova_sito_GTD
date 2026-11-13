@@ -164,3 +164,20 @@ export const IconArrowRight = (p: P) => (
     <path d="M5 12h14M13 6l6 6-6 6" />
   </Svg>
 );
+export const IconFlag = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 21V4M5 4h11l-2 4 2 4H5" />
+  </Svg>
+);
+export const IconStatus = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8" strokeDasharray="3.2 2.6" />
+    <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+  </Svg>
+);
+export const IconNote = (p: P) => (
+  <Svg {...p}>
+    <path d="M5 4h14v16H5z" />
+    <path d="M9 9h6M9 13h6M9 17h3" />
+  </Svg>
+);
